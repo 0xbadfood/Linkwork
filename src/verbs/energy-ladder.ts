@@ -3,7 +3,7 @@
 // emits one. A jump is a quantum jump: the figure vanishes from one rung and appears on the other, with no
 // in-between, and an arrow marks the jump as in a textbook energy-level diagram. Each photon's energy is the gap
 // between the rungs, and its wavelength and colour follow from E = hc / λ.
-import {bandOf, colourName, hydrogenLevel, wavelengthColour, wavelengthNm} from '../physics/light.ts';
+import {bandOf, colourName, hydrogenLevel, readable, wavelengthColour, wavelengthNm} from '../physics/light.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
 import {round, type Vec} from '../vec.ts';
 
@@ -11,6 +11,8 @@ export type LadderEvent = {at: number; kind: 'absorb' | 'emit'; from: number; to
 export type LadderSpec = {
   verb: 'energy_ladder'; atom?: 'hydrogen'; levels?: number[]; start?: number; events: LadderEvent[];
   title?: string; width?: number; height?: number; fps?: number; duration?: number; theme?: 'dark' | 'light';
+  /** A visible-light strip where each emitted line appears, at its wavelength and colour, as it is emitted. */
+  spectrum?: boolean;
 };
 export type LadderFact = {at: number; kind: 'absorb' | 'emit'; from: number; to: number; energy_ev: number;
   wavelength_nm: number; band: string; colour: string; colour_name: string};
@@ -76,8 +78,8 @@ export function energyLadder(spec: LadderSpec): Scene {
   let lastY = Infinity, crowd: number[] = [];
   const flush = () => {
     if (!crowd.length) return;
-    const y = crowd.map(yOf).reduce((a, b) => a + b, 0) / crowd.length;
-    props.push({id: `label-crowd`, type: 'text', x: cx + half + (40 + 30 * spec.events.length) * k, y, size: 24 * k, text: `n = ${crowd.join(', ')} …`, style: {fill: 'muted'}});
+    // The crowded top rungs share one small label, in the gap above "n = 4" on the left.
+    props.push({id: `label-crowd`, type: 'text', x: cx - half - 26 * k, y: yTop + 10 * k, align: 'end', size: 20 * k, text: `n = ${crowd.join(', ')} …`, style: {fill: 'muted'}});
   };
   for (const n of levels) {
     const y = yOf(n);
@@ -89,7 +91,7 @@ export function energyLadder(spec: LadderSpec): Scene {
   }
   flush();
   props.push({id: 'axis-note', type: 'text', x: cx - half - 26 * k, y: yBottom + 70 * k, align: 'end', size: 22 * k, text: 'rungs at their true energies', style: {fill: 'muted'}});
-  if (spec.title) props.push({id: 'title', type: 'text', x: 0.6 * W, y: 0.16 * H, size: 46 * k, weight: 700, text: spec.title});
+  if (spec.title) props.push({id: 'title', type: 'text', x: 0.6 * W, y: 0.16 * H, size: 46 * k, weight: 700, text: spec.title, width: 0.37 * W});
 
   const actor: Actor = {id: 'electron', rig: 'figure', at: stand(spec.start ?? levels[0]), scale, facing: 1,
     pose: [{t: 0, pose: 'stand'}], base: [{t: 0, at: stand(spec.start ?? levels[0])}], opacity: [[0, 1]],
@@ -137,11 +139,41 @@ export function energyLadder(spec: LadderSpec): Scene {
       {id: `card${i}-gap`, type: 'text', x, y: y0 + 70 * k, size: 32 * k, show, text: gapText},
       {id: `card${i}-nm`, type: 'text', x, y: y0 + 125 * k, size: 32 * k, show, text: nmText},
       {id: `card${i}-swatch`, type: 'circle', x: x + 16 * k, y: y0 + 190 * k, r: 16 * k, show, style: {fill: f.colour}},
-      {id: `card${i}-band`, type: 'text', x: x + 46 * k, y: y0 + 190 * k, size: 32 * k, show, text: name, style: {fill: f.colour}},
+      {id: `card${i}-band`, type: 'text', x: x + 46 * k, y: y0 + 190 * k, size: 32 * k, show, text: name, style: {fill: readable(f.colour)}},
     );
   });
+  if (spec.spectrum) props.push(...spectrumStrip(facts, W, H, k));
   const duration = Math.max(spec.duration ?? 0, (facts[facts.length - 1]?.at ?? 0) + 3);
   return {linkwork: 1, width: W, height: H, fps: spec.fps ?? 30, duration, theme: spec.theme ?? 'dark',
     surfaces: levels.map(n => ({x0: cx - half, x1: cx + half, y: yOf(n) - rung / 2})), props, actors: [actor],
     meta: {verb: 'energy_ladder', facts}};
+}
+
+/** The visible spectrum (380–750 nm) as a dim strip; each emitted visible line lights up on it when it is emitted,
+ * and ultraviolet or infrared emissions are noted off its ends. */
+function spectrumStrip(facts: LadderFact[], W: number, H: number, k: number): Prop[] {
+  const x0 = 0.6 * W, x1 = 0.95 * W, y = 0.82 * H, h = 46 * k;
+  const xOf = (nm: number) => x0 + (nm - 380) / (750 - 380) * (x1 - x0);
+  const props: Prop[] = [];
+  for (let nm = 380; nm < 750; nm += 5)
+    props.push({id: `band${nm}`, type: 'rect', x: xOf(nm), y, w: xOf(nm + 5) - xOf(nm) + 0.5, h, style: {fill: wavelengthColour(nm + 2.5), opacity: 0.22}});
+  props.push({id: 'band-label', type: 'text', x: x0, y: y - 26 * k, size: 24 * k, text: 'visible light', style: {fill: 'muted'}},
+    {id: 'band-400', type: 'text', x: xOf(400), y: y + h + 22 * k, size: 20 * k, align: 'middle', text: '400 nm', style: {fill: 'muted'}},
+    {id: 'band-700', type: 'text', x: xOf(700), y: y + h + 22 * k, size: 20 * k, align: 'middle', text: '700 nm', style: {fill: 'muted'}});
+  let uv = 0, ir = 0;
+  facts.forEach((f, i) => {
+    if (f.kind !== 'emit') return;
+    const t = f.at + 0.3;
+    if (f.band === 'visible') {
+      const x = xOf(f.wavelength_nm);
+      props.push({id: `line${i}`, type: 'line', x1: x, y1: y - 6 * k, x2: x, y2: y + h + 6 * k, style: {stroke: f.colour, width: 6 * k}, show: [t, 1e9], pulse: [t], layer: 2},
+        {id: `line${i}-nm`, type: 'text', x, y: y + h + 48 * k, size: 22 * k, weight: 700, align: 'middle', text: `${f.wavelength_nm.toFixed(0)}`, style: {fill: readable(f.colour)}, show: [t, 1e9]});
+    } else {
+      const left = f.band === 'ultraviolet', n = left ? uv++ : ir++;
+      // Off the strip: noted above it, beside its label (ultraviolet first, then infrared).
+      props.push({id: `off${i}`, type: 'text', x: x0 + (180 + (left ? n : uv + n) * 150) * k, y: y - 26 * k, size: 22 * k, weight: 700,
+        text: `${left ? 'UV' : 'IR'} ${f.wavelength_nm.toFixed(0)} nm`, style: {fill: readable(f.colour)}, show: [t, 1e9]});
+    }
+  });
+  return props;
 }

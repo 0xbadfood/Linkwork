@@ -59,5 +59,7 @@ const Frame = ({scene}: {scene: Scene}) => {
 };
 ```
 
+Planning a scene with a model? Put [LEARNINGS.md](LEARNINGS.md) in its system prompt.
+
 See [DESIGN.md](DESIGN.md) for the model (rigs, solver, skins, tracks, props, verbs and checks), the use cases it is
 built for and the plan. MIT licence.

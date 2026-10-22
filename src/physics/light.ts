@@ -11,7 +11,7 @@ export const bandOf = (nm: number): Band => (nm < 380 ? 'ultraviolet' : nm > 750
 /** The everyday colour name of a visible wavelength. */
 export function colourName(nm: number): string {
   if (nm < 380 || nm > 750) return bandOf(nm);
-  return nm < 450 ? 'violet' : nm < 495 ? 'blue' : nm < 570 ? 'green' : nm < 590 ? 'yellow' : nm < 620 ? 'orange' : 'red';
+  return nm < 450 ? 'violet' : nm < 480 ? 'blue' : nm < 500 ? 'blue-green' : nm < 570 ? 'green' : nm < 590 ? 'yellow' : nm < 620 ? 'orange' : 'red';
 }
 
 /** The sRGB colour of a visible wavelength (Bruton's approximation, dimmed towards the ends of the spectrum). Light
@@ -33,3 +33,10 @@ export function wavelengthColour(nm: number): string {
 
 /** Hydrogen's energy levels: E_n = −13.6 eV / n². */
 export const hydrogenLevel = (n: number): number => -13.6 / (n * n);
+
+/** A lighter tint of a colour for text on a dark background (deep violets and blues are hard to read as text). */
+export function readable(hex: string, white = 0.45): string {
+  const v = hex.replace('#', '');
+  const c = [0, 2, 4].map(i => parseInt(v.slice(i, i + 2), 16));
+  return '#' + c.map(x => Math.round(x + (255 - x) * white).toString(16).padStart(2, '0')).join('');
+}
