@@ -1,0 +1,5 @@
+{"verb": "energy_ladder", "title": "Hydrogen: absorb, then emit", "start": 1,
+ "events": [{"at": 1.6, "kind": "absorb", "from": 1, "to": 3},
+            {"at": 5.5, "kind": "emit", "from": 3, "to": 2},
+            {"at": 9.0, "kind": "emit", "from": 2, "to": 1}],
+ "duration": 12.5}

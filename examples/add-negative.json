@@ -1,0 +1,2 @@
+{"verb": "number_line", "title": "3 + (−5)", "range": [-5, 5], "start": 0,
+ "hops": [{"at": 1.0, "by": 3}, {"at": 3.6, "by": -5}], "duration": 7.5}

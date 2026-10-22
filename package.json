@@ -1,0 +1,12 @@
+{
+  "name": "linkwork",
+  "version": "0.1.0",
+  "description": "Jointed figures and mechanisms from plain data: rigs, poses, physics-true motion, checks and SVG frames.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {".": "./src/index.ts"},
+  "bin": {"linkwork": "./src/cli.ts"},
+  "engines": {"node": ">=23.6"},
+  "scripts": {"test": "node --test test/*.test.ts", "typecheck": "tsc --noEmit"},
+  "devDependencies": {"typescript": "5.9.2", "@types/node": "24.3.0"}
+}
