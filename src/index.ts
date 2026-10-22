@@ -13,3 +13,6 @@ export {energyLadder, ladderErrors, ladderFacts, type LadderSpec} from './verbs/
 export {numberLine, numberLineErrors, type NumberLineSpec} from './verbs/number-line.ts';
 export * from './verbs/mechanisms.ts';
 export {crankRig} from './rigs/mechanisms.ts';
+export * from './expr.ts';
+export * from './plane.ts';
+export * from './verbs/calculus.ts';

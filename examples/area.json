@@ -1,0 +1,1 @@
+{"verb": "area_under", "title": "Area under y = x²", "expr": "x^2", "from": 0, "to": 2, "x": [-0.5, 2.5], "y": [-0.5, 5], "riemann": [4, 8, 16, 32], "rule": "mid"}

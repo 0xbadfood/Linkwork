@@ -56,6 +56,21 @@ function stroke(style: Style | undefined, colour: Colour, fallback = 'ink', widt
   return `stroke="${colour(s.stroke, fallback)}" stroke-width="${num(s.width ?? width)}" stroke-linecap="${s.cap ?? 'round'}" stroke-linejoin="round"${dash}`;
 }
 
+/** An estimate of a line of text's width (an average glyph is about 0.55 of the font size). */
+export const textWidth = (text: string, size: number) => 0.55 * size * [...text].length;
+
+/** Break text into lines no wider than `width`, at spaces. */
+export function wrapText(text: string, size: number, width: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(/\s+/)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && textWidth(next, size) > width) { lines.push(line); line = word; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 /** The part of a polyline from its start up to a fraction of its length. */
 export function partOf(points: Vec[], fraction: number): Vec[] {
   if (fraction >= 1) return points;
@@ -98,8 +113,11 @@ export function drawProp(p: PropFrame, colour: Colour): string {
     case 'circle':
       return `${open}<circle cx="${num(p.x)}" cy="${num(p.y)}" r="${num(p.r)}" fill="${colour(s.fill, 'none')}" ${stroke(s, colour, s.stroke ? 'ink' : 'none')}/></g>`;
     case 'text': {
-      const anchor = p.align ?? 'start';
-      return `${open}<text x="${num(p.x)}" y="${num(p.y)}" font-family="${esc(FONTS[p.font ?? 'sans'])}" font-size="${num(p.size ?? 32)}" font-weight="${p.weight ?? 500}" text-anchor="${anchor}" dominant-baseline="middle" fill="${colour(s.fill, 'ink')}">${esc(p.text)}</text></g>`;
+      const anchor = p.align ?? 'start', size = p.size ?? 32;
+      const lines = p.width ? wrapText(p.text, size, p.width) : [p.text];
+      const body = lines.length === 1 ? esc(lines[0])
+        : lines.map((l, i) => `<tspan x="${num(p.x)}" dy="${i ? num(size * 1.25) : 0}">${esc(l)}</tspan>`).join('');
+      return `${open}<text x="${num(p.x)}" y="${num(p.y)}" font-family="${esc(FONTS[p.font ?? 'sans'])}" font-size="${num(size)}" font-weight="${p.weight ?? 500}" text-anchor="${anchor}" dominant-baseline="middle" fill="${colour(s.fill, 'ink')}">${body}</text></g>`;
     }
     case 'wave': {
       const a: Vec = [p.x1, p.y1], b: Vec = [p.x2, p.y2], L = dist(a, b) || 1;
@@ -116,6 +134,8 @@ export function drawProp(p: PropFrame, colour: Colour): string {
       if (head <= L && head > p.length * 0.5) out += arrowHead(add(add(a, mul(u, s1)), mul(u, 10)), add(a, mul(u, s1 - 10)), 8 + 3 * (s.width ?? 3), colour(s.stroke, 'ink'));
       return open + out + '</g>';
     }
+    case 'group':
+      return `${open}${p.items.map(it => drawProp({...it, opacity: 1, glow: 0, layer: 0} as PropFrame, colour)).join('')}</g>`;
     default:
       return '';                                   // trails and readouts arrive here already turned into polylines and text
   }

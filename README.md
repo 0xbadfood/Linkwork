@@ -31,6 +31,16 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `compass_arc`: a pair of compasses drawing an arc or a circle of a given radius.
 - `slider_crank`: a crank, connecting rod and piston; the piston follows x = r cos θ + √(l² − r² sin² θ).
 
+- `domain_range`: a figure walks the x-axis and is stopped by walls where f is undefined; the curve's shadow on the
+  y-axis fills the range. The domain and range you claim ("x >= 0", "y != 0") are checked against f.
+- `extrema`: a tangent rod on a hinge tied to the curve; it is level, slope 0, exactly at each maximum and minimum.
+- `secant_to_tangent`: Q slides into P and the slope of PQ approaches f′(a).
+- `area_under`: the area swept and measured, then Riemann sums closing in on the exact integral.
+- `vector_add`: two vectors head to tail, the sum, its components and its length.
+
+Functions are written in a small, safe expression language (`"x^3 - 3x"`, `"sqrt(x)"`, `"sin(x)/x"`): parsed, never
+run as code, and differentiated exactly.
+
 Numbers on screen are **readouts measured from the drawing** (a distance, an angle, a time), so they always agree
 with what is shown.
 

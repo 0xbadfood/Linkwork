@@ -1,6 +1,9 @@
 // Checks: plain-language errors about a scene, found before anything is drawn. Static checks look at the data;
 // motion checks sample every frame.
 import {EASES} from './ease.ts';
+import {exprErrors} from './expr.ts';
+import {planeErrors} from './plane.ts';
+import {textWidth, wrapText} from './svg.ts';
 import {keyErrors} from './keys.ts';
 import {poseErrors, rigErrors, type Rig} from './rig.ts';
 import {frame, rigOf, type ActorFrame, type Frame, type Prop, type Scene} from './scene.ts';
@@ -51,8 +54,18 @@ export function sceneErrors(scene: Scene): string[] {
     }
     if (a.opacity) errors.push(...keyErrors(a.opacity, `${where} opacity`));
   });
+  const planes = new Set<string>();
+  for (const pl of scene.planes ?? []) { errors.push(...planeErrors(pl)); planes.add(pl.id); }
+  const needPlane = (id: string | undefined, where: string) => { if (id !== undefined && !planes.has(id)) errors.push(`${where}: unknown plane ${id}`); };
+  for (const a of scene.actors) {
+    for (const d of a.drivers ?? []) if (d.driver === 'curve') { needPlane(d.plane, `actor ${a.id}`); errors.push(...exprErrors(d.expr, ['x'], `actor ${a.id} curve driver`)); }
+    for (const d of a.angles ?? []) if (d.kind === 'slope') { needPlane(d.plane, `actor ${a.id}`); errors.push(...exprErrors(d.expr, ['x'], `actor ${a.id} slope driver`)); }
+  }
   scene.props.forEach((p: Prop, i) => {
     const where = `prop ${p.id ?? i}`;
+    needPlane(p.plane, where);
+    if ('expr' in p) errors.push(...exprErrors(p.expr, ['x'], `${where} expr`));
+    if (p.type === 'region' && p.lower) errors.push(...exprErrors(p.lower, ['x'], `${where} lower`));
     for (const [field, keys] of Object.entries(p.keys ?? {})) errors.push(...keyErrors(keys, `${where} keys.${field}`));
     if (p.anchor && !joints.get(p.anchor.actor)?.has(p.anchor.joint)) errors.push(`${where}: anchor ${p.anchor.actor}.${p.anchor.joint} is not a joint of an actor`);
   });
@@ -131,9 +144,10 @@ function bendOf(a: ActorFrame, id: string): number | undefined {
 
 /** A rough box for a line of text (average glyph width ~0.55 of the size). */
 function textBox(p: Prop & {type: 'text'}): Vec[] {
-  const size = p.size ?? 32, w = 0.55 * size * [...p.text].length;
+  const size = p.size ?? 32, lines = p.width ? wrapText(p.text, size, p.width) : [p.text];
+  const w = Math.max(...lines.map(l => textWidth(l, size)));
   const x0 = p.align === 'middle' ? p.x - w / 2 : p.align === 'end' ? p.x - w : p.x;
-  return [[x0, p.y - size / 2], [x0 + w, p.y + size / 2]];
+  return [[x0, p.y - size / 2], [x0 + w, p.y + size / 2 + (lines.length - 1) * size * 1.25]];
 }
 
 export function check(scene: Scene, options: CheckOptions = {}): string[] {

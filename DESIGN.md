@@ -65,7 +65,10 @@ Much of school maths is motion on a coordinate plane, so a **plane** is a core l
 - **Vectors:** arrows with components, joined head to tail, the resultant, resolving along axes. A figure can walk
   each vector in turn.
 
-Verbs built on it: `vector_add`, `components`, `river_crossing` (relative velocity), `tangent_slope`,
+Use cases added by the user (2026-10-23): **domain and range** shown by walls on the x-axis where f is undefined,
+and **maxima and minima** by a hinge tied to the curve whose tangent rod goes level at each.
+
+Verbs built on it: `domain_range`, `extrema`, `vector_add`, `components`, `river_crossing` (relative velocity), `tangent_slope`,
 `secant_to_tangent`, `area_under`, `riemann_sum`, `graph_walk` (a figure walking a graph: rising, falling, turning
 points). Every number shown is computed and checked: slopes from derivatives found by exact differentiation of the
 expression, areas by integration with an error bound.
@@ -207,7 +210,7 @@ no runtime dependencies.
    verbs (`energy_ladder`, `number_line`). A test clip is rendered through Remotion.
 2. **v1 (done 2026-10-23):** sliders, pins and closed loops in use: a ladder sliding down a wall, a compass drawing an arc, a
    pendulum, a slider-crank. Pen trails. Angle limits.
-3. **v1.5, the plane:** axes, the expression language, curves, sliders on a path, regions and vectors, with the
+3. **v1.5, the plane (done 2026-10-23):** axes, the expression language, curves, sliders on a path, regions and vectors, with the
    first maths verbs (vector_add, tangent_slope, secant_to_tangent, area_under).
 4. **v2:** film integration (planner, verb specs, checks in the loop), a clip library (walk, hop, push, throw,
    point, cheer) and more expressions.

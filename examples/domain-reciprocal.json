@@ -1,0 +1,1 @@
+{"verb": "domain_range", "title": "Domain and range of 1/x", "expr": "1/x", "x": [-5, 5], "y": [-5, 5], "domain": "x != 0", "range": "y != 0"}

@@ -34,3 +34,13 @@ export function crankRig(rod = 3): Rig {
   };
 }
 export const crank = crankRig(3);
+
+/** A tangent rod on a hinge: two arms from the hinge, set to the tangent's angle with "slope" angle drivers. */
+export const tangent: Rig = {
+  id: 'tangent', version: 1, root: 'hinge',
+  bones: [{id: 'right', from: 'hinge', to: 'r', length: 100, angle: 0}, {id: 'left', from: 'hinge', to: 'l', length: 100, angle: 180}],
+  skin: {width: 1.4, bones: {right: {style: 'line'}, left: {style: 'line'}}, joints: {hinge: {style: 'ball', size: 3.2}}},
+};
+
+/** A single point, drawn as a ball: a marker that can ride a curve. */
+export const dot: Rig = {id: 'dot', version: 1, root: 'p', bones: [], skin: {joints: {p: {style: 'ball', size: 9}}}};
