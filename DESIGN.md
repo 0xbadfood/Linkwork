@@ -235,9 +235,12 @@ the explanation; images for how something looks or where it happens.
 1. **An existing verb fits** → write its spec.
 2. **It can be composed from the core** → write a low-level scene as data (plane, curves, rigs, drivers, readouts,
    events). There is no new code, and the same checks apply.
-3. **A new verb can be built** (general and likely to recur) → request it from the verb build queue. The film does
-   not wait for it: it falls back now, and the next film gets the verb. In the internal studios an experiment may
-   choose to wait.
+3. **A new verb can be built** (general and likely to recur) → request it from the verb build queue. Whether the
+   film waits is a setting, `verb_build`, set per run and per profile:
+   - `async` (the default, and always in production): the film falls back now, and the next film gets the verb;
+   - `sync`: the film waits for the build, up to `verb_build_timeout` (default 20 minutes), then falls back. For
+     studio experiments;
+   - `off`: no builds are requested; misses are only logged.
 4. **Otherwise** → manim, then images, as today.
 
 **Code has the final say.** A spec must compile, pass every check, and the narration's numbers must match the verb's
