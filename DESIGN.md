@@ -212,6 +212,6 @@ no runtime dependencies.
    pendulum, a slider-crank. Pen trails. Angle limits.
 3. **v1.5, the plane (done 2026-10-23):** axes, the expression language, curves, sliders on a path, regions and vectors, with the
    first maths verbs (vector_add, tangent_slope, secant_to_tangent, area_under).
-4. **v2:** film integration (planner, verb specs, checks in the loop), a clip library (walk, hop, push, throw,
+4. **v2 (see "v2: choosing Linkwork" above):** verb cards, composed scenes as data, the verb build queue and lifecycle, then film integration (planner, verb specs, checks in the loop), a clip library (walk, hop, push, throw,
    point, cheer) and more expressions.
 5. **Later:** molecules, the biology arm with muscles, interactive use in the browser, and a published package.
