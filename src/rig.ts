@@ -8,12 +8,26 @@ export type Pose = Record<string, number>;
 export type Link = {a: string; b: string; length?: number};
 export type Pin = {joint: string; at?: Vec};
 export type Slider = {joint: string; through: [Vec, Vec]};
+/** How a bone is drawn: line (default), rod (hollow bar), ladder (two rails with rungs), string (thin), none. */
+export type BoneSkin = {style?: 'line' | 'rod' | 'ladder' | 'string' | 'none'; width?: number; color?: string; rungs?: number};
+/** How a joint is drawn: ball (a filled bob), pivot (a hinge pin), block (a sliding block), pencil, needle, knob. */
+export type JointSkin = {style: 'ball' | 'pivot' | 'block' | 'pencil' | 'needle' | 'knob'; size?: number; color?: string; fill?: string};
+export type SkinOptions = {
+  width?: number; color?: string; back?: string[]; face?: boolean; head?: string;
+  bones?: Record<string, BoneSkin>; joints?: Record<string, JointSkin>;
+};
 export type Rig = {
   id: string; version: 1; root: string; bones: Bone[];
   contacts?: string[]; poses?: Record<string, Pose>;
   links?: Link[]; pins?: Pin[]; sliders?: Slider[];
-  /** chain: only IK chains move and the root stays (figures); all: every joint not pinned moves (mechanisms). */
+  /** chain: only IK chains move and the root stays (figures); all: the joints in `free` (default: all but the root)
+   * move to satisfy pins, sliders and links (mechanisms). */
   solve?: 'chain' | 'all';
+  free?: string[];
+  /** Joint limits: the allowed range of a bone's angle relative to its parent, in degrees. */
+  limits?: Record<string, [number, number]>;
+  /** The default look; an actor's skin is merged over it. */
+  skin?: SkinOptions;
 };
 
 export type Placed = {
@@ -42,7 +56,16 @@ export function rigErrors(rig: Rig): string[] {
   (rig.links ?? []).forEach(l => { known(l.a, 'a link'); known(l.b, 'a link'); });
   (rig.pins ?? []).forEach(p => known(p.joint, 'a pin'));
   (rig.sliders ?? []).forEach(s => known(s.joint, 'a slider'));
-  for (const [name, pose] of Object.entries(rig.poses ?? {})) errors.push(...poseErrors(rig, pose, `pose ${name}`));
+  (rig.free ?? []).forEach(j => known(j, 'free'));
+  for (const [id, [lo, hi]] of Object.entries(rig.limits ?? {})) {
+    if (!ids.has(id)) errors.push(`${rig.id}: limits name unknown bone ${id}`);
+    else if (!(lo < hi)) errors.push(`${rig.id}: limits for ${id} must be [low, high]`);
+  }
+  for (const [name, pose] of Object.entries(rig.poses ?? {})) {
+    errors.push(...poseErrors(rig, pose, `pose ${name}`));
+    for (const [id, [lo, hi]] of Object.entries(rig.limits ?? {}))
+      if (pose[id] !== undefined && (pose[id] < lo - 0.5 || pose[id] > hi + 0.5)) errors.push(`${rig.id}: pose ${name} bends ${id} to ${pose[id].toFixed(0)}°, outside ${lo}° to ${hi}°`);
+  }
   return errors;
 }
 

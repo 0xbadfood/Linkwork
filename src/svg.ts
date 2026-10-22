@@ -1,5 +1,6 @@
 // Drawing: a frame becomes one SVG string. Colours are theme tokens (ink, muted, faint, accent, figure, paper, good,
 // bad) or literal colours (#rrggbb, rgb(...)) where colour is the subject, such as a photon's.
+import type {JointSkin} from './rig.ts';
 import {frame, type ActorFrame, type Frame, type PropFrame, type Scene, type Style} from './scene.ts';
 import {add, dist, len, mul, sub, type Vec} from './vec.ts';
 
@@ -115,6 +116,8 @@ export function drawProp(p: PropFrame, colour: Colour): string {
       if (head <= L && head > p.length * 0.5) out += arrowHead(add(add(a, mul(u, s1)), mul(u, 10)), add(a, mul(u, s1 - 10)), 8 + 3 * (s.width ?? 3), colour(s.stroke, 'ink'));
       return open + out + '</g>';
     }
+    default:
+      return '';                                   // trails and readouts arrive here already turned into polylines and text
   }
 }
 
@@ -125,29 +128,89 @@ export function drawActor(a: ActorFrame, colour: Colour): string {
   const ink = colour(a.skin.color, 'figure'), paper = colour('paper', '#000');
   const back = new Set(a.skin.back ?? (a.rig.id === 'figure' ? SIDE_BACK : []));
   const headBone = a.skin.head ?? (a.rig.id === 'figure' ? 'head' : undefined);
-  const bone = (id: string, width: number, c: string, extra = '') => {
-    const b = a.rig.bones.find(x => x.id === id)!;
-    return `<path d="M${pt(a.joints.get(b.from)!)}L${pt(a.joints.get(b.to)!)}" stroke="${c}" stroke-width="${num(width)}" stroke-linecap="round"${extra}/>`;
-  };
   const halo = w * 0.9;
-  const parts: string[] = [];
-  const layer = (ids: string[], opacity = 1) => {
-    // A paper-coloured halo under each bone breaks the lines behind it, so crossings read in depth.
-    for (const id of ids) parts.push(bone(id, w + halo, paper));
-    for (const id of ids) parts.push(bone(id, w, ink, opacity < 1 ? ` opacity="${opacity}"` : ''));
+  const seg = (p: Vec, q: Vec, width: number, c: string, extra = '') =>
+    `<path d="M${pt(p)}L${pt(q)}" stroke="${c}" stroke-width="${num(width)}" stroke-linecap="round"${extra}/>`;
+  const ends = (id: string) => {
+    const b = a.rig.bones.find(x => x.id === id)!;
+    return [a.joints.get(b.from)!, a.joints.get(b.to)!] as const;
   };
+  // Halos first (a paper-coloured band under each bone breaks the lines behind it, so crossings read in depth),
+  // then the bones themselves, back side before front side.
+  const unders: string[] = [], overs: string[] = [];
+  const drawBone = (id: string, opacity: number) => {
+    const style = a.skin.bones?.[id] ?? {};
+    const bw = (style.width ?? a.skin.width ?? 6.5) * a.scale, c = colour(style.color ?? a.skin.color, 'figure');
+    const [p, q] = ends(id);
+    const extra = opacity < 1 ? ` opacity="${opacity}"` : '';
+    switch (style.style ?? 'line') {
+      case 'none': return;
+      case 'string': overs.push(seg(p, q, Math.max(1.5, bw * 0.35), colour(style.color, 'muted'), extra)); return;
+      case 'rod':
+        unders.push(seg(p, q, bw + halo, paper));
+        overs.push(seg(p, q, bw, c, extra), seg(p, q, bw * 0.42, paper));
+        return;
+      case 'ladder': {
+        const d = sub(q, p), l = len(d) || 1, n: Vec = [-d[1] / l * bw * 2.2, d[0] / l * bw * 2.2];
+        const rungs = style.rungs ?? Math.max(2, Math.round(l / (bw * 6)));
+        unders.push(seg(add(p, n), add(q, n), bw * 0.7 + halo, paper), seg(sub(p, n), sub(q, n), bw * 0.7 + halo, paper));
+        for (let i = 1; i < rungs; i++) {
+          const m = add(p, mul(d, i / rungs));
+          overs.push(seg(add(m, n), sub(m, n), bw * 0.45, c, extra));
+        }
+        overs.push(seg(add(p, n), add(q, n), bw * 0.7, c, extra), seg(sub(p, n), sub(q, n), bw * 0.7, c, extra));
+        return;
+      }
+      default:
+        unders.push(seg(p, q, bw + halo, paper));
+        overs.push(seg(p, q, bw, c, extra));
+    }
+  };
+  const parts: string[] = [];
   const others = a.rig.bones.map(b => b.id).filter(id => id !== headBone);
-  layer(others.filter(id => back.has(id)), 0.6);
-  layer(others.filter(id => !back.has(id)));
+  for (const group of [others.filter(id => back.has(id)), others.filter(id => !back.has(id))]) {
+    unders.length = 0; overs.length = 0;
+    group.forEach(id => drawBone(id, back.has(id) ? 0.6 : 1));
+    parts.push(...unders, ...overs);
+  }
   if (headBone) {
-    const b = a.rig.bones.find(x => x.id === headBone)!;
-    const p0 = a.joints.get(b.from)!, p1 = a.joints.get(b.to)!;
+    const [p0, p1] = ends(headBone);
     const c: Vec = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2], r = dist(p0, p1) / 2;
     parts.push(`<circle cx="${num(c[0])}" cy="${num(c[1])}" r="${num(r + halo / 2)}" fill="${paper}"/>`);
     parts.push(`<circle cx="${num(c[0])}" cy="${num(c[1])}" r="${num(r - w / 2)}" fill="${paper}" stroke="${ink}" stroke-width="${num(w)}"/>`);
     if (a.skin.face !== false && a.face !== 'none') parts.push(face(c, sub(p1, p0), r, a.facing, a.face, ink, w));
   }
+  for (const [joint, js] of Object.entries(a.skin.joints ?? {})) {
+    const at = a.joints.get(joint);
+    if (at) parts.push(drawJoint(a, joint, at, js, w, colour));
+  }
   return `<g opacity="${num(a.opacity)}"${glow(a.glow, colour)}>${parts.join('')}</g>`;
+}
+
+function drawJoint(a: ActorFrame, joint: string, at: Vec, js: JointSkin, w: number, colour: Colour): string {
+  const size = (js.size ?? 2.2 * (a.skin.width ?? 6.5)) * a.scale;
+  const ink = colour(js.color ?? a.skin.color, 'figure'), paper = colour('paper', '#000');
+  const circle = (r: number, fill: string, strokeWidth = 0) =>
+    `<circle cx="${num(at[0])}" cy="${num(at[1])}" r="${num(r)}" fill="${fill}"${strokeWidth ? ` stroke="${ink}" stroke-width="${num(strokeWidth)}"` : ''}/>`;
+  switch (js.style) {
+    case 'ball': return circle(size, colour(js.fill, 'accent'), w * 0.4);
+    case 'knob': return circle(size * 0.7, ink);
+    case 'pivot': return circle(size * 0.6, paper, w * 0.5) + circle(size * 0.18, ink);
+    case 'block': {
+      const bw = size * 2.6, bh = size * 1.8;
+      return `<rect x="${num(at[0] - bw / 2)}" y="${num(at[1] - bh / 2)}" width="${num(bw)}" height="${num(bh)}" rx="${num(size * 0.2)}" fill="${colour(js.fill, 'faint')}" stroke="${ink}" stroke-width="${num(w * 0.5)}"/>` + circle(size * 0.22, ink);
+    }
+    case 'pencil': case 'needle': {
+      // A tip at the joint, pointing along the bone that ends there.
+      const into = a.rig.bones.find(b => b.to === joint), out = a.rig.bones.find(b => b.from === joint);
+      const from = into ? a.joints.get(into.from)! : out ? a.joints.get(out.to)! : sub(at, [0, -1]);
+      const d = sub(at, from), l = len(d) || 1, u: Vec = [d[0] / l, d[1] / l], n: Vec = [-u[1], u[0]];
+      const long = size * (js.style === 'pencil' ? 1.6 : 1.1), wide = size * (js.style === 'pencil' ? 0.55 : 0.3);
+      const b0 = sub(at, mul(u, long));
+      const fill = js.style === 'pencil' ? colour(js.fill, 'accent') : ink;
+      return `<path d="M${pt(at)}L${pt(add(b0, mul(n, wide)))}L${pt(sub(b0, mul(n, wide)))}Z" fill="${fill}" stroke="${ink}" stroke-width="${num(w * 0.25)}" stroke-linejoin="round"/>`;
+    }
+  }
 }
 
 function face(c: Vec, axis: Vec, r: number, facing: 1 | -1, kind: string, ink: string, w: number): string {

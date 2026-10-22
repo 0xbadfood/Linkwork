@@ -11,3 +11,5 @@ export * from './physics/light.ts';
 export {compile, VERBS, type Spec} from './verbs/index.ts';
 export {energyLadder, ladderErrors, ladderFacts, type LadderSpec} from './verbs/energy-ladder.ts';
 export {numberLine, numberLineErrors, type NumberLineSpec} from './verbs/number-line.ts';
+export * from './verbs/mechanisms.ts';
+export {crankRig} from './rigs/mechanisms.ts';

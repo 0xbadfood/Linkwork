@@ -30,7 +30,7 @@ export function solve(rig: Rig, placed: Placed, targets: Target[], world: {pins?
 
   const mode = rig.solve ?? 'chain';
   let free: Set<string>;
-  if (mode === 'all') free = new Set([...joints.keys()].filter(j => !pins.has(j)));
+  if (mode === 'all') free = new Set((rig.free ?? [...joints.keys()].filter(j => j !== rig.root)).filter(j => !pins.has(j)));
   else free = new Set(targets.flatMap(t => chainJoints(rig, t.joint, t.chain ?? 2)));
   for (const t of targets) free.delete(t.joint);          // a target holds its joint where it is put
 
@@ -40,7 +40,6 @@ export function solve(rig: Rig, placed: Placed, targets: Target[], world: {pins?
     for (const [j, at] of pins) joints.set(j, [...at] as Vec);
     for (const s of sliders) joints.set(s.joint, project(joints.get(s.joint)!, s.through[0], s.through[1]));
   };
-  for (const s of sliders) free.add(s.joint);
   for (let i = 0; i < iterations; i++) {
     hold();
     for (const r of rods) {

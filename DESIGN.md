@@ -203,9 +203,9 @@ no runtime dependencies.
 
 ## Build order
 
-1. **v0:** the core (rig, FK, solver, keys, drivers, props, SVG, checks, command line), the figure rig, and two
+1. **v0 (done 2026-10-23):** the core (rig, FK, solver, keys, drivers, props, SVG, checks, command line), the figure rig, and two
    verbs (`energy_ladder`, `number_line`). A test clip is rendered through Remotion.
-2. **v1:** sliders, pins and closed loops in use: a ladder sliding down a wall, a compass drawing an arc, a
+2. **v1 (done 2026-10-23):** sliders, pins and closed loops in use: a ladder sliding down a wall, a compass drawing an arc, a
    pendulum, a slider-crank. Pen trails. Angle limits.
 3. **v1.5, the plane:** axes, the expression language, curves, sliders on a path, regions and vectors, with the
    first maths verbs (vector_add, tangent_slope, secant_to_tangent, area_under).

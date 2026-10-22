@@ -3,8 +3,8 @@
 import {EASES} from './ease.ts';
 import {keyErrors} from './keys.ts';
 import {poseErrors, rigErrors, type Rig} from './rig.ts';
-import {frame, rigOf, type Frame, type Prop, type Scene} from './scene.ts';
-import {dist, type Vec} from './vec.ts';
+import {frame, rigOf, type ActorFrame, type Frame, type Prop, type Scene} from './scene.ts';
+import {angleOf, dist, sub, turnBetween, type Vec} from './vec.ts';
 
 export type CheckOptions = {
   /** Largest joint speed allowed outside blink intervals, in frame heights per second. */
@@ -85,6 +85,10 @@ export function motionErrors(scene: Scene, options: CheckOptions = {}): string[]
     for (const a of f.actors) {
       const tol = (options.tolerance ?? 1.5) * Math.max(1, a.scale);
       if (a.residual > tol) out.add(`actor ${a.id}: the rig can't reach its targets (off by ${a.residual.toFixed(1)})`, t);
+      for (const [bone, [lo, hi]] of Object.entries(a.rig.limits ?? {})) {
+        const angle = bendOf(a, bone);
+        if (angle !== undefined && (angle < lo - 2 || angle > hi + 2)) out.add(`actor ${a.id}: ${bone} bends to ${angle.toFixed(0)}°, outside ${lo}° to ${hi}°`, t);
+      }
       if (a.opacity < 0.05) continue;
       for (const [j, p] of a.joints) {
         if (p[0] < 0 || p[0] > f.width || p[1] < 0 || p[1] > f.height) out.add(`actor ${a.id}: ${j} leaves the frame`, t);
@@ -115,6 +119,14 @@ export function motionErrors(scene: Scene, options: CheckOptions = {}): string[]
     prev = f;
   }
   return out.list();
+}
+
+/** A bone's angle relative to its parent, measured from the solved joints (as if the actor faced right). */
+function bendOf(a: ActorFrame, id: string): number | undefined {
+  const bone = a.rig.bones.find(b => b.id === id), parent = a.rig.bones.find(b => b.to === bone?.from);
+  if (!bone || !parent) return undefined;
+  const heading = (b: typeof bone) => angleOf(sub(a.joints.get(b.to)!, a.joints.get(b.from)!));
+  return a.facing * turnBetween(heading(parent), heading(bone));
 }
 
 /** A rough box for a line of text (average glyph width ~0.55 of the size). */

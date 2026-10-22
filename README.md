@@ -26,6 +26,13 @@ A verb turns a short spec into a full scene and checks the spec first.
   Photons are absorbed and emitted, each with its energy gap, wavelength (λ = hc/ΔE) and true colour. Jumps are
   quantum jumps, with no in-between.
 - `number_line`: hops along a number line for adding and subtracting, negatives included.
+- `sliding_ladder`: a ladder sliding down a wall, its base, height and angle measured live (x² + y² = L²).
+- `pendulum`: a simple pendulum, T = 2π√(L/g), timed swing by swing.
+- `compass_arc`: a pair of compasses drawing an arc or a circle of a given radius.
+- `slider_crank`: a crank, connecting rod and piston; the piston follows x = r cos θ + √(l² − r² sin² θ).
+
+Numbers on screen are **readouts measured from the drawing** (a distance, an angle, a time), so they always agree
+with what is shown.
 
 ```json
 {"verb": "energy_ladder", "start": 1,

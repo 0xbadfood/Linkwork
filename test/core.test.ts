@@ -99,3 +99,56 @@ test('frame is pure: the same time gives the same drawing', () => {
   assert.equal(svg(scene!, 1.1), svg(scene!, 1.1));
   assert.equal(frame(scene!, 1.1).actors.length, 1);
 });
+
+test('the sliding ladder keeps its length and its top on the wall, and its readouts match the geometry', async () => {
+  const {scene} = compile({verb: 'sliding_ladder', length: 5, from_angle: 70, to_angle: 30, start: 1, slide_time: 4} as any);
+  const wall = 0.16 * scene!.width, perM = 0.66 * scene!.height / 5;
+  for (const t of [0, 1.5, 3, 5, 6]) {
+    const f = frame(scene!, t), lad = f.actors[0];
+    const foot = lad.joints.get('foot')!, top = lad.joints.get('top')!;
+    assert.ok(Math.abs(dist(foot, top) - 5 * perM) < 1, `length at ${t}`);
+    assert.ok(Math.abs(top[0] - wall) < 1, `top on the wall at ${t}`);
+    const x = (foot[0] - wall) / perM, y = (0.84 * scene!.height - top[1]) / perM;
+    const text = (f.props.find(p => p.id === 'ro-x') as any).text as string;
+    assert.equal(text, `base   x = ${x.toFixed(2)} m`);
+    assert.ok(Math.abs(x * x + y * y - 25) < 0.05);
+  }
+});
+
+test('the pendulum keeps time: the bob is back where it started after each period', () => {
+  const {scene} = compile({verb: 'pendulum', length: 1, amplitude: 10, swings: 2, release: 1} as any);
+  const T = (scene!.meta as any).period_s;
+  assert.ok(Math.abs(T - 2 * Math.PI * Math.sqrt(1 / 9.8)) < 1e-3);
+  const bob = (t: number) => frame(scene!, t).actors[0].joints.get('bob')!;
+  assert.ok(dist(bob(1), bob(1 + T)) < 0.5 && dist(bob(1), bob(1 + 2 * T)) < 0.5);
+  assert.ok(dist(bob(1), bob(1 + T / 2)) > 50, 'half a period later it is on the other side');
+});
+
+test('the compass draws at its radius all the way round', () => {
+  const {scene} = compile({verb: 'compass_arc', radius: 4, sweep: 360, start: 1, draw_time: 3} as any);
+  const perCm = (scene!.meta as any).px_per_cm;
+  const f = frame(scene!, 4.5);
+  const arc = f.props.find(p => p.id === 'arc') as any;
+  const centre = f.actors[0].joints.get('needle')!;
+  assert.ok(arc.points.length > 80);
+  for (const p of arc.points) assert.ok(Math.abs(dist(p, centre) / perCm - 4) < 0.02);
+  assert.ok(dist(arc.points[0], arc.points[arc.points.length - 1]) < 1, 'the circle closes');
+});
+
+test('the slider-crank piston follows x = r cos θ + √(l² − r² sin² θ)', async () => {
+  const {pistonX} = await import('../src/verbs/mechanisms.ts');
+  const {scene} = compile({verb: 'slider_crank', crank: 5, rod: 15, rpm: 20, turns: 1, start: 1} as any);
+  const perCm = (scene!.meta as any).px_per_cm;
+  for (const t of [1, 1.4, 2.2, 2.9, 3.7]) {
+    const j = frame(scene!, t).actors[0].joints;
+    const theta = 120 * (t - 1);
+    const x = (j.get('piston')![0] - j.get('center')![0]) / perCm;
+    assert.ok(Math.abs(x - pistonX(5, 15, theta)) < 0.02, `t ${t}: ${x} vs ${pistonX(5, 15, theta)}`);
+  }
+});
+
+test('joint limits: a backwards knee is refused', () => {
+  const scene: Scene = {linkwork: 1, width: 600, height: 400, fps: 10, duration: 0.2, props: [],
+    actors: [{id: 'a', rig: 'figure', at: [300, 350], pose: [{t: 0, pose: {shin_l: 60}}]}]};
+  assert.match(check(scene).join('\n'), /shin_l bends to 60°, outside/);
+});

@@ -32,7 +32,7 @@ const POSES: Record<string, World> = {
     thigh_l: -52, shin_l: -112, thigh_r: -60, shin_r: -116},
   cheer: {...STAND, upper_arm_l: 58, forearm_l: 70, upper_arm_r: 118, forearm_r: 108},
   point: {...STAND, upper_arm_l: 8, forearm_l: 4},
-  shrug: {...STAND, upper_arm_l: -60, forearm_l: 20, upper_arm_r: -120, forearm_r: 160},
+  shrug: {...STAND, upper_arm_l: -95, forearm_l: 20, upper_arm_r: -85, forearm_r: 30},
   think: {...STAND, upper_arm_l: -62, forearm_l: 104},
   push: {spine: 70, head: 75, upper_arm_l: 8, forearm_l: 6, upper_arm_r: 0, forearm_r: -2,
     thigh_l: -60, shin_l: -95, thigh_r: -122, shin_r: -120},
@@ -55,5 +55,7 @@ export const figure: Rig = {
   id: 'figure', version: 1, root: 'hip', solve: 'chain',
   bones: BONES.map(b => ({...b, angle: relative(STAND)[b.id]})),
   contacts: ['foot_l', 'foot_r'],
+  // Knees bend backwards and elbows forwards (relative to the parent bone, figure facing right).
+  limits: {shin_l: [-165, 8], shin_r: [-165, 8], forearm_l: [-15, 170], forearm_r: [-15, 170]},
   poses: Object.fromEntries(Object.entries(POSES).map(([k, w]) => [k, relative(w)])),
 };
