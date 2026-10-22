@@ -204,6 +204,63 @@ no runtime dependencies.
   any errors to the planner as it does for other figure kinds.
 - **Labels and highlights:** come from narration timing, as for the biology figures.
 
+## v2: choosing Linkwork in a film, and growing the library (agreed 2026-10-23)
+
+**Scope: science (physics, chemistry, biology) and maths only.** Humanities keep today's flow. Geography keeps its
+own map kit.
+
+**Why:** chapter films and key-idea films are a known, finite set. Question and solution videos are where most new
+films will come from, and questions repeat a limited set of shapes: projectiles, inclined planes, pulleys,
+collisions, ray diagrams, circuits, graphs and rates, areas, titration and equilibrium curves, constructions. Every
+verb built during chapter work is one less thing to invent when a student asks a question, and it makes those films
+faster and cheaper (no GPU, no image model).
+
+### Verb cards
+
+Every verb carries a card the planner reads:
+
+- the subjects and concepts it fits;
+- the registry kinds and motions it covers;
+- "use when" and "not when".
+
+The visual-needs registry is matched to verbs once per chapter, after its digest (the LLM proposes, code checks the
+proposal against the card). An entry that fits is tagged with its verb, for example Fig. 2.11 "transitions of the
+electron in the hydrogen atom" → `energy_ladder`.
+
+### Per point, in order
+
+The planner chooses for each point that needs motion. The rule of thumb: Linkwork when what changes on screen *is*
+the explanation; images for how something looks or where it happens.
+
+1. **An existing verb fits** → write its spec.
+2. **It can be composed from the core** → write a low-level scene as data (plane, curves, rigs, drivers, readouts,
+   events). There is no new code, and the same checks apply.
+3. **A new verb can be built** (general and likely to recur) → request it from the verb build queue. The film does
+   not wait for it: it falls back now, and the next film gets the verb. In the internal studios an experiment may
+   choose to wait.
+4. **Otherwise** → manim, then images, as today.
+
+**Code has the final say.** A spec must compile, pass every check, and the narration's numbers must match the verb's
+computed facts. After one retry with the errors shown, the point falls back to the next option. A Linkwork scene can
+never break a film; at worst it becomes an image scene. Every choice and every fallback is logged, and the most
+frequent unmet needs become the next verbs.
+
+### Verb lifecycle: candidate → trial → trusted
+
+- **Built by a strong model** (Opus-class) from a queued request. Before writing, it checks that no existing verb
+  nearly fits and could take one more parameter instead. Verbs must be general ("a block on an inclined plane with
+  friction, given angle, μ and mass"), never written for one question.
+- **A candidate ships with:**
+  - its spec type and its own checks;
+  - tests that prove its physics or maths against formulas;
+  - an example, and rendered frames looked over by a vision model.
+- **Trial:** used only in the internal studios.
+- **Trusted:** after the user's review it is merged into the public repo as a pull request, and becomes usable on
+  madesimple.in. It runs sandboxed until merged.
+- **Each build adds what went wrong to LEARNINGS.md,** which the planner and the next verb writer both read.
+
+**Measure:** the share of question points served by steps 1 and 2 without new code.
+
 ## Build order
 
 1. **v0 (done 2026-10-23):** the core (rig, FK, solver, keys, drivers, props, SVG, checks, command line), the figure rig, and two
