@@ -49,6 +49,31 @@ Licence: MIT. Started 2026-10-23 for NCERT explainer films; meant from the start
 | Solutions | the people and objects in word problems (a boat crossing a river, a lift, a train) | several actors, props, checked motion |
 | Notes and quizzes | drag an angle, pose an arm | the same core, interactive in a browser |
 
+### Maths on a plane (user, 2026-10-23: "vectors, calculus and what not")
+
+Much of school maths is motion on a coordinate plane, so a **plane** is a core layer, not a verb:
+
+- **Axes:** a mapping between maths coordinates and the scene, with ticks, a grid and labels. Props and rigs can be
+  placed in maths units.
+- **Curves:** drawn from expressions, using a small, safe expression language (numbers, x and t, + − × ÷ ^, sin,
+  cos, exp, log, sqrt, abs, and named parameters). It is parsed, never evaluated as code. The same language drives
+  formulas everywhere else.
+- **Sliders on a path:** a joint can slide along a curve, not only a line. A tangent is then a rod on a point that
+  slides along the curve, and a secant turning into a tangent is two points with one moving in.
+- **Regions:** the area under a curve, between curves, or Riemann rectangles that refine, all computed from the
+  curve.
+- **Vectors:** arrows with components, joined head to tail, the resultant, resolving along axes. A figure can walk
+  each vector in turn.
+
+Verbs built on it: `vector_add`, `components`, `river_crossing` (relative velocity), `tangent_slope`,
+`secant_to_tangent`, `area_under`, `riemann_sum`, `graph_walk` (a figure walking a graph: rising, falling, turning
+points). Every number shown is computed and checked: slopes from derivatives found by exact differentiation of the
+expression, areas by integration with an error bound.
+
+**Where manim fits:** manim (MIT) is already in the pipeline for LLM-written animation code. Linkwork verbs cover
+the common, repeated explanations as checked data specs: cheaper and more reliable, with no code generation and no
+sandbox. manim stays the tool for one-off animations that no verb covers.
+
 ## Concepts
 
 Coordinates are scene units with y pointing down, as in SVG. Angles in data are degrees, counter-clockwise as you
@@ -182,6 +207,8 @@ no runtime dependencies.
    verbs (`energy_ladder`, `number_line`). A test clip is rendered through Remotion.
 2. **v1:** sliders, pins and closed loops in use: a ladder sliding down a wall, a compass drawing an arc, a
    pendulum, a slider-crank. Pen trails. Angle limits.
-3. **v2:** film integration (planner, verb specs, checks in the loop), a clip library (walk, hop, push, throw,
+3. **v1.5, the plane:** axes, the expression language, curves, sliders on a path, regions and vectors, with the
+   first maths verbs (vector_add, tangent_slope, secant_to_tangent, area_under).
+4. **v2:** film integration (planner, verb specs, checks in the loop), a clip library (walk, hop, push, throw,
    point, cheer) and more expressions.
-4. **Later:** molecules, the biology arm with muscles, interactive use in the browser, and a published package.
+5. **Later:** molecules, the biology arm with muscles, interactive use in the browser, and a published package.
