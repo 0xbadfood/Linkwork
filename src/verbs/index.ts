@@ -1,5 +1,6 @@
 // Verbs compile a short, meaningful spec into a low-level scene, and check the spec first.
 import type {Scene} from '../scene.ts';
+import {CARDS, type Card} from './cards.ts';
 import {energyLadder, ladderErrors, type LadderSpec} from './energy-ladder.ts';
 import {compassArc, compassErrors, crankErrors, ladderSlideErrors, pendulum, pendulumErrors, sliderCrank, slidingLadder,
   type CompassSpec, type CrankSpec, type LadderSlideSpec, type PendulumSpec} from './mechanisms.ts';
@@ -35,6 +36,12 @@ export const VERBS: Record<string, Verb<any>> = {
   vector_add: {errors: vectorErrors, compile: vectorAdd,
     about: 'adding vectors head to tail, with components and the magnitude of the sum'} as Verb<VectorSpec>,
 };
+
+/** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */
+export function cards(statuses: Card['status'][] = ['trusted']): Record<string, Card & {about: string}> {
+  return Object.fromEntries(Object.entries(VERBS).filter(([name]) => statuses.includes(CARDS[name]?.status))
+    .map(([name, verb]) => [name, {about: verb.about, ...CARDS[name]}]));
+}
 
 /** Compile a verb spec. A spec with errors gives no scene. */
 export function compile(spec: {verb: string}): {scene?: Scene; errors: string[]} {

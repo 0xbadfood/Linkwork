@@ -152,3 +152,13 @@ test('joint limits: a backwards knee is refused', () => {
     actors: [{id: 'a', rig: 'figure', at: [300, 350], pose: [{t: 0, pose: {shin_l: 60}}]}]};
   assert.match(check(scene).join('\n'), /shin_l bends to 60°, outside/);
 });
+
+test('every verb has a valid card whose example compiles and passes every check', async () => {
+  const {CARDS, cardErrors, VERBS} = await import('../src/index.ts');
+  for (const name of Object.keys(VERBS)) {
+    assert.deepEqual(cardErrors(name, CARDS[name]), [], name);
+    const {scene, errors} = compile(CARDS[name].example as {verb: string});
+    assert.deepEqual(errors, [], `${name} example`);
+    assert.deepEqual(check(scene!, {every: 3}), [], `${name} example checks`);
+  }
+});

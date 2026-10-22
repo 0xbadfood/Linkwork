@@ -6,13 +6,13 @@ import {join} from 'node:path';
 import {check} from './check.ts';
 import type {Scene} from './scene.ts';
 import {svg} from './svg.ts';
-import {compile, VERBS} from './verbs/index.ts';
+import {cards, compile, VERBS} from './verbs/index.ts';
 
 const USAGE = `linkwork compile <spec.json> [-o scene.json]
 linkwork check <file.json> [--every n]           errors, one per line; exit 1 if any
 linkwork svg <file.json> --t <seconds> [-o out.svg] [--transparent]
 linkwork frames <file.json> --out <dir> [--every n] [--transparent]
-linkwork verbs`;
+linkwork verbs [--json [--all]]                 the verbs, or their cards as JSON`;
 
 function arg(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
@@ -28,6 +28,8 @@ function load(path: string): {scene?: Scene; errors: string[]} {
 function main(argv: string[]): number {
   const [command, file, ...rest] = argv;
   if (command === 'verbs') {
+    // --json prints the cards (all statuses with --all), for a pipeline's planner.
+    if (argv.includes('--json')) { console.log(JSON.stringify(cards(argv.includes('--all') ? ['candidate', 'trial', 'trusted'] : ['trusted']), null, 1)); return 0; }
     for (const [name, v] of Object.entries(VERBS)) console.log(`${name}: ${v.about}`);
     return 0;
   }
