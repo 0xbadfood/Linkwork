@@ -11,7 +11,7 @@ import {round, type Vec} from '../vec.ts';
 
 type Window = {expr: string; x?: [number, number]; y?: [number, number]; step?: [number, number]};
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
-const n2 = (v: number, places = 2) => {
+export const n2 = (v: number, places = 2) => {
   if (Math.abs(v - Math.round(v)) < 1e-9) return String(Math.round(v)).replace('-', '−');
   const s = v.toFixed(places);
   return /^-0\.?0*$/.test(s) ? s.slice(1) : s.replace('-', '−');
@@ -37,12 +37,12 @@ function layout(s: Window & Common) {
   const py = (f: number) => f * H + shift;
   return {W, H, k, plane, axes, px, title, py};
 }
-const text = (id: string, x: number, y: number, t: string, size: number, extra: Partial<Prop> = {}): Prop =>
+export const text = (id: string, x: number, y: number, t: string, size: number, extra: Partial<Prop> = {}): Prop =>
   ({id, type: 'text', x, y, text: t, size, ...extra} as Prop);
 /** Panel text on the right: wrapped to the panel's width. */
-const panel = (W: number, k: number) => (id: string, x: number, y: number, t: string, size: number, extra: Partial<Prop> = {}): Prop =>
+export const panel = (W: number, k: number) => (id: string, x: number, y: number, t: string, size: number, extra: Partial<Prop> = {}): Prop =>
   ({id, type: 'text', x, y, text: t, size, width: W - x - 40 * k, ...extra} as Prop);
-const scene = (s: Common, W: number, H: number, duration: number, plane: Plane, props: Prop[], actors: Actor[], meta: Record<string, unknown>): Scene =>
+export const scene = (s: Common, W: number, H: number, duration: number, plane: Plane, props: Prop[], actors: Actor[], meta: Record<string, unknown>): Scene =>
   ({linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration, theme: s.theme ?? 'dark', planes: [plane], props, actors, meta});
 
 /** Walking poses for a figure moving between t0 and t1 (a step every `beat` seconds). */

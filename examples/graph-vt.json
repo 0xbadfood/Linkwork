@@ -1,0 +1,6 @@
+{"verb": "graph", "title": "Distance is the area under v–t",
+ "x": {"name": "t", "unit": "s", "range": [0, 6]}, "y": {"name": "v", "unit": "m/s", "range": [0, 22], "step": 4},
+ "series": [{"label": "uniform acceleration", "expr": "2 + 3t"}],
+ "trace": {"series": 0, "from": 0, "to": 5},
+ "shade": {"series": 0, "from": 0, "to": 5, "label": "distance travelled", "unit": "m"},
+ "tangent": {"series": 0, "x": 3}}

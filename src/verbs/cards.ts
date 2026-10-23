@@ -143,6 +143,25 @@ export const CARDS: Record<string, Card> = {
     example: {verb: 'vector_add', title: 'Adding two vectors', a: [4, 1], b: [1, 3]},
     status: 'trusted',
   },
+  graph: {
+    subjects: ['physics', 'chemistry', 'maths', 'biology'],
+    concepts: ['motion graphs (x–t, v–t, a–t)', 'distance as the area under v–t', 'acceleration as the slope of v–t', "Boyle's law",
+      "Charles' law", "Hooke's law", 'stress–strain curve', 'heating and cooling curves', 'periodic trends (ionisation enthalpy, atomic radius)',
+      'rate of reaction from a concentration–time graph', 'first-order and zero-order kinetics', 'Arrhenius plot', 'Maxwell–Boltzmann distribution',
+      "Raoult's law", "Henry's law", 'V–I characteristics', 'photoelectric effect graphs', 'any quantity plotted against another'],
+    kinds: ['graph'], motions: ['draw_on', 'value_change', 'highlight', 'labels'],
+    use_when: "one quantity is plotted against another: from a formula (v = 2 + 3t, P = 24/V) or from the book's own data; reading a value off the curve, its slope, the area under it, or comparing up to 4 curves",
+    not_when: 'the derivative as a limit (use secant_to_tangent), Riemann sums (area_under), domain and range (domain_range), turning points of a function (extrema), bar or pie charts, or 3-D plots',
+    fields: {x: '{name: one letter for a formula ("t", "V", "T"), unit, range: [low, high], step?}', y: '{name, unit, range, step?}',
+      series: "1–4 curves, each {label, expr: formula in x's name} or {label, points: [[x, y], ...] from the book, join: line | smooth | none, names?: one per point}",
+      trace: '{series, from, to, time?}: a dot runs along the curve with live readouts', tangent: '{series, x}: the tangent and its slope (formula series)',
+      shade: '{series, from, to, label?, unit?}: the area under a formula series, computed', marks: 'list of {series?, x, y?, label}: points to point out',
+      at: 'optional time (seconds) on any series, trace, shade, tangent or mark, to place it on a word of the narration'},
+    example: {verb: 'graph', title: 'Distance is the area under v–t', x: {name: 't', unit: 's', range: [0, 6]}, y: {name: 'v', unit: 'm/s', range: [0, 22], step: 4},
+      series: [{label: 'uniform acceleration', expr: '2 + 3t'}], trace: {series: 0, from: 0, to: 5},
+      shade: {series: 0, from: 0, to: 5, label: 'distance travelled', unit: 'm'}, tangent: {series: 0, x: 3}},
+    status: 'trial',
+  },
 };
 
 export function cardErrors(name: string, card: Card | undefined): string[] {

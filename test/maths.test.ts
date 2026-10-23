@@ -63,9 +63,42 @@ test('secant to tangent: the slope of PQ approaches f′(a)', () => {
 test('the maths examples compile and pass every check', async () => {
   const {readFileSync} = await import('node:fs');
   const {check} = await import('../src/index.ts');
-  for (const f of ['domain-sqrt', 'domain-reciprocal', 'extrema-cubic', 'secant', 'area', 'vectors']) {
+  for (const f of ['domain-sqrt', 'domain-reciprocal', 'extrema-cubic', 'secant', 'area', 'vectors', 'graph-vt', 'graph-boyle', 'graph-ionisation', 'graph-heating']) {
     const {scene, errors} = compile(JSON.parse(readFileSync(`examples/${f}.json`, 'utf8')));
     assert.deepEqual(errors, [], f);
     assert.deepEqual(check(scene!, {every: 3}), [], f);
   }
+});
+
+test('graph: facts are computed, readouts measured from the drawing, and data stays shaped as given', async () => {
+  const {smooth, niceStep} = await import('../src/verbs/graph.ts');
+  const spec = {verb: 'graph', x: {name: 't', unit: 's', range: [0, 6]}, y: {name: 'v', unit: 'm/s', range: [0, 22]},
+    series: [{label: 'v', expr: '2 + 3t'}], trace: {series: 0, from: 0, to: 5, at: 1, time: 4},
+    shade: {series: 0, from: 0, to: 5, unit: 'm'}, tangent: {series: 0, x: 3}};
+  const {scene, errors} = compile(spec as any);
+  assert.deepEqual(errors, []);
+  const meta = scene!.meta as any;
+  assert.equal(meta.area.value, 47.5);                                   // ∫₀⁵ (2 + 3t) dt
+  assert.equal(meta.tangent.slope, 3);
+  assert.ok(meta.facts.some((f: string) => f.includes('3 m/s²')));
+  const ro = (id: string, t: number) => Number(((frame(scene!, t).props.find(p => p.id === id) as any).text as string).split('= ')[1].split(' ')[0]);
+  assert.ok(Math.abs(ro('ro-x', 5.5) - 5) < 0.05 && Math.abs(ro('ro-y', 5.5) - 17) < 0.15, 'the tracer ends at (5, 17)');
+  // Monotone smoothing never overshoots: between rising points the curve keeps rising.
+  const s = smooth([[0, 0], [1, 1], [2, 1], [3, 5]]);
+  for (let i = 1; i < s.length; i++) assert.ok(s[i][1] >= s[i - 1][1] - 1e-9 && s[i][1] <= 5 + 1e-9);
+  assert.equal(niceStep(0, 2600), 500);
+  assert.equal(niceStep(0, 6), 1);
+});
+
+test('graph: refuses specs a planner might get wrong', () => {
+  const base = {verb: 'graph', x: {name: 'V', unit: 'L', range: [0, 12]}, y: {name: 'P', unit: 'atm', range: [0, 30]}};
+  const err = (extra: object) => compile({...base, ...extra} as any).errors.join('; ');
+  assert.match(err({series: [{label: 'a', expr: '24/x'}]}), /expr/);                                    // the variable is V, not x
+  assert.match(err({series: [{label: 'a', expr: '240/V'}]}), /outside the y range/);
+  assert.match(err({series: [{label: 'a', points: [[1, 5], [13, 2]]}]}), /outside the graph/);
+  assert.match(err({series: [{label: 'a', points: [[4, 5], [2, 2]]}]}), /left to right/);
+  assert.match(err({series: [{label: 'a', expr: '24/V'}], trace: {series: 0, from: 0.2, to: 10}}), /trace leaves/);
+  assert.match(err({series: [{label: 'a', points: [[1, 5], [2, 2]]}], tangent: {series: 0, x: 1.5}}), /formula series/);
+  assert.match(err({series: [{label: 'a', expr: '24/V'}], marks: [{series: 0, x: 0.5, label: 'too high'}]}), /outside the graph/);
+  assert.match(err({series: [{label: 'a', expr: '24/V'}], x: {name: 'V', range: [0, 0.01], step: 0.0005}}), /rescale/);
 });

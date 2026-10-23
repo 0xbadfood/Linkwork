@@ -46,6 +46,14 @@ caught or a reviewer saw while building the examples and the first pilot film (h
     the window must hold 1–5 turning points. For `secant_to_tangent`, the curve must stay in the window from `at` to
     `at + h`. For `area_under`, f must be defined from `from` to `to`.
 
+## Graphs
+
+19. **Copy the book's data exactly** into a graph's `points`, in the book's units, and say in the narration only the
+    values listed in `meta.facts` (the area, the slope, the marked points). A formula uses the x axis's own letter
+    (`24/V`, not `24/x`), and the axes need names and units.
+20. **Mark what the narration points at.** A label on a point ("Na: a new shell starts") must be true of that point;
+    check it against the data (K, not Na, is the lowest of Z = 1–20).
+
 ## Words on screen
 
 14. **Keep titles short**: about 25 characters a line, two lines at most. They wrap to the panel's width.

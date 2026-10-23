@@ -1,0 +1,5 @@
+{"verb": "graph", "title": "Boyle's law: P × V stays the same",
+ "x": {"name": "V", "unit": "L", "range": [0, 12], "step": 2}, "y": {"name": "P", "unit": "atm", "range": [0, 30], "step": 5},
+ "series": [{"label": "T₁ (P × V = 24)", "expr": "24/V"}, {"label": "T₂ > T₁ (P × V = 48)", "expr": "48/V"}],
+ "trace": {"series": 0, "from": 1.2, "to": 10},
+ "marks": [{"series": 0, "x": 4, "label": "4 L at 6 atm"}, {"series": 1, "x": 4, "label": "4 L at 12 atm"}]}

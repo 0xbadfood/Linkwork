@@ -37,6 +37,8 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `secant_to_tangent`: Q slides into P and the slope of PQ approaches f′(a).
 - `area_under`: the area swept and measured, then Riemann sums closing in on the exact integral.
 - `vector_add`: two vectors head to tail, the sum, its components and its length.
+- `graph` (trial): any quantity against another, from a formula in the axis's own variable or the book's data; a tracer
+  with readouts, a tangent with its slope, a shaded area, marked points (v–t, Boyle's law, periodic trends, heating curves).
 
 Functions are written in a small, safe expression language (`"x^3 - 3x"`, `"sqrt(x)"`, `"sin(x)/x"`): parsed, never
 run as code, and differentiated exactly.

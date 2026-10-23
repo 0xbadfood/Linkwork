@@ -1,0 +1,5 @@
+{"verb": "graph", "title": "Heating ice to steam",
+ "x": {"name": "t", "unit": "min", "range": [0, 30], "step": 5}, "y": {"name": "T", "unit": "°C", "range": [-30, 130], "step": 20},
+ "series": [{"label": "temperature of the water", "join": "line", "points": [[0,-20],[2,0],[8,0],[16,100],[27,100],[29,120]]}],
+ "trace": {"series": 0, "from": 0, "to": 29, "time": 6},
+ "marks": [{"x": 5, "y": 0, "label": "melting: T stays at 0 °C"}, {"x": 21.5, "y": 100, "label": "boiling: T stays at 100 °C"}]}

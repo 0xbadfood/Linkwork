@@ -1,0 +1,6 @@
+{"verb": "graph", "title": "First ionisation enthalpy, Z = 1 to 20",
+ "x": {"name": "Z", "range": [0, 21], "step": 2}, "y": {"name": "ΔiH", "unit": "kJ/mol", "range": [0, 2600], "step": 500},
+ "series": [{"label": "first ionisation enthalpy", "join": "line",
+   "points": [[1,1312],[2,2372],[3,520],[4,899],[5,801],[6,1086],[7,1402],[8,1314],[9,1681],[10,2081],[11,496],[12,738],[13,578],[14,787],[15,1012],[16,1000],[17,1251],[18,1521],[19,419],[20,590]],
+   "names": ["H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca"]}],
+ "marks": [{"series": 0, "x": 2, "label": "noble gas: highest"}, {"series": 0, "x": 11, "label": "Na: a new shell starts"}]}
