@@ -115,3 +115,10 @@ test("secant_to_tangent in physics words reproduces NCERT's Table 2.1 (x = 0.08t
   assert.match(texts, /x = 0\.08t³/);
   assert.doesNotMatch(texts, /f′|slope of PQ/);
 });
+
+test('physics formulas may be written in t', () => {
+  const v = compile({verb: 'secant_to_tangent', quantity: 'velocity', expr: '0.08*t^3', at: 4, h: 2, x: [0, 7], y: [0, 20]} as never);
+  assert.deepEqual(v.errors, []);
+  assert.match((v.scene!.meta as {facts: string[]}).facts[0], /3\.84 m\/s/);
+  assert.deepEqual(compile({verb: 'motion_on_line', axis: {range: [0, 20]}, formula: {expr: '0.5*t^2', t: [0, 6]}} as never).errors, []);
+});

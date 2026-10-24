@@ -2,7 +2,7 @@
 // maxima and minima (a tangent rod on a hinge tied to the curve, level exactly at each), a secant turning into the
 // tangent, the area under a curve with Riemann sums, and adding vectors. Every number shown is computed from the
 // expression or measured from the drawing.
-import {derivative, dfOf, exprErrors, fOf, show, tree} from '../expr.ts';
+import {derivative, dfOf, exprErrors, fOf, inTime, show, tree} from '../expr.ts';
 import {claimErrors, criticalPoints, definedIntervals, integrate, parseClaim, riemann, toScene, type Plane} from '../plane.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
 import type {Key} from '../keys.ts';
@@ -237,6 +237,7 @@ const cell = (v: number, places = 4) => n2(v, places).replace(/(\.\d*?)0+$/, '$1
 const asTime = (src: string) => src.replace(/(?<![a-z])x(?![a-z])/g, 't');
 
 export function secantErrors(s: SecantSpec): string[] {
+  if (typeof s?.expr === 'string') s = {...s, expr: inTime(s.expr)};
   const e = windowErrors(s, 'secant_to_tangent');
   if (e.length) return e;
   const f = fOf(s.expr), df = dfOf(s.expr), h = s.h ?? s.steps?.[0] ?? 2;
@@ -258,6 +259,7 @@ export function secantErrors(s: SecantSpec): string[] {
 }
 
 export function secantToTangent(s: SecantSpec): Scene {
+  s = {...s, expr: inTime(s.expr)};
   const {W, H, k, plane, px, title, py} = layout(s);
   const w = SECANT_WORDS[s.quantity ?? 'maths'], phys = !!s.quantity;
   const axes: Prop = {id: 'axes', type: 'axes', plane: 'p', step: s.step ?? [1, 1], size: 24 * k, ...(phys ? {names: [`${w.t} (${w.tu.trim()})`, `${w.y} (${w.yu.trim()})`] as [string, string]} : {})};

@@ -260,3 +260,7 @@ export function tree(src: string, names: Iterable<string> = ['x']): Node {
 export const fOf = (src: string) => { const n = tree(src); return (x: number) => evaluate(n, {x}); };
 /** f′(x) for an expression in x, exactly. */
 export const dfOf = (src: string) => { const n = derivative(tree(src)); return (x: number) => evaluate(n, {x}); };
+
+/** A formula of time written in t (x = 0.08t³) as the x the parser reads; one already in x is left alone. */
+export const inTime = (src: string): string =>
+  /(?<![a-z])x(?![a-z])/.test(src) ? src : src.replace(/(?<![a-z])t(?![a-z])/g, 'x');

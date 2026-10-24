@@ -11,7 +11,7 @@ import {OBJECTS} from '../objects.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
-import {dfOf, exprErrors, fOf} from '../expr.ts';
+import {dfOf, exprErrors, fOf, inTime} from '../expr.ts';
 import {round} from '../vec.ts';
 import {n2, walking} from './calculus.ts';
 import {niceStep} from './graph.ts';
@@ -54,12 +54,13 @@ export function motionErrors(s: MotionSpec): string[] {
     if (!SCALED.includes((s.object ?? 'dot') as never)) e.push('motion_on_line: object_length needs an object that has a length (not a dot)');
   }
   if (s.formula !== undefined) {
+    const formula = typeof s.formula?.expr === 'string' ? {...s.formula, expr: inTime(s.formula.expr)} : s.formula;
     if (s.moves !== undefined) return [...e, 'motion_on_line: give moves or a formula, not both'];
-    const errs = exprErrors(s.formula?.expr, ['x'], 'motion_on_line: formula.expr');
+    const errs = exprErrors(formula?.expr, ['x'], 'motion_on_line: formula.expr');
     if (errs.length) return [...e, ...errs];
-    const [t0, t1] = s.formula.t ?? [NaN, NaN];
+    const [t0, t1] = formula.t ?? [NaN, NaN];
     if (!isNum(t0) || !isNum(t1) || t0 < 0 || t1 <= t0 || t1 - t0 > 60) return [...e, 'motion_on_line: formula.t is [t0, t1] seconds, under a minute'];
-    const f = fOf(s.formula.expr);
+    const f = fOf(formula.expr);
     for (let i = 0; i <= 200; i++) {
       const v = f(t0 + (t1 - t0) * i / 200);
       if (!isNum(v) || v < a || v > b) { e.push(`motion_on_line: x(t) leaves the axis (${a} to ${b}) at t = ${fmt(t0 + (t1 - t0) * i / 200)} s; widen axis.range`); break; }
@@ -88,7 +89,7 @@ export function motionOnLine(s: MotionSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const [a, b] = s.axis.range, unit = s.axis.unit ?? 'm', u = unit ? ` ${unit}` : '';
   // A formula is sampled finely (30 a second) into moves; readouts of v come from its exact rate.
-  const formula = s.formula, fx = formula ? fOf(formula.expr) : null;
+  const formula = s.formula ? {...s.formula, expr: inTime(s.formula.expr)} : undefined, fx = formula ? fOf(formula.expr) : null;
   let moves: {t: number; x: number}[] = s.moves ?? [];
   if (formula) {
     const n = Math.ceil((formula.t[1] - formula.t[0]) * 30);
