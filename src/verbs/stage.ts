@@ -6,6 +6,9 @@
 //   slide    a block slides down a wedge, a = g(sin θ − μ cos θ)
 //   roll     a roller rolls down a wedge without slipping, a = g sin θ / (1 + k) (ball 2/5, cylinder 1/2, ring 1)
 //   collide  a mover runs into another (or a wall), elastic or sticking together; momentum is conserved
+// and the general props (2026-10-24), which belong in any scene: a figure that stands, thinks, points or walks (pose,
+// move), a bulb that lights (light; put it on a figure to hang it over the head: a new idea), a stopwatch that runs
+// (run), a speedometer that reads a mover's computed speed (follows).
 // Every value the narration may quote (range, flight time, top height, time down the slope, speeds after a collision)
 // is computed here and listed in meta.facts. Arrows (velocity, force, direction), labels and readouts of position and
 // height (measured from the drawing) are optional.
@@ -14,17 +17,24 @@ import {OBJECTS, type Role} from '../objects.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
 import type {Vec} from '../vec.ts';
-import {n2} from './calculus.ts';
+import {n2, walking} from './calculus.ts';
 
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
 export type StageItem = {id: string; object: string; x: number; y?: number; on?: string; size?: number; facing?: 1 | -1;
-  angle?: number; a?: number; b?: number; label?: string; params?: Record<string, number | string>; mass?: number};
+  angle?: number; a?: number; b?: number; label?: string; params?: Record<string, number | string>; mass?: number;
+  /** A figure's pose at the start. */ pose?: string;
+  /** A speedometer: the mover whose speed it shows. */ follows?: string};
 export type StageEvent = {t: number; item: string} & (
   | {kind: 'move'; to: number; duration: number; ease?: 'linear' | 'inOut'}
   | {kind: 'launch'; speed: number; angle?: number; from?: string}
   | {kind: 'slide'; on: string; friction?: number; then?: number}
   | {kind: 'roll'; on: string; then?: number}
-  | {kind: 'collide'; with: string; speed: number; elastic?: boolean; after?: number});
+  | {kind: 'collide'; with: string; speed: number; elastic?: boolean; after?: number}
+  | {kind: 'pose'; pose: string}
+  | {kind: 'light'; on?: boolean}
+  | {kind: 'run'; duration: number});
+/** The figure's poses a stage may ask for. */
+export const POSES = ['stand', 'think', 'point', 'cheer', 'shrug', 'push', 'crouch'] as const;
 export type StageSpec = Common & {
   verb: 'stage'; width_m?: number; ground?: 'floor' | 'grass' | 'none'; g?: number;
   items: StageItem[]; events?: StageEvent[];
@@ -36,7 +46,7 @@ export type StageSpec = Common & {
 /** Natural sizes in metres, when a spec gives none. */
 export const SIZES: Record<string, number> = {car: 4, bus: 12, train: 20, bicycle: 1.8, block: 1, wedge: 4, pulley: 1, sling: 2,
   ball: 0.4, platform: 10, road: 10, parking: 6, signpost: 1.2, marker: 0.4, table: 3, plank: 3, slide: 4, cylinder: 0.6,
-  ring: 0.6, cart: 1.2, wall: 0.3, spring: 2, cannon: 1.6, ruler: 3, stopwatch: 0.7};
+  ring: 0.6, cart: 1.2, wall: 0.3, spring: 2, cannon: 1.6, ruler: 3, stopwatch: 0.7, speedometer: 1, bulb: 0.4, figure: 1.7};
 /** How high the top of a support is, over its size. */
 const top = (i: StageItem) => (i.object === 'block' ? +(i.params?.height ?? 0.7) : OBJECTS[i.object]?.height ?? 0);
 const ROLL_K: Record<string, number> = {ball: 0.4, cylinder: 0.5, ring: 1};
@@ -44,13 +54,21 @@ const DT = 1 / 30, DEG = Math.PI / 180;
 const slopeOf = (wedge: StageItem) => Math.max(5, Math.min(75, wedge.a ?? 30)) * DEG;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const fmt = (v: number, p = 2) => n2(Number(v.toFixed(p)), p).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-const has = (item: StageItem | undefined, role: Role) => !!item && OBJECTS[item.object]?.roles.includes(role);
-let WIDTH = 10;
+/** The figure is a jointed rig, not a drawn object: it walks (a mover) and belongs in any scene. */
+const FIGURE_ROLES: Role[] = ['mover', 'general'];
+const rolesOf = (item: StageItem) => (item.object === 'figure' ? FIGURE_ROLES : OBJECTS[item.object]?.roles ?? []);
+const has = (item: StageItem | undefined, role: Role) => !!item && rolesOf(item).includes(role);
+let WIDTH = 10, FIGURES = new Map<string, StageItem>();
 /** Its size in metres, as drawn: a launcher or a mover too small to see on a wide stage is drawn larger, as a textbook
  * figure would, and the physics uses the drawn geometry (where the muzzle is, how long the slope is) so both agree. */
-const sizeOf = (i: StageItem) => {
-  const size = i.size ?? SIZES[i.object] ?? 1, roles = OBJECTS[i.object]?.roles ?? [];
-  return Math.max(size, roles.includes('launcher') ? 0.07 * WIDTH : roles.includes('mover') ? 0.02 * WIDTH : 0);
+const sizeOf = (i: StageItem): number => {
+  const size = i.size ?? SIZES[i.object] ?? 1, roles = rolesOf(i);
+  // A figure carries a pose and a face, so it is drawn at least a ninth of the stage tall; a bulb over a head is a
+  // quarter of the figure; a general prop is never smaller than a few percent of the stage.
+  if (i.object === 'bulb' && i.on && FIGURES.get(i.on)) return i.size ?? sizeOf(FIGURES.get(i.on)!) * 0.25;
+  if (i.object === 'figure') return Math.max(size, 0.11 * WIDTH);
+  return Math.max(size, roles.includes('launcher') ? 0.07 * WIDTH : roles.includes('mover') ? 0.02 * WIDTH
+    : roles.includes('general') ? 0.06 * WIDTH : 0);
 };
 
 type Sample = {t: number; x: number; y: number; angle: number; travel: number};
@@ -59,11 +77,13 @@ type State = Sample;
 /** Where every item starts (base point in metres, angle) and its whole timed path, plus the facts. */
 function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[]; end: number; errors: string[]} {
   const g = s.g ?? 9.8, W = WIDTH = s.width_m ?? 10, errors: string[] = [], facts: string[] = [];
+  FIGURES = new Map(s.items.filter(i => i.object === 'figure').map(i => [i.id, i]));
   const items = new Map(s.items.map(i => [i.id, i]));
   const state = new Map<string, State>();
   const restY = (i: StageItem): number => {
     if (isNum(i.y)) return i.y;
     const under = i.on ? items.get(i.on) : undefined;
+    if (under?.object === 'figure') return restY(under) + sizeOf(under) * 1.06;     // a bulb over the head
     return under ? restY(under) + top(under) * sizeOf(under) : 0;
   };
   for (const i of s.items) state.set(i.id, {t: 0, x: i.x, y: restY(i), angle: i.angle ?? 0, travel: 0});
@@ -93,6 +113,10 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
   let end = 0;
   for (const e of [...(s.events ?? [])].sort((a, b) => a.t - b.t)) {
     const item = items.get(e.item)!, id = e.item;
+    if (e.kind === 'pose' || e.kind === 'light' || e.kind === 'run') {      // nothing moves: the prop changes
+      end = Math.max(end, e.t + (e.kind === 'run' ? e.duration : 0.6));
+      continue;
+    }
     hold(id, e.t);
     const c = state.get(id)!;
     const where = `stage: ${e.kind} of ${id} at ${e.t} s`;
@@ -172,6 +196,7 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
     for (const [pid, p] of paths) {
       const last = p.at(-1)!;
       end = Math.max(end, last.t);
+      if (items.get(pid)?.on && items.get(items.get(pid)!.on!)?.object === 'figure') continue;
       for (const q of p) if (q.x < -0.5 || q.x > W + 0.5) { errors.push(`stage: ${pid} goes off the stage (x = ${fmt(q.x)} m; it is 0 to ${W} m)`); break; }
     }
   }
@@ -189,10 +214,13 @@ export function stageErrors(s: StageSpec): string[] {
     const where = `stage: item ${i?.id ?? n + 1}`;
     if (typeof i?.id !== 'string' || !i.id || ids.has(i.id)) e.push(`${where} needs a unique id`);
     ids.add(i?.id);
-    if (!OBJECTS[i?.object]) e.push(`${where}: unknown object ${JSON.stringify(i?.object)}; known: ${Object.keys(OBJECTS).join(', ')}`);
+    if (!OBJECTS[i?.object] && i?.object !== 'figure') e.push(`${where}: unknown object ${JSON.stringify(i?.object)}; known: figure, ${Object.keys(OBJECTS).join(', ')}`);
+    if (i?.pose !== undefined && (i.object !== 'figure' || !POSES.includes(i.pose as never))) e.push(`${where}: pose is for a figure: ${POSES.join(', ')}`);
+    if (i?.follows !== undefined && (i.object !== 'speedometer' || !has(items.get(i.follows), 'mover'))) e.push(`${where}: follows is for a speedometer, naming a mover`);
     if (!isNum(i?.x) || i.x < 0 || i.x > W) e.push(`${where}: x must be on the stage (0 to ${W} m)`);
     if (i?.size !== undefined && !(i.size > 0)) e.push(`${where}: size (metres) must be positive`);
-    if (i?.on !== undefined && !has(items.get(i.on), 'support')) e.push(`${where}: on must name an item that things can rest on (a table, block, plank, wall)`);
+    const over = i?.object === 'bulb' && items.get(i?.on as string)?.object === 'figure';
+    if (i?.on !== undefined && !over && !has(items.get(i.on), 'support')) e.push(`${where}: on must name an item that things can rest on (a table, block, plank, wall), or a figure for a bulb`);
   });
   if (e.length) return e;
   for (const [n, ev] of (s.events ?? []).entries()) {
@@ -221,7 +249,17 @@ export function stageErrors(s: StageSpec): string[] {
         if (!has(item, 'impactor') || !has(items.get(ev.with), 'impactor')) e.push(`${where}: both must be things that collide (a ball, block, cart, car, wall)`);
         if (!(ev.speed > 0)) e.push(`${where}: speed (m/s) must be positive`);
         break;
-      default: e.push(`${where}: kind is move, launch, slide, roll or collide`);
+      case 'pose':
+        if (item.object !== 'figure' || !POSES.includes(ev.pose as never)) e.push(`${where}: a figure takes a pose: ${POSES.join(', ')}`);
+        break;
+      case 'light':
+        if (item.object !== 'bulb') e.push(`${where}: only a bulb lights`);
+        break;
+      case 'run':
+        if (item.object !== 'stopwatch') e.push(`${where}: only a stopwatch runs`);
+        if (!(ev.duration > 0 && ev.duration <= 60)) e.push(`${where}: duration is 0 to 60 seconds`);
+        break;
+      default: e.push(`${where}: kind is move, launch, slide, roll, collide, pose, light or run`);
     }
   }
   for (const [n, a] of (s.arrows ?? []).entries()) if (!items.has(a?.item) || !isNum(a?.dx) || !isNum(a?.dy)) e.push(`stage: arrow ${n + 1} needs an item and dx, dy in metres`);
@@ -242,13 +280,57 @@ export function stage(s: StageSpec): Scene {
   if (ground !== 'none') props.push({id: 'ground', type: 'line', x1: 0, y1: box[3], x2: Wpx, y2: box[3],
     style: {stroke: ground === 'grass' ? 'good' : 'muted', width: 4 * k}});
   if (s.title) props.push({id: 'title', type: 'text', x: box[0], y: 0.08 * Hpx, text: s.title, size: 44 * k, weight: 700, width: Wpx * 0.6});
+  const events = s.events ?? [];
+  /** A speedometer's reading: the speed of the mover it follows, from that mover's computed path. */
+  const speedKeys = (id: string, scale: number): Key[] => {
+    const p = paths.get(id)!;
+    if (p.length < 2) return [[0, 0]];
+    return p.map((q, i) => {
+      const r = p[Math.max(1, i)], l = p[Math.max(0, i - 1)], dt = r.t - l.t;
+      const v = dt > 0 ? Math.hypot(r.x - l.x, r.y - l.y) / dt : 0;
+      return [q.t, v * scale, 'linear'] as Key;
+    });
+  };
   for (const item of s.items) {
     const path = paths.get(item.id)!, size = sizeOf(item) * unit;
+    if (item.object === 'figure') {
+      // A jointed figure: its height is its size; it holds its pose, changes pose on cue and walks when it moves.
+      const pose: {t: number; pose: string}[] = [{t: 0, pose: item.pose ?? 'stand'}];
+      for (const e of [...events].sort((a, b) => a.t - b.t).filter(e => e.item === item.id)) {
+        if (e.kind === 'pose') pose.push({t: e.t, pose: e.pose}, {t: e.t + 0.5, pose: e.pose});
+        if (e.kind === 'move') pose.push(...walking(e.t, e.t + e.duration));
+      }
+      const moves = path.length > 1;
+      const facings = moves ? path.slice(1).flatMap((q, i) => (q.x !== path[i].x ? [{t: path[i].t, facing: (q.x > path[i].x ? 1 : -1) as 1 | -1}] : [])) : [];
+      actors.push({id: `f-${item.id}`, rig: 'figure', at: P(path[0].x, path[0].y), scale: size / 176, facing: item.facing ?? 1,
+        facings: facings.filter((x, i) => !i || x.facing !== facings[i - 1].facing), pose: pose.sort((a, b) => a.t - b.t), layer: 3,
+        ...(moves ? {base: path.map((q, i) => ({t: q.t, at: P(q.x, q.y), ...(i ? {ease: 'linear' as const} : {})}))} : {})});
+      if (moves) actors.push({id: `d-${item.id}`, rig: 'dot', at: P(path[0].x, path[0].y), opacity: [[0, 0]], layer: 1,
+        base: path.map((q, i) => ({t: q.t, at: P(q.x, q.y), ...(i ? {ease: 'linear' as const} : {})})), blink: []});
+      continue;
+    }
+    const keyed: Record<string, Key[]> = {};
+    if (item.object === 'bulb') {
+      const a: Key[] = [[0, item.a ?? 0]];
+      for (const e of events.filter(e => e.item === item.id && e.kind === 'light').sort((x, y) => x.t - y.t)) {
+        a.push([e.t, a.at(-1)![1]], [e.t + 0.4, (e as {on?: boolean}).on === false ? 0 : 1, 'linear']);
+      }
+      if (a.length > 1) keyed.a = a;
+    }
+    if (item.object === 'stopwatch') {
+      const a: Key[] = [[0, item.a ?? 0]];
+      for (const e of events.filter(e => e.item === item.id && e.kind === 'run').sort((x, y) => x.t - y.t)) {
+        const from = a.at(-1)![1], dur = (e as {duration: number}).duration;
+        a.push([e.t, from], [e.t + dur, from + dur, 'linear']);
+      }
+      if (a.length > 1) keyed.a = a;
+    }
+    if (item.object === 'speedometer' && item.follows) keyed.a = speedKeys(item.follows, String(item.params?.unit ?? 'm/s') === 'km/h' ? 3.6 : 1);
     const base = {id: `o-${item.id}`, type: 'object' as const, name: item.object, size, facing: item.facing ?? 1, a: item.a, b: item.b,
       label: item.label, params: item.params, layer: has(item, 'mover') ? 3 : 2};
     if (path.length === 1) {
       const [x, y] = P(path[0].x, path[0].y);
-      props.push({...base, x, y, angle: path[0].angle});
+      props.push({...base, x, y, angle: path[0].angle, ...(Object.keys(keyed).length ? {keys: keyed} : {})});
       continue;
     }
     // A moving item: a hidden dot carries its place (readouts and arrows follow it); the prop rides on the dot, with

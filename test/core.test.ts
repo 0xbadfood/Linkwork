@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {check, compile, dist, frame, ladderFacts, place, poseAt, RIGS, solve, svg, valueAt, wavelengthColour,
+import {check, compile, dist, frame, ladderFacts, place, poseAt, RIGS, solve, svg, valueAt, wavelengthColour, type Key,
   type Rig, type Scene} from '../src/index.ts';
 
 const figure = RIGS.figure;
@@ -212,4 +212,35 @@ test('stage: a projectile lands where the formula says, a slider and a roller ta
     events: [{t: 0, item: 't', kind: 'roll', on: 'w'}]}).some(e => /only a roller/.test(e)));
   assert.ok(stageErrors({verb: 'stage', width_m: 20, items: [{id: 'b', object: 'ball', x: 1}],
     events: [{t: 0, item: 'b', kind: 'launch', speed: 30, angle: 45}]}).some(e => /off the stage/.test(e)));
+});
+
+test('general props: a thinker poses, a bulb lights over the head, a stopwatch runs, a speedometer reads its car', () => {
+  const out = compile({verb: 'stage', width_m: 24, items: [{id: 'kid', object: 'figure', x: 2}, {id: 'idea', object: 'bulb', x: 2.3, on: 'kid'},
+    {id: 'car', object: 'car', x: 7}, {id: 'meter', object: 'speedometer', x: 15, y: 3, follows: 'car', params: {max: 20}},
+    {id: 'watch', object: 'stopwatch', x: 20, y: 3}],
+  events: [{t: 0.3, item: 'kid', kind: 'pose', pose: 'think'}, {t: 1.6, item: 'idea', kind: 'light'},
+    {t: 2, item: 'car', kind: 'move', to: 21, duration: 4}, {t: 2, item: 'watch', kind: 'run', duration: 4}]} as never);
+  assert.deepEqual(out.errors, []);
+  const scene = out.scene!, keyOf = (id: string) => scene.props.find(p => p.id === id)!.keys!.a as Key[];
+  assert.equal(valueAt(keyOf('o-idea'), 1), 0);
+  assert.equal(valueAt(keyOf('o-idea'), 2.5), 1);
+  assert.ok(Math.abs(valueAt(keyOf('o-watch'), 4) - 2) < 1e-9);               // ran from t = 2: 2 s shown at t = 4
+  assert.ok(Math.abs(valueAt(keyOf('o-meter'), 4) - 14 / 4) < 0.05);           // 14 m in 4 s at constant speed
+  assert.ok(scene.actors.some(a => a.rig === 'figure'));
+  assert.deepEqual(check(scene, {every: 3}), []);
+  assert.ok(compile({verb: 'stage', items: [{id: 't', object: 'table', x: 2}], events: [{t: 0, item: 't', kind: 'light'}]} as never).errors.some(e => /only a bulb/.test(e)));
+});
+
+test('motion_on_line follows a formula exactly; path_length measures path against displacement', () => {
+  const car = compile({verb: 'motion_on_line', axis: {range: [0, 20]}, object: 'car', formula: {expr: '0.08*x^3', t: [0, 6]}, readouts: ['t', 'x', 'v'], speedometer: {max: 10}} as never);
+  assert.deepEqual(car.errors, []);
+  assert.match((car.scene!.meta as {facts: string[]}).facts.join(' '), /at t = 3 s, v = 2\.16 m\/s/);
+  assert.ok(compile({verb: 'motion_on_line', axis: {range: [0, 10]}, formula: {expr: '0.08*x^3', t: [0, 6]}} as never).errors.some(e => /leaves the axis/.test(e)));
+  const trip = compile({verb: 'path_length', area: [200, 120], duration: 8, trip_seconds: 240, back: true, route: [[10, 60], [190, 60]]} as never);
+  assert.deepEqual(trip.errors, []);
+  const meta = trip.scene!.meta as {path: number; displacement: number; facts: string[]};
+  assert.equal(meta.path, 360);
+  assert.equal(meta.displacement, 0);
+  assert.match(meta.facts.join(' '), /average speed 1\.5 m\/s; size of average velocity 0 m\/s/);
+  assert.deepEqual(check(trip.scene!, {every: 3}), []);
 });

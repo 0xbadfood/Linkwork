@@ -11,6 +11,7 @@ import {OBJECTS} from '../objects.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
+import {dfOf, exprErrors, fOf} from '../expr.ts';
 import {round} from '../vec.ts';
 import {n2, walking} from './calculus.ts';
 import {niceStep} from './graph.ts';
@@ -26,7 +27,12 @@ export type MotionSpec = Common & {
   object?: (typeof MOVERS)[number];
   /** The object's real length in axis units, to draw it to scale (optional). */
   object_length?: number;
-  moves: {t: number; x: number}[];
+  moves?: {t: number; x: number}[];
+  /** Instead of moves: x as a formula of time, x(t) written in the variable x (e.g. '0.08*x^3'), from t0 to t1
+   * (user, 2026-10-24: the book's x = 0.08t³ car). The motion follows it exactly; v is its rate, read live. */
+  formula?: {expr: string; t: [number, number]};
+  /** A speedometer beside the axis showing the mover's speed (max: the top of its dial). */
+  speedometer?: {max?: number};
   marks?: {x: number; label: string}[];
   graph?: boolean;
   readouts?: (typeof READOUTS)[number][];
@@ -47,15 +53,29 @@ export function motionErrors(s: MotionSpec): string[] {
     else if (s.object_length > 0.6 * (b - a)) e.push('motion_on_line: the object is too long for the axis (at most 60% of it)');
     if (!SCALED.includes((s.object ?? 'dot') as never)) e.push('motion_on_line: object_length needs an object that has a length (not a dot)');
   }
-  if (!Array.isArray(s.moves) || s.moves.length < 2) return [...e, 'motion_on_line: give at least two moves {t, x}'];
+  if (s.formula !== undefined) {
+    if (s.moves !== undefined) return [...e, 'motion_on_line: give moves or a formula, not both'];
+    const errs = exprErrors(s.formula?.expr, ['x'], 'motion_on_line: formula.expr');
+    if (errs.length) return [...e, ...errs];
+    const [t0, t1] = s.formula.t ?? [NaN, NaN];
+    if (!isNum(t0) || !isNum(t1) || t0 < 0 || t1 <= t0 || t1 - t0 > 60) return [...e, 'motion_on_line: formula.t is [t0, t1] seconds, under a minute'];
+    const f = fOf(s.formula.expr);
+    for (let i = 0; i <= 200; i++) {
+      const v = f(t0 + (t1 - t0) * i / 200);
+      if (!isNum(v) || v < a || v > b) { e.push(`motion_on_line: x(t) leaves the axis (${a} to ${b}) at t = ${fmt(t0 + (t1 - t0) * i / 200)} s; widen axis.range`); break; }
+    }
+    return e;
+  }
+  if (!Array.isArray(s.moves) || s.moves.length < 2) return [...e, 'motion_on_line: give at least two moves {t, x}, or a formula'];
   s.moves.forEach((m, i) => {
     const where = `motion_on_line: move ${i + 1}`;
     if (!isNum(m?.t) || !isNum(m?.x)) { e.push(`${where} needs t (seconds) and x`); return; }
     if (i === 0 && m.t < 0) e.push(`${where}: t starts at 0 or later`);
-    if (i && !(m.t > s.moves[i - 1].t)) e.push(`${where}: times must increase`);
+    if (i && !(m.t > s.moves![i - 1].t)) e.push(`${where}: times must increase`);
     if (m.x < a || m.x > b) e.push(`${where}: x = ${m.x} is off the axis (${a} to ${b})`);
   });
-  if (s.moves.at(-1)!.t > 60) e.push('motion_on_line: keep the motion under a minute');
+  if (s.moves!.at(-1)!.t > 60) e.push('motion_on_line: keep the motion under a minute');
+  if (s.speedometer !== undefined && !(s.speedometer?.max === undefined || s.speedometer.max > 0)) e.push('motion_on_line: speedometer.max must be positive');
   for (const [i, m] of (s.marks ?? []).entries()) {
     if (!isNum(m?.x) || m.x < a || m.x > b) e.push(`motion_on_line: mark ${i + 1} must be on the axis`);
     if (typeof m?.label !== 'string' || !m.label.trim() || m.label.length > 16) e.push(`motion_on_line: mark ${i + 1} needs a short label (16 characters)`);
@@ -67,7 +87,15 @@ export function motionErrors(s: MotionSpec): string[] {
 export function motionOnLine(s: MotionSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const [a, b] = s.axis.range, unit = s.axis.unit ?? 'm', u = unit ? ` ${unit}` : '';
-  const moves = s.moves, T = moves.at(-1)!.t, kind = s.object ?? 'dot';
+  // A formula is sampled finely (30 a second) into moves; readouts of v come from its exact rate.
+  const formula = s.formula, fx = formula ? fOf(formula.expr) : null;
+  let moves: {t: number; x: number}[] = s.moves ?? [];
+  if (formula) {
+    const n = Math.ceil((formula.t[1] - formula.t[0]) * 30);
+    moves = [];
+    for (let i = 0; i <= n; i++) { const t = formula.t[0] + (formula.t[1] - formula.t[0]) * i / n; moves.push({t: round(t, 6), x: fx!(t)}); }
+  }
+  const T = moves.at(-1)!.t, kind = s.object ?? 'dot';
   const left = 0.06 * W, right = 0.6 * W, yAxis = (s.graph ? 0.3 : 0.6) * H;
   const axis: Plane = {id: 'axis', x: [a, b], y: [0, 1], box: [left, yAxis - 10, right, yAxis]};
   const X = (x: number) => toScene(axis, [x, 0]);
@@ -103,7 +131,8 @@ export function motionOnLine(s: MotionSpec): Scene {
   if (kind === 'figure') {
     const walker: Actor = {id: 'walker', rig: 'figure', at: X(moves[0].x), base, scale: (s.object_length ? s.object_length * unitPx / 70 : 1.4) * k,
       facing: facings[0]?.[1] === -1 ? -1 : 1, facings: facings.map(([t, f]) => ({t, facing: f as 1 | -1})), pose: [{t: 0, pose: 'stand'}], layer: 2};
-    moves.slice(1).forEach((m, i) => { if (m.x !== moves[i].x) walker.pose!.push(...walking(moves[i].t, m.t)); });
+    if (formula) walker.pose!.push(...walking(moves[0].t, T));
+    else moves.slice(1).forEach((m, i) => { if (m.x !== moves[i].x) walker.pose!.push(...walking(moves[i].t, m.t)); });
     actors.push(walker);
   } else if (kind !== 'dot') {
     const size = s.object_length ? s.object_length * unitPx : Math.min(OBJECTS[kind].length, 0.18 * (right - left)) * k;
@@ -133,9 +162,13 @@ export function motionOnLine(s: MotionSpec): Scene {
     texts.forEach((x, i) => props.push({id: `${id}${i}`, type: 'text', x: px, y: row, text: x.text, size: 34 * k, width: pw, show: x.show, fade: 0.1, style: {fill}}));
     row += 1.35 * 34 * k;
   };
-  if (reads.includes('v')) shared('ro-v', segments.map((g, i) => ({text: `v = ${signed(round(g.v, 6))}${unit ? ` ${unit}/s` : ''}`,
+  if (formula && reads.includes('v')) {
+    props.push({id: 'ro-v', type: 'readout', x: px, y: row, size: 34 * k, text: `v = {v}${unit ? ` ${unit}/s` : ''}`, decimals: 2,
+      measures: {v: {kind: 'of_time', expr: formula.expr, rate: true, from: 0, until: formula.t[1]}}, style: {fill: 'good'}});
+    row += 1.35 * 34 * k;
+  } else if (reads.includes('v')) shared('ro-v', segments.map((g, i) => ({text: `v = ${signed(round(g.v, 6))}${unit ? ` ${unit}/s` : ''}`,
     show: [g.t0, i < segments.length - 1 ? g.t1 : 1e9] as [number, number]})), 'good');
-  if (reads.includes('distance')) {
+  if (reads.includes('distance') && !formula) {
     let covered = 0;
     shared('ro-s', segments.map((g, i) => {
       covered += Math.abs(g.x1 - g.x0);
@@ -155,8 +188,20 @@ export function motionOnLine(s: MotionSpec): Scene {
         style: {stroke: 'muted', width: 2 * k, dash: [5 * k, 8 * k]}, layer: 1});
   }
 
+  if (s.speedometer) {
+    // Its reading: the formula's rate, or the speed of each stretch (constant between moves).
+    const keys: Key[] = formula ? moves.map(m => [m.t, Math.abs(dfOf(formula.expr)(m.t)), 'linear'] as Key)
+      : segments.flatMap(g => [[g.t0, Math.abs(g.v)], [g.t1, Math.abs(g.v)]] as Key[]);
+    const max = s.speedometer.max ?? Math.max(1, ...keys.map(x => x[1])) * 1.25;
+    props.push({id: 'speedometer', type: 'object', name: 'speedometer', x: 0.8 * W, y: 0.9 * H, size: 260 * k,
+      params: {max: Number(max.toPrecision(2)), unit: unit ? `${unit}/s` : ''}, keys: {a: keys}, a: keys[0][1]});
+  }
   const total = moves.at(-1)!.x - moves[0].x, distance = segments.reduce((d, g) => d + Math.abs(g.x1 - g.x0), 0);
-  const facts = [
+  const facts = formula ? [
+    `x = ${formula.expr.replace(/(?<![a-z])x(?![a-z])/g, 't')} from t = ${fmt(formula.t[0])} s to ${fmt(formula.t[1])} s: x goes from ${fmt(moves[0].x)} to ${fmt(moves.at(-1)!.x)}${u}`,
+    ...[formula.t[0], (formula.t[0] + formula.t[1]) / 2, formula.t[1]].map(t => `at t = ${fmt(t)} s, v = ${fmt(round(dfOf(formula.expr)(t), 6))}${unit ? ` ${unit}/s` : ''}`),
+    `average velocity over the whole motion: ${fmt(round((moves.at(-1)!.x - moves[0].x) / (T - moves[0].t), 6))}${unit ? ` ${unit}/s` : ''}`,
+  ] : [
     ...segments.map(g => `from t = ${fmt(g.t0)} s to ${fmt(g.t1)} s: x goes from ${fmt(g.x0)} to ${fmt(g.x1)}${u}, velocity ${signed(round(g.v, 6))}${unit ? ` ${unit}/s` : ''}`),
     `displacement ${signed(round(total, 6))}${u}; distance covered ${fmt(round(distance, 6))}${u}`,
   ];

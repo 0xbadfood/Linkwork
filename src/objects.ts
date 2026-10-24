@@ -18,9 +18,10 @@ export type Motion = {t: number; travel: number; speed: number};
 /** What a prop can do in a scene (user, 2026-10-24: the mechanics world by role). The stage verb's physics follows
  * the role: a mover moves, a roller rolls without slipping, a launcher fires, a support carries what rests on it, a
  * surface is slid or rolled down, an impactor collides, a path and a direction show the way, a connector joins, a
- * measure reads a quantity, ground is what everything stands on. */
+ * measure reads a quantity, ground is what everything stands on; a general prop belongs in any scene of any subject
+ * (a stopwatch, a speedometer, a bulb for a new idea). */
 export const ROLES = ['mover', 'path', 'direction', 'launcher', 'support', 'surface', 'roller', 'impactor', 'ground',
-  'connector', 'measure'] as const;
+  'connector', 'measure', 'general'] as const;
 export type Role = (typeof ROLES)[number];
 type Def = {about: string; length: number; a?: string; b?: string; params?: Record<string, string>; roles: Role[];
   /** Height over length, in its own units (for fitting and for what rests on top). */
@@ -54,7 +55,10 @@ export const OBJECTS: Record<string, Def> = {
   spring: {about: 'a coil spring lying along the ground from x - size/2 to x + size/2 (key size to stretch or squeeze it)', length: 200, roles: ['connector'], height: 0.15},
   cannon: {about: 'a cannon on wheels; its barrel points at angle a (degrees, default 40) and launches a ball', length: 160, a: 'barrel angle in degrees (0–80)', roles: ['launcher'], height: 0.6},
   ruler: {about: 'a measuring rule with ticks (size is its length; label gives what it measures)', length: 300, roles: ['measure'], height: 0.08},
-  stopwatch: {about: 'a stopwatch; its hand shows a seconds (key a to run it)', length: 70, a: 'seconds shown', roles: ['measure'], height: 1.2},
+  stopwatch: {about: 'a stopwatch; its hand shows a seconds (key a to run it)', length: 70, a: 'seconds shown', roles: ['measure', 'general'], height: 1.2},
+  speedometer: {about: "a speedometer: its needle and its number show a speed (a stage keeps it on a mover's speed)", length: 160,
+    a: 'the speed shown', params: {max: 'the top of the dial (default 30)', unit: 'unit under the number (default m/s)'}, roles: ['measure', 'general'], height: 0.9},
+  bulb: {about: 'a light bulb that lights up (a new idea, a light turned on); a sets its glow, 0 to 1', length: 60, a: 'brightness 0 to 1', roles: ['general'], height: 1.7},
 };
 
 export function objectErrors(o: ObjectSpec, where: string): string[] {
@@ -284,6 +288,44 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
       if (o.label) text([0, -h - 16 / s], o.label, 22 / s, 'accent');
       break;
     }
+    case 'speedometer': {
+      const c: Vec = [0, -72], r = 66, max = Math.max(1e-9, +(o.params?.max ?? 30)), sweep = 240;
+      const at = (frac: number, rr: number): Vec => {       // 0 at the lower left, 1 at the lower right, clockwise
+        const ang = (210 - sweep * frac) * DEG;
+        return [c[0] + Math.cos(ang) * rr * f, c[1] - Math.sin(ang) * rr];     // P mirrors x; undo it so it reads left to right
+      };
+      circle(c, r + 8, {fill: 'paper', stroke: 'ink', width: W(4)});
+      const arc: Vec[] = [];
+      for (let i = 0; i <= 24; i++) arc.push(at(i / 24, r - 4));
+      poly(arc, {stroke: 'muted', width: W(3)}, false);
+      const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(v => max / v <= 6) ?? max / 5;
+      for (let v = 0; v <= max + 1e-9; v += step) {
+        line(at(v / max, r - 4), at(v / max, r - 16), {stroke: 'ink', width: W(3)});
+        text(at(v / max, r - 34), String(Math.round(v * 100) / 100), 17, 'muted');
+      }
+      const value = Math.max(0, o.a ?? 0), frac = Math.min(1, value / max);
+      line(c, at(frac, r - 10), {stroke: 'bad', width: W(5)});
+      circle(c, 6, {fill: 'ink'});
+      text([0, 26], `${value < 10 ? value.toFixed(1) : Math.round(value)} ${o.params?.unit ?? 'm/s'}`, 24);
+      if (o.label) text([0, 54], o.label, 20);
+      break;
+    }
+    case 'bulb': {
+      const glow = Math.max(0, Math.min(1, o.a ?? 0)), c: Vec = [0, -72];
+      if (glow > 0) {
+        circle(c, 30 + 34 * glow, {fill: 'accent', opacity: 0.25 * glow});
+        for (let i = 0; i < 8; i++) {
+          const ang = i * Math.PI / 4, r0 = 40, r1 = 40 + 26 * glow;
+          line([c[0] + Math.cos(ang) * r0, c[1] + Math.sin(ang) * r0], [c[0] + Math.cos(ang) * r1, c[1] + Math.sin(ang) * r1], {stroke: 'accent', width: W(4), opacity: glow});
+        }
+      }
+      circle(c, 30, {fill: glow > 0 ? 'accent' : 'faint', stroke: 'ink', width: W(3), opacity: 0.35 + 0.65 * Math.max(glow, 0.4)});
+      poly([[-14, -48], [14, -48], [12, -30], [-12, -30]], {fill: 'muted', stroke: 'ink', width: W(2)});
+      for (const y of [-42, -36]) line([-13, y], [13, y], {stroke: 'ink', width: W(1.5)});
+      poly([[-12, -30], [12, -30], [6, -22], [-6, -22]], {fill: 'ink'});
+      if (o.label) text([0, 16], o.label, 20);
+      break;
+    }
     case 'stopwatch': {
       const c: Vec = [0, -40];
       circle(c, 35, {fill: 'paper', stroke: 'ink', width: W(4)});
@@ -291,7 +333,8 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
       const hand = (o.a ?? 0) * 6 * DEG;          // one turn a minute
       line(c, [Math.sin(hand) * 28, -40 - Math.cos(hand) * 28], {stroke: 'bad', width: W(3)});
       circle(c, 3, {fill: 'ink'});
-      if (o.label) text([0, 16], o.label, 22);
+      text([0, 22], `${(o.a ?? 0).toFixed(1)} s`, 20);
+      if (o.label) text([0, 46], o.label, 22);
       break;
     }
     // Settings are long and thin: their thickness keeps a fixed screen size (k), whatever their length.

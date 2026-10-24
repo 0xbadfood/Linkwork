@@ -7,12 +7,13 @@ import {compassArc, compassErrors, crankErrors, ladderSlideErrors, pendulum, pen
 import {graph, graphErrors, type GraphSpec} from './graph.ts';
 import {motionErrors, motionOnLine, scaleCompare, scaleErrors, type MotionSpec, type ScaleSpec} from './motion.ts';
 import {stage, stageErrors, type StageSpec} from './stage.ts';
+import {pathErrors, pathLength, type PathSpec} from './path.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
   type AreaSpec, type DomainSpec, type ExtremaSpec, type SecantSpec, type VectorSpec} from './calculus.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
-  | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec;
+  | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -44,6 +45,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'an object moving along an x-axis (origin, direction, positions over time), with time, position, displacement, velocity and distance read off, and optionally its x–t graph drawing itself'} as Verb<MotionSpec>,
   scale_compare: {errors: scaleErrors, compile: scaleCompare,
     about: "an object's length against distances, drawn to scale: it shrinks to its true size beside each distance and L/D is shown (when is it a point?)"} as Verb<ScaleSpec>,
+  path_length: {errors: pathErrors, compile: pathLength,
+    about: 'distance along a route against displacement, seen from above: a walker on a winding trail or a round trip; path covered and the straight start-to-here arrow measured as it goes, then average speed beside the size of average velocity'} as Verb<PathSpec>,
   stage: {errors: stageErrors, compile: stage,
     about: 'a small mechanics world laid out in metres (ground, tables, wedges, walls, a cannon) where things move by computed physics: a mover at constant speed, a ball launched as a projectile, a block sliding or a ball rolling down a wedge, two things colliding; ranges, times and speeds are computed and shown'} as Verb<StageSpec>,
 };

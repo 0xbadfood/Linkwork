@@ -43,6 +43,11 @@ export type Measure =
   | {kind: 'angle'; a: Ref; b: Ref; c: Ref}
   | {kind: 'heading'; a: Ref; b: Ref}
   | {kind: 'time'; from?: number; scale?: number}
+  /** A quantity that is a formula of time, x(t) in the variable x: its value (or its rate, with `rate`), at the time
+   * since `from`, held at its value at `until` afterwards; with `abs`, its size (a speed from a velocity). */
+  | {kind: 'of_time'; expr: string; rate?: boolean; from?: number; until?: number; abs?: boolean; scale?: number}
+  /** A value keyed over time (a stage's computed speed), so the readout agrees with the motion drawn from it. */
+  | {kind: 'keys'; keys: Key[]}
   /** Measured on a plane, in its maths units: a coordinate, the run (dx) or slope between two points, the value of an
    * expression at a point's x, or the integral of an expression from a fixed x to a point's x. */
   | {kind: 'coord'; of: Ref; plane: string; axis: 'x' | 'y'}
@@ -305,6 +310,11 @@ export function pointOf(ref: Ref, actors: Map<string, ActorFrame>, planes: Plane
 
 export function measure(m: Measure, t: number, actors: Map<string, ActorFrame>, planes: Planes = new Map()): number {
   if (m.kind === 'time') return (t - (m.from ?? 0)) * (m.scale ?? 1);
+  if (m.kind === 'keys') return valueAt(m.keys, t);
+  if (m.kind === 'of_time') {
+    const s = Math.min(Math.max(0, t - (m.from ?? 0)), m.until ?? Infinity), v = (m.rate ? dfOf(m.expr) : fOf(m.expr))(s) * (m.scale ?? 1);
+    return m.abs ? Math.abs(v) : v;
+  }
   const at = (ref: Ref) => pointOf(ref, actors, planes);
   if (m.kind === 'coord' || m.kind === 'expr' || m.kind === 'integral') {
     const p = at(m.kind === 'coord' ? m.of : m.kind === 'expr' ? m.at : m.to), plane = planes.get(m.plane);
