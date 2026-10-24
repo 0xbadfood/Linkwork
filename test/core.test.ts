@@ -179,11 +179,11 @@ test('objects draw, check and roll as far as they move', async () => {
 
 test('motion_on_line computes velocities and distance; scale_compare its ratios', async () => {
   const {compile} = await import('../src/index.ts');
-  const {scene} = compile({verb: 'motion_on_line', axis: {range: [-4, 8]}, moves: [{t: 0, x: 0}, {t: 3, x: 6}, {t: 4, x: 6}, {t: 7, x: -3}]});
+  const {scene} = compile({verb: 'motion_on_line', axis: {range: [-4, 8]}, moves: [{t: 0, x: 0}, {t: 3, x: 6}, {t: 4, x: 6}, {t: 7, x: -3}]} as never);
   assert.deepEqual((scene!.meta as {segments: {v: number}[]}).segments.map(g => g.v), [2, 0, -3]);
   assert.equal(scene!.meta!.displacement, -3);
   assert.equal(scene!.meta!.distance, 15);
-  assert.match(compile({verb: 'motion_on_line', axis: {range: [0, 5]}, moves: [{t: 0, x: 0}, {t: 1, x: 9}]}).errors.join(' '), /off the axis/);
-  const sc = compile({verb: 'scale_compare', object: 'bus', length: 12, cases: [{label: 'route', distance: 10000}, {label: 'parking', distance: 15}]}).scene!;
+  assert.match(compile({verb: 'motion_on_line', axis: {range: [0, 5]}, moves: [{t: 0, x: 0}, {t: 1, x: 9}]} as never).errors.join(' '), /off the axis/);
+  const sc = compile({verb: 'scale_compare', object: 'bus', length: 12, cases: [{label: 'route', distance: 10000}, {label: 'parking', distance: 15}]} as never).scene!;
   assert.deepEqual((sc.meta as {cases: {ratio: number}[]}).cases.map(c => c.ratio), [0.0012, 0.8]);
 });

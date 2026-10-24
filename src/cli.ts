@@ -6,13 +6,15 @@ import {join} from 'node:path';
 import {check} from './check.ts';
 import type {Scene} from './scene.ts';
 import {svg} from './svg.ts';
-import {cards, compile, VERBS} from './verbs/index.ts';
+import {cards, compile, shortlist, VERBS} from './verbs/index.ts';
 
 const USAGE = `linkwork compile <spec.json> [-o scene.json]
 linkwork check <file.json> [--every n]           errors, one per line; exit 1 if any
 linkwork svg <file.json> --t <seconds> [-o out.svg] [--transparent]
 linkwork frames <file.json> --out <dir> [--every n] [--transparent]
-linkwork verbs [--json [--all]]                 the verbs, or their cards as JSON`;
+linkwork verbs [--json [--all]]                 the verbs, or their cards as JSON
+linkwork shortlist <text.txt> --subject <s> [--limit n] [--all]   cards fitting a teaching text, as JSON
+linkwork batch <specs.json> [--every n]          [{id, spec}] -> [{id, errors, duration, facts, scene}] as JSON`;
 
 function arg(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
@@ -31,6 +33,24 @@ function main(argv: string[]): number {
     // --json prints the cards (all statuses with --all), for a pipeline's planner.
     if (argv.includes('--json')) { console.log(JSON.stringify(cards(argv.includes('--all') ? ['candidate', 'trial', 'trusted'] : ['trusted']), null, 1)); return 0; }
     for (const [name, v] of Object.entries(VERBS)) console.log(`${name}: ${v.about}`);
+    return 0;
+  }
+  if (command === 'shortlist' && file) {
+    const statuses = rest.includes('--all') ? ['candidate', 'trial', 'trusted'] as const : ['trusted'] as const;
+    const list = shortlist(readFileSync(file, 'utf8'), arg(rest, '--subject') ?? 'physics', [...statuses], Number(arg(rest, '--limit') ?? 6));
+    console.log(JSON.stringify(list.map(s => ({name: s.name, score: s.score, ...s.card})), null, 1));
+    return 0;
+  }
+  if (command === 'batch' && file) {
+    // Many specs in one process: each compiled and checked, with the facts it will show and its scene when it passes.
+    const every = Number(arg(rest, '--every') ?? 3);
+    const items = JSON.parse(readFileSync(file, 'utf8')) as {id: string; spec: {verb: string}}[];
+    console.log(JSON.stringify(items.map(({id, spec}) => {
+      const {scene, errors} = compile(spec);
+      const problems = scene ? check(scene, {every}) : errors;
+      return {id, errors: problems, duration: scene?.duration ?? null, facts: (scene?.meta as {facts?: string[]})?.facts ?? [],
+        scene: problems.length ? null : scene};
+    })));
     return 0;
   }
   if (!command || !file) { console.error(USAGE); return 2; }

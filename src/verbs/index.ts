@@ -51,6 +51,27 @@ export function cards(statuses: Card['status'][] = ['trusted']): Record<string, 
     .map(([name, verb]) => [name, {about: verb.about, ...CARDS[name]}]));
 }
 
+const STOP = new Set(['about', 'their', 'there', 'which', 'where', 'with', 'from', 'that', 'this', 'when', 'what', 'into',
+  'between', 'against', 'along', 'shown', 'shows', 'using', 'used', 'other', 'than', 'then', 'them', 'they', 'these', 'those']);
+const words = (text: string) => new Set((text.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? []).map(w => w.replace(/s$/, '')).filter(w => !STOP.has(w)));
+
+/** The cards worth showing a planner for this teaching text (a concept's name, summary and coverage): the verbs of the
+ * subject whose concepts the text names (a whole concept phrase counts most), best first, at most `limit`. */
+export function shortlist(text: string, subject: string, statuses: Card['status'][] = ['trusted'], limit = 6) {
+  const lower = ` ${text.toLowerCase()} `, have = words(text);
+  const scored = Object.entries(cards(statuses)).filter(([, c]) => c.subjects.includes(subject as never)).map(([name, c]) => {
+    let score = 0;
+    for (const concept of c.concepts) {
+      const phrase = concept.toLowerCase().replace(/\s*\(.*?\)/g, '');
+      if (lower.includes(phrase)) score += 3;
+      score += [...words(concept)].filter(w => have.has(w)).length * 0.5;
+    }
+    score += [...words(c.use_when)].filter(w => have.has(w)).length * 0.25;
+    return {name, score, card: c};
+  });
+  return scored.filter(s => s.score >= 1).sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
 /** Compile a verb spec. A spec with errors gives no scene. */
 export function compile(spec: {verb: string}): {scene?: Scene; errors: string[]} {
   const verb = VERBS[spec?.verb];
