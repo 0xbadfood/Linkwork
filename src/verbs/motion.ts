@@ -101,7 +101,7 @@ export function motionOnLine(s: MotionSpec): Scene {
   const facingKeys: Key[] = facings.length ? facings.flatMap(([t, f], i) => (i ? [[t, facings[i - 1][1]], [t, f]] : [[0, f], [t, f]]) as Key[]) : [[0, 1]];
   const unitPx = (right - left) / (b - a);
   if (kind === 'figure') {
-    const walker: Actor = {id: 'walker', rig: 'figure', at: X(moves[0].x), base, scale: (s.object_length ? s.object_length * unitPx / 70 : 0.8) * k,
+    const walker: Actor = {id: 'walker', rig: 'figure', at: X(moves[0].x), base, scale: (s.object_length ? s.object_length * unitPx / 70 : 1.4) * k,
       facing: facings[0]?.[1] === -1 ? -1 : 1, facings: facings.map(([t, f]) => ({t, facing: f as 1 | -1})), pose: [{t: 0, pose: 'stand'}], layer: 2};
     moves.slice(1).forEach((m, i) => { if (m.x !== moves[i].x) walker.pose!.push(...walking(moves[i].t, m.t)); });
     actors.push(walker);
