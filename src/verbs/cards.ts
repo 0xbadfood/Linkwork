@@ -192,6 +192,23 @@ export const CARDS: Record<string, Card> = {
       cases: [{label: 'Beside a 100 m platform', distance: 100, setting: 'platform'}, {label: 'Delhi to Agra, about 200 km', distance: 200000, setting: 'route'}]},
     status: 'trial',
   },
+  stage: {
+    subjects: ['physics'],
+    concepts: ['projectile motion', 'range', 'time of flight', 'inclined plane', 'friction', 'rolling motion', 'collision',
+      'conservation of momentum', 'elastic collision', 'inelastic collision', 'uniform motion', 'acceleration down a slope'],
+    kinds: ['process', 'apparatus', 'model'], motions: ['translate', 'rotate', 'labels', 'value_change'],
+    use_when: 'a mechanics situation acted out with real objects: a ball fired from a cannon or thrown off a table (projectile), a block sliding or a ball, cylinder or ring rolling down a wedge, carts or blocks colliding (elastic or sticking), a cart at constant speed; the motion is computed from the numbers, so ranges, times and speeds are exact',
+    not_when: 'a motion only along a marked x-axis with position readouts (use motion_on_line), a graph (use graph), or a situation with forces that vary in time (springs oscillating, circular motion)',
+    fields: {width_m: 'the stage width in metres (things must stay on it)', ground: 'floor | grass | none',
+      items: "{id, object (from the props list), x in metres (the base's middle), on: id of a support it rests on (table, block, plank, wall) or y, size in metres, facing 1 | -1, a (a wedge's angle, a cannon's barrel angle), label, mass in kg}",
+      events: "{t in seconds, item, kind} and: move {to, duration, ease?}; launch {speed m/s, angle°, from: cannon id?}; slide {on: wedge id, friction μ?, then: seconds along the ground after}; roll {on: wedge id, then?}; collide {with, speed m/s, elastic true|false, after: seconds}",
+      arrows: '{item, dx, dy in metres, kind: velocity | force | direction, label, t0, t1}', labels: '{text, x, y in metres, t0, t1}',
+      readouts: "{item, show: ['x', 'height']}", title: 'short title'},
+    example: {verb: 'stage', title: 'A ball fired from a cannon', width_m: 40, ground: 'grass',
+      items: [{id: 'cannon', object: 'cannon', x: 2, size: 2, a: 40}, {id: 'ball', object: 'ball', x: 2, size: 0.5}],
+      events: [{t: 0.5, item: 'ball', kind: 'launch', from: 'cannon', speed: 18}], readouts: [{item: 'ball', show: ['x', 'height']}]},
+    status: 'trial',
+  },
 };
 
 export function cardErrors(name: string, card: Card | undefined): string[] {

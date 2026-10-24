@@ -15,24 +15,46 @@ export type ObjectSpec = {name: string; x: number; y: number; size?: number; fac
  * the start (scene units, + to the right) and its speed (scene units per second). */
 export type Motion = {t: number; travel: number; speed: number};
 
-type Def = {about: string; length: number; a?: string; b?: string; params?: Record<string, string>; ground: boolean};
+/** What a prop can do in a scene (user, 2026-10-24: the mechanics world by role). The stage verb's physics follows
+ * the role: a mover moves, a roller rolls without slipping, a launcher fires, a support carries what rests on it, a
+ * surface is slid or rolled down, an impactor collides, a path and a direction show the way, a connector joins, a
+ * measure reads a quantity, ground is what everything stands on. */
+export const ROLES = ['mover', 'path', 'direction', 'launcher', 'support', 'surface', 'roller', 'impactor', 'ground',
+  'connector', 'measure'] as const;
+export type Role = (typeof ROLES)[number];
+type Def = {about: string; length: number; a?: string; b?: string; params?: Record<string, string>; roles: Role[];
+  /** Height over length, in its own units (for fitting and for what rests on top). */
+  height?: number};
 export const OBJECTS: Record<string, Def> = {
-  car: {about: 'a car; wheels roll with the distance travelled', length: 200, ground: true},
-  bus: {about: 'a city bus; wheels roll with the distance travelled', length: 300, ground: true},
+  car: {about: 'a car; wheels roll with the distance travelled', length: 200, roles: ['mover', 'impactor']},
+  bus: {about: 'a city bus; wheels roll with the distance travelled', length: 300, roles: ['mover', 'impactor']},
   train: {about: 'a locomotive with smoke (and carriages behind it); wheels roll, smoke trails while it moves', length: 260,
-    params: {cars: 'carriages behind the engine, 0–3 (each as long as the engine)', smoke: '0 for no smoke'}, ground: true},
-  bicycle: {about: 'a cyclist on a bicycle; wheels roll and the pedals turn with the distance travelled', length: 170, ground: true},
-  block: {about: 'a block (a box of mass m)', length: 100, params: {height: 'height as a share of the length, default 0.7'}, ground: true},
-  wedge: {about: 'a wedge or inclined plane with its angle marked', length: 300, a: 'the angle of the slope in degrees (5–75, default 30)', ground: true},
+    params: {cars: 'carriages behind the engine, 0–3 (each as long as the engine)', smoke: '0 for no smoke'}, roles: ['mover', 'impactor']},
+  bicycle: {about: 'a cyclist on a bicycle; wheels roll and the pedals turn with the distance travelled', length: 170, roles: ['mover']},
+  block: {about: 'a block (a box of mass m)', length: 100, params: {height: 'height as a share of the length, default 0.7'}, roles: ['mover', 'support', 'impactor']},
+  wedge: {about: 'a wedge or inclined plane with its angle marked', length: 300, a: 'the angle of the slope in degrees (5–75, default 30)', roles: ['support', 'surface']},
   pulley: {about: 'a fixed pulley hanging from the ceiling, a rope over it and a block on each side; the wheel turns with the rope',
     length: 100, a: 'the left rope length below the wheel, in pulley diameters (default 2)',
-    b: 'the right rope length below the wheel, in pulley diameters (default 2)', ground: false},
+    b: 'the right rope length below the wheel, in pulley diameters (default 2)', roles: ['connector']},
   sling: {about: 'a stone whirled on a string (circular motion), with its path and, optionally, its velocity arrow',
-    length: 240, a: 'the angle of the string in degrees, counter-clockwise from the right', b: 'velocity arrow length as a share of the radius (0: none)', ground: false},
-  ball: {about: 'a ball', length: 40, ground: true},
-  platform: {about: 'a railway platform beside the track (its length is its size)', length: 300, ground: true},
-  road: {about: 'a stretch of road with a dashed centre line (its length is its size)', length: 300, ground: true},
-  parking: {about: 'a parking bay between two kerbs, with a P sign (its length is its size)', length: 300, ground: true},
+    length: 240, a: 'the angle of the string in degrees, counter-clockwise from the right', b: 'velocity arrow length as a share of the radius (0: none)', roles: ['connector', 'mover']},
+  ball: {about: 'a ball', length: 40, roles: ['mover', 'roller', 'impactor']},
+  platform: {about: 'a railway platform beside the track (its length is its size)', length: 300, roles: ['ground', 'path']},
+  road: {about: 'a stretch of road with a dashed centre line (its length is its size)', length: 300, roles: ['ground', 'path']},
+  parking: {about: 'a parking bay between two kerbs, with a P sign (its length is its size)', length: 300, roles: ['ground', 'path']},
+  signpost: {about: 'a signpost whose arrow board points the way it faces (label: the word on the board)', length: 120, roles: ['direction'], height: 1.3},
+  marker: {about: 'a stone marker with a small flag: a chosen starting point (label under it)', length: 40, roles: ['direction', 'path'], height: 1.6},
+  table: {about: 'a table; things rest on its top', length: 300, roles: ['support', 'ground'], height: 0.5},
+  plank: {about: 'a plank; things rest on it, tilt it with angle', length: 300, roles: ['support', 'surface'], height: 0.04},
+  slide: {about: 'a smooth curved slide (rounded surface) from a high end on the left down to the ground on the right', length: 300, roles: ['surface', 'support'], height: 0.7},
+  cylinder: {about: 'a solid cylinder seen end-on; rolls without slipping (the stripe turns with it)', length: 60, roles: ['mover', 'roller', 'impactor'], height: 1},
+  ring: {about: 'a ring or hoop seen end-on; rolls without slipping', length: 60, roles: ['mover', 'roller'], height: 1},
+  cart: {about: 'a trolley on two small wheels (collisions, pushes)', length: 120, roles: ['mover', 'impactor'], height: 0.5},
+  wall: {about: 'a wall: things stop or bounce at it', length: 30, roles: ['impactor', 'support'], height: 6},
+  spring: {about: 'a coil spring lying along the ground from x - size/2 to x + size/2 (key size to stretch or squeeze it)', length: 200, roles: ['connector'], height: 0.15},
+  cannon: {about: 'a cannon on wheels; its barrel points at angle a (degrees, default 40) and launches a ball', length: 160, a: 'barrel angle in degrees (0–80)', roles: ['launcher'], height: 0.6},
+  ruler: {about: 'a measuring rule with ticks (size is its length; label gives what it measures)', length: 300, roles: ['measure'], height: 0.08},
+  stopwatch: {about: 'a stopwatch; its hand shows a seconds (key a to run it)', length: 70, a: 'seconds shown', roles: ['measure'], height: 1.2},
 };
 
 export function objectErrors(o: ObjectSpec, where: string): string[] {
@@ -193,9 +215,85 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
       }
       break;
     }
-    case 'ball':
-      circle([0, -20], 20, {fill: 'accent', stroke: 'ink', width: W(3)});
+    case 'ball': case 'cylinder': case 'ring': {
+      // A roller: a stripe through its centre turns by the distance rolled over its radius (no slipping).
+      const r = def.length / 2, c: Vec = [0, -r];
+      circle(c, o.name === 'ring' ? r - 3 : r, o.name === 'ring' ? {fill: 'none', stroke: 'accent', width: W(8)} : {fill: o.name === 'ball' ? 'accent' : 'faint', stroke: 'ink', width: W(3)});
+      const turn = m.travel / (r * s) * f, d: Vec = [Math.cos(turn) * r * 0.8, Math.sin(turn) * r * 0.8];
+      line([c[0] - d[0], c[1] - d[1]], [c[0] + d[0], c[1] + d[1]], {stroke: 'ink', width: W(o.name === 'ball' ? 3 : 4)});
+      if (o.name !== 'ball') circle(c, r * 0.12, {fill: 'ink'});
       break;
+    }
+    case 'signpost': {
+      line([0, 0], [0, -150], {stroke: 'muted', width: W(8)});
+      poly([[-50, -150], [40, -150], [60, -132], [40, -114], [-50, -114]], {fill: 'accent', stroke: 'ink', width: W(3)});
+      if (o.label) text([-4, -132], o.label, 22, 'paper');
+      break;
+    }
+    case 'marker': {
+      poly([[-20, 0], [-14, -22], [14, -22], [20, 0]], {fill: 'muted', stroke: 'ink', width: W(3)});
+      line([0, -22], [0, -64], {stroke: 'ink', width: W(3)});
+      poly([[0, -64], [26, -56], [0, -48]], {fill: 'cool', stroke: 'cool', width: W(1)});
+      if (o.label) text([0, 26], o.label, 26);
+      break;
+    }
+    case 'table':
+      poly(box(-150, -150, 150, -136), {fill: 'faint', stroke: 'ink', width: W(4)});
+      for (const x of [-130, 122]) poly(box(x, -136, x + 8, 0), {fill: 'muted', stroke: 'muted', width: W(1)});
+      break;
+    case 'plank':
+      poly(box(-150, -12, 150, 0), {fill: 'faint', stroke: 'ink', width: W(3)});
+      break;
+    case 'slide': {
+      const pts: Vec[] = [];
+      for (let i = 0; i <= 24; i++) { const u = i / 24; pts.push([-150 + 300 * u, -210 * (1 - u) ** 2]); }
+      poly([...pts, [150, 0], [-150, 0]], {fill: 'faint', stroke: 'ink', width: W(3)});
+      poly(pts, {stroke: 'accent', width: W(4)}, false);
+      break;
+    }
+    case 'cart':
+      poly(box(-60, -50, 60, -16), {fill: 'faint', stroke: 'ink', width: W(4)});
+      wheel(-36, -12, 12, 2); wheel(36, -12, 12, 2);
+      if (o.label) text([0, -33], o.label, 22);
+      break;
+    case 'wall':
+      poly(box(-15, -180, 15, 0), {fill: 'muted', stroke: 'ink', width: W(3)});
+      for (let y = -170; y < 0; y += 30) line([-15, y], [15, y + 12], {stroke: 'faint', width: W(2)});
+      break;
+    case 'spring': {
+      const pts: Vec[] = [[-100, -15]];
+      for (let i = 1; i < 20; i++) pts.push([-100 + i * 10, i % 2 ? -27 : -3]);
+      pts.push([100, -15]);
+      poly(pts, {stroke: 'ink', width: 3}, false);
+      break;
+    }
+    case 'cannon': {
+      const a = Math.max(0, Math.min(80, o.a ?? 40)) * DEG, base: Vec = [-10, -40];
+      const tip: Vec = [base[0] + Math.cos(a) * 90, base[1] - Math.sin(a) * 90];
+      const n: Vec = [Math.sin(a) * 14, Math.cos(a) * 14];
+      poly([[base[0] - n[0], base[1] - n[1]], [tip[0] - n[0], tip[1] - n[1]], [tip[0] + n[0], tip[1] + n[1]], [base[0] + n[0], base[1] + n[1]]], {fill: 'ink', stroke: 'ink', width: W(2)});
+      poly([[-60, -40], [40, -40], [30, -16], [-50, -16]], {fill: 'faint', stroke: 'ink', width: W(3)});
+      wheel(-30, -16, 16, 3);
+      break;
+    }
+    case 'ruler': {
+      const len = 300, h = 24 / s;
+      poly(box(-150, -h, 150, 0), {fill: 'paper', stroke: 'accent', width: 2});
+      const ticks = Math.max(1, Math.round(+(o.params?.ticks ?? 10)));
+      for (let i = 0; i <= ticks; i++) { const x = -150 + len * i / ticks; line([x, -h], [x, -h * (i % 5 ? 0.55 : 0.2)], {stroke: 'accent', width: 2}); }
+      if (o.label) text([0, -h - 16 / s], o.label, 22 / s, 'accent');
+      break;
+    }
+    case 'stopwatch': {
+      const c: Vec = [0, -40];
+      circle(c, 35, {fill: 'paper', stroke: 'ink', width: W(4)});
+      line([0, -75], [0, -84], {stroke: 'ink', width: W(5)});
+      const hand = (o.a ?? 0) * 6 * DEG;          // one turn a minute
+      line(c, [Math.sin(hand) * 28, -40 - Math.cos(hand) * 28], {stroke: 'bad', width: W(3)});
+      circle(c, 3, {fill: 'ink'});
+      if (o.label) text([0, 16], o.label, 22);
+      break;
+    }
     // Settings are long and thin: their thickness keeps a fixed screen size (k), whatever their length.
     case 'platform': {
       const h = 16 / s;

@@ -187,3 +187,29 @@ test('motion_on_line computes velocities and distance; scale_compare its ratios'
   const sc = compile({verb: 'scale_compare', object: 'bus', length: 12, cases: [{label: 'route', distance: 10000}, {label: 'parking', distance: 15}]} as never).scene!;
   assert.deepEqual((sc.meta as {cases: {ratio: number}[]}).cases.map(c => c.ratio), [0.0012, 0.8]);
 });
+
+test('stage: a projectile lands where the formula says, a slider and a roller take their times, collisions keep momentum', async () => {
+  const {stageErrors} = await import('../src/verbs/stage.ts');
+  const shot = compile({verb: 'stage', width_m: 60, items: [{id: 'b', object: 'ball', x: 1, y: 0, size: 0.5}],
+    events: [{t: 0, item: 'b', kind: 'launch', speed: 20, angle: 45}]} as never);
+  assert.deepEqual(shot.errors, []);
+  const R = 20 * 20 / 9.8, T = 2 * 20 * Math.SQRT1_2 / 9.8;
+  assert.match((shot.scene!.meta as {facts: string[]}).facts[0], new RegExp(`lands at x = ${(1 + R).toFixed(2)} m .* after ${T.toFixed(2)} s`));
+  const slope = compile({verb: 'stage', width_m: 12, items: [{id: 'w', object: 'wedge', x: 4, size: 4, a: 30},
+    {id: 'k', object: 'block', x: 4, size: 0.5}, {id: 'v', object: 'wedge', x: 9, size: 4, a: 30}, {id: 'r', object: 'ring', x: 9, size: 0.5}],
+  events: [{t: 0, item: 'k', kind: 'slide', on: 'w'}, {t: 0, item: 'r', kind: 'roll', on: 'v'}]} as never);
+  assert.deepEqual(slope.errors, []);
+  const [slide, roll] = (slope.scene!.meta as {facts: string[]}).facts;
+  assert.match(slide, /a = 4\.9 m\/s²/);
+  assert.match(roll, /a = 2\.45 m\/s²/);                       // a ring: g sin θ / 2
+  const hit = compile({verb: 'stage', width_m: 12, items: [{id: 'a', object: 'cart', x: 2, mass: 2}, {id: 'c', object: 'cart', x: 6, mass: 2}],
+    events: [{t: 0, item: 'a', kind: 'collide', with: 'c', speed: 4, elastic: false, after: 1}]} as never);
+  assert.deepEqual(hit.errors, []);
+  assert.ok((hit.scene!.meta as {facts: string[]}).facts.some(f => /a moves at 2 m\/s and c at 2 m\/s/.test(f)));
+  assert.deepEqual(check(hit.scene!, {every: 3}), []);
+  // Roles are enforced, and a shot that leaves the stage is refused.
+  assert.ok(stageErrors({verb: 'stage', items: [{id: 'w', object: 'wedge', x: 2}, {id: 't', object: 'table', x: 5}],
+    events: [{t: 0, item: 't', kind: 'roll', on: 'w'}]}).some(e => /only a roller/.test(e)));
+  assert.ok(stageErrors({verb: 'stage', width_m: 20, items: [{id: 'b', object: 'ball', x: 1}],
+    events: [{t: 0, item: 'b', kind: 'launch', speed: 30, angle: 45}]}).some(e => /off the stage/.test(e)));
+});

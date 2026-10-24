@@ -374,10 +374,10 @@ export function propFrame(prop: Prop, t: number, actors: Map<string, ActorFrame>
   switch (prop.type) {
     case 'object': {
       // The motion is read from where the object is now, a moment ago and at the start, so wheels roll exactly as far
-      // as it has moved and smoke knows how fast it goes.
+      // as it has moved and smoke knows how fast it goes. Keyed travel (rolling down a slope) overrides it.
       const xAt = (s: number) => objectX(prop, s, scene);
       const dt = 1 / (scene?.fps ?? 30), now = out.x as number;
-      const motion = {t, travel: now - xAt(0), speed: (now - xAt(Math.max(0, t - dt))) / (t > 0 ? Math.min(dt, t) : dt)};
+      const motion = {t, travel: typeof out.travel === 'number' ? out.travel : now - xAt(0), speed: (now - xAt(Math.max(0, t - dt))) / (t > 0 ? Math.min(dt, t) : dt)};
       Object.assign(out, {type: 'group', items: objectItems(out as never, motion, prop.id)});
       break;
     }
