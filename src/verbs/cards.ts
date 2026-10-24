@@ -21,6 +21,8 @@ export type Card = {
   example: Record<string, unknown>;
   /** candidate → trial (studios only) → trusted (anywhere). */
   status: 'candidate' | 'trial' | 'trusted';
+  /** Offered for its subjects whatever the concept is about (the general props: a thinker, a stopwatch, a speedometer). */
+  always?: boolean;
 };
 
 const window = {x: '[low, high] x window', y: '[low, high] y window', step: 'optional [x step, y step] for the grid'};
@@ -214,7 +216,7 @@ export const CARDS: Record<string, Card> = {
     status: 'trial',
   },
   stage: {
-    subjects: ['physics'],
+    subjects: ['physics', 'maths'], always: true,
     concepts: ['projectile motion', 'range', 'time of flight', 'inclined plane', 'friction', 'rolling motion', 'collision',
       'conservation of momentum', 'elastic collision', 'inelastic collision', 'uniform motion', 'acceleration down a slope'],
     kinds: ['process', 'apparatus', 'model'], motions: ['translate', 'rotate', 'labels', 'value_change'],

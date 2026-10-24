@@ -75,7 +75,9 @@ export function shortlist(text: string, subject: string, statuses: Card['status'
     score += [...words(c.use_when)].filter(w => have.has(w)).length * 0.25;
     return {name, score, card: c};
   });
-  return scored.filter(s => s.score >= 1).sort((a, b) => b.score - a.score).slice(0, limit);
+  const picked = scored.filter(s => s.score >= 1).sort((a, b) => b.score - a.score).slice(0, limit);
+  // The general props' verb comes with every film of its subjects, after the verbs the concept itself calls for.
+  return [...picked, ...scored.filter(s => s.card.always && !picked.includes(s))];
 }
 
 /** Compile a verb spec. A spec with errors gives no scene. */
