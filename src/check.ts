@@ -2,6 +2,7 @@
 // motion checks sample every frame.
 import {EASES} from './ease.ts';
 import {exprErrors} from './expr.ts';
+import {objectErrors} from './objects.ts';
 import {planeErrors} from './plane.ts';
 import {textWidth, wrapText} from './svg.ts';
 import {keyErrors} from './keys.ts';
@@ -68,6 +69,7 @@ export function sceneErrors(scene: Scene): string[] {
     if (p.type === 'region' && p.lower) errors.push(...exprErrors(p.lower, ['x'], `${where} lower`));
     for (const [field, keys] of Object.entries(p.keys ?? {})) errors.push(...keyErrors(keys, `${where} keys.${field}`));
     if (p.anchor && !joints.get(p.anchor.actor)?.has(p.anchor.joint)) errors.push(`${where}: anchor ${p.anchor.actor}.${p.anchor.joint} is not a joint of an actor`);
+    if (p.type === 'object') errors.push(...objectErrors(p, where));
   });
   return errors;
 }

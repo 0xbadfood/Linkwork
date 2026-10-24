@@ -1,0 +1,16 @@
+{
+ "verb": "scale_compare",
+ "title": "Is a train a point?",
+ "object": "train",
+ "length": 25,
+ "cases": [
+  {
+   "label": "Passing a 100 m platform",
+   "distance": 100
+  },
+  {
+   "label": "Delhi to Agra, about 200 km",
+   "distance": 200000
+  }
+ ]
+}

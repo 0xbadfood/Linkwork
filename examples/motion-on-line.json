@@ -1,0 +1,44 @@
+{
+ "verb": "motion_on_line",
+ "title": "Going and coming back",
+ "axis": {
+  "range": [
+   -4,
+   8
+  ],
+  "unit": "m"
+ },
+ "object": "car",
+ "moves": [
+  {
+   "t": 0,
+   "x": 0
+  },
+  {
+   "t": 3,
+   "x": 6
+  },
+  {
+   "t": 4,
+   "x": 6
+  },
+  {
+   "t": 7,
+   "x": -3
+  }
+ ],
+ "marks": [
+  {
+   "x": 6,
+   "label": "P"
+  }
+ ],
+ "graph": true,
+ "readouts": [
+  "t",
+  "x",
+  "displacement",
+  "v",
+  "distance"
+ ]
+}

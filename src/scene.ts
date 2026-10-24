@@ -5,6 +5,7 @@ import {pulseAt, shown, valueAt, type Key} from './keys.ts';
 import {mergePoses, place, type Pose, type Rig, type SkinOptions} from './rig.ts';
 import {dfOf, fOf} from './expr.ts';
 import {integrate, slopeAngle, toPlane, toScene, unitsOf, type Plane} from './plane.ts';
+import {objectItems} from './objects.ts';
 import {RIGS} from './rigs/index.ts';
 import {solve, type Target} from './solve.ts';
 import {add, angleOf, dir, dist, lerp, lerpVec, mul, sub, turnBetween, type Vec} from './vec.ts';
@@ -93,6 +94,10 @@ export type Prop = PropBase & (
   /** The straight line through two points, extended to the plane's box (or by `extend` scene units). */
   | {type: 'through'; a: Ref; b: Ref; plane?: string; extend?: number}
   | {type: 'group'; items: Prop[]}
+  /** A common object of physics problems (objects.ts): car, bus, train, bicycle, block, wedge, pulley, sling, ball.
+   * Key x (or anchor it to an actor) to move it; its wheels, smoke and pulley turn follow from the motion. */
+  | {type: 'object'; name: string; x: number; y: number; size?: number; facing?: number; angle?: number; a?: number; b?: number;
+     label?: string; params?: Record<string, number | string>}
 ) & {
   /** Coordinates (x, y, x1, y1, x2, y2, points; rect corners and sizes) are in this plane's maths units. */
   plane?: string;
@@ -367,6 +372,15 @@ export function propFrame(prop: Prop, t: number, actors: Map<string, ActorFrame>
     if (b) { out.x2 = b[0]; out.y2 = b[1]; }
   }
   switch (prop.type) {
+    case 'object': {
+      // The motion is read from where the object is now, a moment ago and at the start, so wheels roll exactly as far
+      // as it has moved and smoke knows how fast it goes.
+      const xAt = (s: number) => objectX(prop, s, scene);
+      const dt = 1 / (scene?.fps ?? 30), now = out.x as number;
+      const motion = {t, travel: now - xAt(0), speed: (now - xAt(Math.max(0, t - dt))) / (t > 0 ? Math.min(dt, t) : dt)};
+      Object.assign(out, {type: 'group', items: objectItems(out as never, motion, prop.id)});
+      break;
+    }
     case 'trail': {
       const points: Vec[] = [];
       if (scene && t >= prop.t0) {
@@ -436,6 +450,17 @@ export function propFrame(prop: Prop, t: number, actors: Map<string, ActorFrame>
   }
   const base = typeof out.opacity === 'number' ? out.opacity : (prop.style?.opacity ?? 1);
   return {...(out as Prop), opacity: base * shown(prop.show, t, prop.fade), glow: pulseAt(prop.pulse, t), layer: prop.layer ?? 0};
+}
+
+/** An object's x at time s: its anchor's joint, or its keyed or fixed x. */
+function objectX(prop: Prop, s: number, scene?: Scene): number {
+  if (prop.anchor && scene) {
+    const j = actorsAt(scene, s).get(prop.anchor.actor)?.joints.get(prop.anchor.joint);
+    if (j) return j[0] + (prop.anchor.offset?.[0] ?? 0);
+  }
+  const keys = prop.keys?.x, x = keys ? valueAt(keys, s) : (prop as {x: number}).x;
+  if (prop.plane && scene) return toScene(planeNamed(planesOf(scene), prop.plane), [x, 0])[0];
+  return x;
 }
 
 /** The part of the line through `a` with direction `u` that lies in the box [left, top, right, bottom]. */

@@ -46,7 +46,7 @@ export const scene = (s: Common, W: number, H: number, duration: number, plane: 
   ({linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration, theme: s.theme ?? 'dark', planes: [plane], props, actors, meta});
 
 /** Walking poses for a figure moving between t0 and t1 (a step every `beat` seconds). */
-function walking(t0: number, t1: number, beat = 0.28) {
+export function walking(t0: number, t1: number, beat = 0.28) {
   const keys: {t: number; pose: string}[] = [];
   let i = 0;
   for (let t = t0; t < t1 - beat / 2; t += beat) keys.push({t, pose: i++ % 2 ? 'walk_b' : 'walk_a'});

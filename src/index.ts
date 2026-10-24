@@ -5,6 +5,7 @@ export * from './rig.ts';
 export * from './solve.ts';
 export * from './scene.ts';
 export * from './svg.ts';
+export * from './objects.ts';
 export {RIGS} from './rigs/index.ts';
 export * from './check.ts';
 export * from './physics/light.ts';

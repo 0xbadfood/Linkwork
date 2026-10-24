@@ -5,12 +5,13 @@ import {energyLadder, ladderErrors, type LadderSpec} from './energy-ladder.ts';
 import {compassArc, compassErrors, crankErrors, ladderSlideErrors, pendulum, pendulumErrors, sliderCrank, slidingLadder,
   type CompassSpec, type CrankSpec, type LadderSlideSpec, type PendulumSpec} from './mechanisms.ts';
 import {graph, graphErrors, type GraphSpec} from './graph.ts';
+import {motionErrors, motionOnLine, scaleCompare, scaleErrors, type MotionSpec, type ScaleSpec} from './motion.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
   type AreaSpec, type DomainSpec, type ExtremaSpec, type SecantSpec, type VectorSpec} from './calculus.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
-  | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec;
+  | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -38,6 +39,10 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'adding vectors head to tail, with components and the magnitude of the sum'} as Verb<VectorSpec>,
   graph: {errors: graphErrors, compile: graph,
     about: "a science or maths graph: curves from a formula or the book's data, a tracer with readouts, a tangent, a shaded area, marked points"} as Verb<GraphSpec>,
+  motion_on_line: {errors: motionErrors, compile: motionOnLine,
+    about: 'an object moving along an x-axis (origin, direction, positions over time), with time, position, displacement, velocity and distance read off, and optionally its x–t graph drawing itself'} as Verb<MotionSpec>,
+  scale_compare: {errors: scaleErrors, compile: scaleCompare,
+    about: "an object's length against distances, drawn to scale: it shrinks to its true size beside each distance and L/D is shown (when is it a point?)"} as Verb<ScaleSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

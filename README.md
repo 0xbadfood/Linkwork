@@ -40,6 +40,26 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `graph` (trial): any quantity against another, from a formula in the axis's own variable or the book's data; a tracer
   with readouts, a tangent with its slope, a shaded area, marked points (v–t, Boyle's law, periodic trends, heating curves).
 
+- `motion_on_line` (trial): an object (dot, walker, car, bus, train, cyclist, ball, block) moves along an x-axis with its
+  origin and direction marked; between given positions it moves at constant velocity. Time, position and displacement are
+  read off the drawing; each stretch's velocity and the distance covered are computed; its x–t graph can draw itself.
+- `scale_compare` (trial): an object's length against distances, drawn to scale: it shrinks to its true size beside each
+  distance and L/D is shown (when can a train or a bus be treated as a point?).
+
+## Objects
+
+The common things of physics problems are drawn by code, as an `object` prop: `car`, `bus`, `train` (with carriages and
+smoke), `bicycle` (with its rider), `block`, `wedge` (its angle marked), `pulley` (a block on each rope), `sling` (a stone
+on a string, with its path and velocity arrow) and `ball`. Only the motion is given; what follows from it is computed:
+wheels roll exactly as far as the object moves (no skid), the pedals turn with them, smoke trails a moving engine and
+thins when it stops, a pulley's wheel turns with its rope. Key `x` (or anchor the object to an actor) to move it; `a` and
+`b` drive a wedge's angle, a pulley's ropes or a sling's angle.
+
+```json
+{"id": "engine", "type": "object", "name": "train", "x": 300, "y": 800, "size": 360, "params": {"cars": 2},
+ "keys": {"x": [[0, 300], [6, 1500, "inOut"]]}}
+```
+
 Functions are written in a small, safe expression language (`"x^3 - 3x"`, `"sqrt(x)"`, `"sin(x)/x"`): parsed, never
 run as code, and differentiated exactly.
 

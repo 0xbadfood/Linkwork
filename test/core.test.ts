@@ -162,3 +162,28 @@ test('every verb has a valid card whose example compiles and passes every check'
     assert.deepEqual(check(scene!, {every: 3}), [], `${name} example checks`);
   }
 });
+
+test('objects draw, check and roll as far as they move', async () => {
+  const {OBJECTS, objectItems, check, frame} = await import('../src/index.ts');
+  for (const name of Object.keys(OBJECTS)) assert.ok(objectItems({name, x: 400, y: 400}, {t: 1, travel: 0, speed: 0}, name).length > 0, name);
+  const bad = {linkwork: 1, width: 800, height: 600, fps: 30, duration: 1, actors: [], props: [{id: 'o', type: 'object', name: 'rocket', x: 1, y: 1}]};
+  assert.match(check(bad as never).join(' '), /unknown object "rocket"/);
+  // A car keyed 0 → 2πR along the ground: its wheels turn exactly once, so the spokes come back where they started.
+  const R = 22, scene = {linkwork: 1, width: 1920, height: 1080, fps: 30, duration: 2, actors: [],
+    props: [{id: 'car', type: 'object', name: 'car', x: 300, y: 500, keys: {x: [[0, 300], [2, 300 + 2 * Math.PI * R, 'linear']]}}]};
+  const spokes = (t: number) => (frame(scene as never, t).props[0] as unknown as {items: {type: string; x1?: number; y1?: number}[]}).items
+    .filter(p => p.type === 'line').map(p => [Math.round(p.x1! - 0), Math.round(p.y1!)]);
+  const start = spokes(0), end = spokes(2).map(([x, y]) => [x - Math.round(2 * Math.PI * R), y]);
+  assert.deepEqual(end, start);
+});
+
+test('motion_on_line computes velocities and distance; scale_compare its ratios', async () => {
+  const {compile} = await import('../src/index.ts');
+  const {scene} = compile({verb: 'motion_on_line', axis: {range: [-4, 8]}, moves: [{t: 0, x: 0}, {t: 3, x: 6}, {t: 4, x: 6}, {t: 7, x: -3}]});
+  assert.deepEqual((scene!.meta as {segments: {v: number}[]}).segments.map(g => g.v), [2, 0, -3]);
+  assert.equal(scene!.meta!.displacement, -3);
+  assert.equal(scene!.meta!.distance, 15);
+  assert.match(compile({verb: 'motion_on_line', axis: {range: [0, 5]}, moves: [{t: 0, x: 0}, {t: 1, x: 9}]}).errors.join(' '), /off the axis/);
+  const sc = compile({verb: 'scale_compare', object: 'bus', length: 12, cases: [{label: 'route', distance: 10000}, {label: 'parking', distance: 15}]}).scene!;
+  assert.deepEqual((sc.meta as {cases: {ratio: number}[]}).cases.map(c => c.ratio), [0.0012, 0.8]);
+});
