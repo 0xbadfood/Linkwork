@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {check} from './check.ts';
 import type {Scene} from './scene.ts';
 import {svg} from './svg.ts';
+import {OBJECTS} from './objects.ts';
 import {cards, compile, shortlist, VERBS} from './verbs/index.ts';
 
 const USAGE = `linkwork compile <spec.json> [-o scene.json]
@@ -13,6 +14,7 @@ linkwork check <file.json> [--every n]           errors, one per line; exit 1 if
 linkwork svg <file.json> --t <seconds> [-o out.svg] [--transparent]
 linkwork frames <file.json> --out <dir> [--every n] [--transparent]
 linkwork verbs [--json [--all]]                 the verbs, or their cards as JSON
+linkwork objects [--json]                        the props a film can draw exactly
 linkwork shortlist <text.txt> --subject <s> [--limit n] [--all]   cards fitting a teaching text, as JSON
 linkwork batch <specs.json> [--every n]          [{id, spec}] -> [{id, errors, duration, facts, scene}] as JSON`;
 
@@ -33,6 +35,13 @@ function main(argv: string[]): number {
     // --json prints the cards (all statuses with --all), for a pipeline's planner.
     if (argv.includes('--json')) { console.log(JSON.stringify(cards(argv.includes('--all') ? ['candidate', 'trial', 'trusted'] : ['trusted']), null, 1)); return 0; }
     for (const [name, v] of Object.entries(VERBS)) console.log(`${name}: ${v.about}`);
+    return 0;
+  }
+  if (command === 'objects') {
+    // The props a film can draw exactly: the objects, and the walking figure (a rig), with what each is for.
+    const props = {...Object.fromEntries(Object.entries(OBJECTS).map(([name, o]) => [name, o.about])),
+      figure: 'a person (stick figure) who stands, walks, hops and points; walks along a line in motion_on_line'};
+    console.log(argv.includes('--json') ? JSON.stringify(props, null, 1) : Object.entries(props).map(([n, a]) => `${n}: ${a}`).join('\n'));
     return 0;
   }
   if (command === 'shortlist' && file) {
