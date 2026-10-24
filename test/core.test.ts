@@ -244,3 +244,17 @@ test('motion_on_line follows a formula exactly; path_length measures path agains
   assert.match(meta.facts.join(' '), /average speed 1\.5 m\/s; size of average velocity 0 m\/s/);
   assert.deepEqual(check(trip.scene!, {every: 3}), []);
 });
+
+test('an illustrative scene shows shape and motion with every number hidden', () => {
+  const spec = {verb: 'motion_on_line', title: 'Speeding up', axis: {range: [0, 20]}, object: 'car', formula: {expr: '0.5*t^2', t: [0, 6]},
+    readouts: ['t', 'x', 'v'], speedometer: {max: 10}, graph: true, illustrative: true};
+  const out = compile(spec as never);
+  assert.deepEqual(out.errors, []);
+  const scene = out.scene!;
+  assert.ok(!scene.props.some(p => p.type === 'readout'));
+  assert.ok(!scene.props.some(p => p.type === 'text' && p.id !== 'title' && /\d/.test(p.text)));
+  assert.ok(scene.props.filter(p => p.type === 'axes').every(p => (p as {numbers?: boolean}).numbers === false));
+  assert.deepEqual((scene.meta as {facts: string[]}).facts, []);
+  assert.ok(!/>\s*[\d.]+ m\/s\s*</.test(svg(scene, 3)));                     // the speedometer shows no digits
+  assert.deepEqual(check(scene, {every: 3}), []);
+});

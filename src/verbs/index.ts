@@ -80,10 +80,25 @@ export function shortlist(text: string, subject: string, statuses: Card['status'
   return [...picked, ...scored.filter(s => s.card.always && !picked.includes(s))];
 }
 
-/** Compile a verb spec. A spec with errors gives no scene. */
-export function compile(spec: {verb: string}): {scene?: Scene; errors: string[]} {
+/** Compile a verb spec. A spec with errors gives no scene. Any spec may say `illustrative: true`: its values only
+ * shape the picture (a car speeding up, a curve bending upwards) when the narration states no numbers, so every
+ * number is hidden (user, 2026-10-25: a plan for a definitions-only concept could neither paint the car nor give it
+ * numbers the narration never states). */
+export function compile(spec: {verb: string; illustrative?: boolean}): {scene?: Scene; errors: string[]} {
   const verb = VERBS[spec?.verb];
   if (!verb) return {errors: [`unknown verb ${JSON.stringify(spec?.verb)}; known: ${Object.keys(VERBS).join(', ')}`]};
+  if (spec.illustrative !== undefined && typeof spec.illustrative !== 'boolean') return {errors: [`${spec.verb}: illustrative is true or false`]};
   const errors = verb.errors(spec);
-  return errors.length ? {errors} : {scene: verb.compile(spec), errors: []};
+  if (errors.length) return {errors};
+  const scene = verb.compile(spec);
+  return {scene: spec.illustrative ? illustrate(scene) : scene, errors: []};
+}
+
+/** The scene with its numbers hidden: no readouts, no axis numbers, no text with a figure in it (but the title), dials
+ * and watches without their digits; no facts for the narration to quote. */
+export function illustrate(scene: Scene): Scene {
+  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && /\d/.test(p.text)))
+    .map(p => (p.type === 'axes' ? {...p, numbers: false}
+      : p.type === 'object' && ['speedometer', 'stopwatch'].includes(p.name) ? {...p, params: {...p.params, digits: 'none'}} : p));
+  return {...scene, props, meta: {...scene.meta, facts: [], illustrative: true}};
 }

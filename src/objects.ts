@@ -301,12 +301,12 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
       const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(v => max / v <= 6) ?? max / 5;
       for (let v = 0; v <= max + 1e-9; v += step) {
         line(at(v / max, r - 4), at(v / max, r - 16), {stroke: 'ink', width: W(3)});
-        text(at(v / max, r - 34), String(Math.round(v * 100) / 100), 17, 'muted');
+        if (o.params?.digits !== 'none') text(at(v / max, r - 34), String(Math.round(v * 100) / 100), 17, 'muted');
       }
       const value = Math.max(0, o.a ?? 0), frac = Math.min(1, value / max);
       line(c, at(frac, r - 10), {stroke: 'bad', width: W(5)});
       circle(c, 6, {fill: 'ink'});
-      text([0, 26], `${value < 10 ? value.toFixed(1) : Math.round(value)} ${o.params?.unit ?? 'm/s'}`, 24);
+      if (o.params?.digits !== 'none') text([0, 26], `${value < 10 ? value.toFixed(1) : Math.round(value)} ${o.params?.unit ?? 'm/s'}`, 24);
       if (o.label) text([0, 54], o.label, 20);
       break;
     }
@@ -333,7 +333,7 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
       const hand = (o.a ?? 0) * 6 * DEG;          // one turn a minute
       line(c, [Math.sin(hand) * 28, -40 - Math.cos(hand) * 28], {stroke: 'bad', width: W(3)});
       circle(c, 3, {fill: 'ink'});
-      text([0, 22], `${(o.a ?? 0).toFixed(1)} s`, 20);
+      if (o.params?.digits !== 'none') text([0, 22], `${(o.a ?? 0).toFixed(1)} s`, 20);
       if (o.label) text([0, 46], o.label, 22);
       break;
     }
