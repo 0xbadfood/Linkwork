@@ -217,44 +217,109 @@ export function extrema(s: ExtremaSpec): Scene {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-export type SecantSpec = Window & Common & {verb: 'secant_to_tangent'; at: number; h?: number; time?: number};
+export type SecantSpec = Window & Common & {verb: 'secant_to_tangent'; at: number; h?: number; time?: number;
+  /** Physics wording (user, 2026-10-24: instantaneous velocity): the curve is position (or velocity) against time t,
+   * h is Δt, the chord's slope is the average velocity (acceleration) and its limit the instantaneous one. */
+  quantity?: 'velocity' | 'acceleration';
+  /** Δt (or h) values Q stops at, largest first, each a row of a table: Δt, Δx, Δx/Δt (NCERT's Table 2.1). */
+  steps?: number[];
+  /** The chord spans at − h/2 to at + h/2, closing in from both sides (as NCERT's Table 2.1 does), not at to at + h. */
+  centred?: boolean};
+
+/** The words and units for a quantity, or the maths ones. */
+const SECANT_WORDS = {
+  maths: {t: 'x', y: 'f(x)', dt: 'h', dy: 'Δf', rate: 'slope of PQ', limit: (a: string) => `f′(${a})`, tu: '', yu: '', ru: '', name: 'slope'},
+  velocity: {t: 't', y: 'x', dt: 'Δt', dy: 'Δx', rate: 'average velocity Δx/Δt', limit: (a: string) => `v(${a} s)`, tu: ' s', yu: ' m', ru: ' m/s', name: 'instantaneous velocity'},
+  acceleration: {t: 't', y: 'v', dt: 'Δt', dy: 'Δv', rate: 'average acceleration Δv/Δt', limit: (a: string) => `a(${a} s)`, tu: ' s', yu: ' m/s', ru: ' m/s²', name: 'instantaneous acceleration'},
+};
+/** A table number: up to `places` significant decimals, trailing zeros dropped. */
+const cell = (v: number, places = 4) => n2(v, places).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+const asTime = (src: string) => src.replace(/(?<![a-z])x(?![a-z])/g, 't');
 
 export function secantErrors(s: SecantSpec): string[] {
   const e = windowErrors(s, 'secant_to_tangent');
   if (e.length) return e;
-  const f = fOf(s.expr), df = dfOf(s.expr), h = s.h ?? 2;
+  const f = fOf(s.expr), df = dfOf(s.expr), h = s.h ?? s.steps?.[0] ?? 2;
   const [a, b] = s.x ?? [-5, 5], [c, d] = s.y ?? [-5, 5];
-  if (!(s.at > a && s.at + h < b)) e.push('secant_to_tangent: at and at + h must be inside the x window');
+  const lo = s.centred ? s.at - h / 2 : s.at, hi = s.centred ? s.at + h / 2 : s.at + h;
+  if (!(lo > a && hi < b)) e.push(`secant_to_tangent: ${s.centred ? 'at ± h/2' : 'at and at + h'} must be inside the x window`);
   for (let i = 0; i <= 100; i++) {
-    const x = s.at + h * i / 100, y = f(x);
+    const x = lo + (hi - lo) * i / 100, y = f(x);
     if (!Number.isFinite(y) || y < c || y > d) { e.push(`secant_to_tangent: the curve must stay in the window between at and at + h (fails at x = ${n2(x)})`); break; }
   }
   if (!Number.isFinite(df(s.at))) e.push('secant_to_tangent: f has no slope at that point');
+  if (s.quantity !== undefined && !(s.quantity in SECANT_WORDS) ) e.push('secant_to_tangent: quantity is velocity or acceleration');
+  if (s.steps !== undefined) {
+    if (!Array.isArray(s.steps) || s.steps.length < 2 || s.steps.length > 6) e.push('secant_to_tangent: steps is 2 to 6 values of h (Δt)');
+    else if (s.steps.some((v, i) => !(v > 0) || (i && v >= s.steps![i - 1]))) e.push('secant_to_tangent: steps are positive and get smaller');
+    else if (s.steps[0] > h) e.push('secant_to_tangent: the first step must be no more than h');
+  }
   return e;
 }
 
 export function secantToTangent(s: SecantSpec): Scene {
-  const {W, H, k, plane, axes, px, title, py} = layout(s);
+  const {W, H, k, plane, px, title, py} = layout(s);
+  const w = SECANT_WORDS[s.quantity ?? 'maths'], phys = !!s.quantity;
+  const axes: Prop = {id: 'axes', type: 'axes', plane: 'p', step: s.step ?? [1, 1], size: 24 * k, ...(phys ? {names: [`${w.t} (${w.tu.trim()})`, `${w.y} (${w.yu.trim()})`] as [string, string]} : {})};
   const ptext = panel(W, k);
-  const f = fOf(s.expr), df = dfOf(s.expr), a0 = s.at, h = s.h ?? 2, T = s.time ?? 6, t0 = 2.4, t1 = t0 + T;
-  const slope = df(a0);
-  const P: Actor = {id: 'P', rig: 'dot', at: toScene(plane, [a0, f(a0)]), scale: k, layer: 4, skin: {joints: {p: {style: 'ball', size: 10, fill: 'accent'}}}};
-  const Q: Actor = {id: 'Q', rig: 'dot', at: toScene(plane, [a0 + h, f(a0 + h)]), scale: k, layer: 4, skin: {joints: {p: {style: 'ball', size: 10, fill: 'cool'}}},
-    drivers: [{t0: 0, t1: t1 + 5, driver: 'curve', plane: 'p', expr: s.expr, x: [[0, a0 + h], [t0, a0 + h], [t1, a0 + h * 0.01, 'out']]}]};
+  const f = fOf(s.expr), df = dfOf(s.expr), a0 = s.at, steps = s.steps ?? [], h = s.h ?? steps[0] ?? 2, t0 = 2.4;
+  const slope = df(a0), c = !!s.centred;
+  /** Where P and Q stand for a gap v: from a0 forwards, or centred on a0. */
+  const ends = (v: number): [number, number] => (c ? [a0 - v / 2, a0 + v / 2] : [a0, a0 + v]);
+  const chord = (v: number) => { const [p, q] = ends(v); return f(q) - f(p); };
+  // Q slides in smoothly, or stops at each step (a row of the table appears as it arrives).
+  const hold = 1.4, move = 1.1;
+  const gaps: Key[] = [[0, h], [t0, h]];
+  const arrive: number[] = [];
+  if (steps.length) {
+    let t = t0;
+    steps.forEach((v, i) => {
+      if (i || v < h) { t += move; gaps.push([t, v, 'inOut']); }
+      arrive.push(t); t += hold; gaps.push([t, v]);
+    });
+  } else gaps.push([t0 + (s.time ?? 6), h * 0.01, 'out']);
+  const t1 = gaps.at(-1)![0];
+  const along = (side: 0 | 1): Key[] => gaps.map(([t, v, e]) => (e ? [t, ends(v)[side], e] : [t, ends(v)[side]]) as Key);
+  const dot = (id: string, x: number, fill: string, drive: boolean): Actor => ({id, rig: 'dot', at: toScene(plane, [x, f(x)]), scale: k, layer: 4,
+    skin: {joints: {p: {style: 'ball', size: 10, fill}}}, ...(drive ? {drivers: [{t0: 0, t1: t1 + 5, driver: 'curve', plane: 'p', expr: s.expr, x: along(id === 'P' ? 0 : 1)}]} : {})});
+  const P = dot('P', ends(h)[0], c ? 'cool' : 'accent', c), Q = dot('Q', ends(h)[1], 'cool', true);
+  const O: Actor[] = c ? [dot('O', a0, 'accent', false)] : [];
   const P2: Vec = toScene(plane, [a0 + 1, f(a0) + slope]);
+  const name = (src: string) => (phys ? asTime(src) : src);
+  const at = n2(a0);
   const props: Prop[] = [axes, {id: 'curve', type: 'curve', plane: 'p', expr: s.expr, draw: 0, keys: {draw: [[0.3, 0], [2, 1, 'inOut']]}, style: {stroke: 'ink', width: 5 * k}}, ...title,
     {id: 'secant', type: 'through', plane: 'p', a: {actor: 'P', joint: 'p'}, b: {actor: 'Q', joint: 'p'}, style: {stroke: 'cool', width: 4 * k}, show: [2.2, t1 + 0.6], layer: 2},
+    ...(c ? [text('O', 0, 0, `${phys ? 't' : 'x'} = ${n2(a0)}`, 26 * k, {anchor: {actor: 'O', joint: 'p', offset: [44 * k, 30 * k]}, weight: 700, style: {fill: 'accent'}, layer: 5})] : []),
     {id: 'tangent', type: 'through', plane: 'p', a: {plane: 'p', at: [a0, f(a0)]}, b: P2, style: {stroke: 'accent', width: 5 * k}, show: [t1 + 0.4, 1e9], layer: 2},
-    text('P', 0, 0, 'P', 30 * k, {anchor: {actor: 'P', joint: 'p', offset: [-26 * k, -26 * k]}, weight: 700, style: {fill: 'accent'}, layer: 5}),
+    text('P', 0, 0, 'P', 30 * k, {anchor: {actor: 'P', joint: 'p', offset: [-26 * k, -26 * k]}, weight: 700, style: {fill: c ? 'cool' : 'accent'}, layer: 5}),
     text('Q', 0, 0, 'Q', 30 * k, {anchor: {actor: 'Q', joint: 'p', offset: [18 * k, -26 * k]}, weight: 700, style: {fill: 'cool'}, layer: 5}),
-    ptext('f', px, py(0.24), `f(x) = ${pretty(s.expr)}`, 40 * k, {weight: 700}),
-    ptext('pq', px, py(0.33), `P is fixed at x = ${n2(a0)}. Q = P + h slides in.`, 30 * k, {style: {fill: 'muted'}}),
-    {id: 'ro-h', type: 'readout', width: W - px - 40 * k, x: px, y: py(0.42), size: 36 * k, text: 'h = {h}', decimals: 3, measures: {h: {kind: 'run', a: {actor: 'P', joint: 'p'}, b: {actor: 'Q', joint: 'p'}, plane: 'p'}}, style: {fill: 'cool'}},
-    {id: 'ro-m', type: 'readout', width: W - px - 40 * k, x: px, y: py(0.49), size: 36 * k, weight: 700, text: 'slope of PQ = {m}', decimals: 3, measures: {m: {kind: 'slope', a: {actor: 'P', joint: 'p'}, b: {actor: 'Q', joint: 'p'}, plane: 'p'}}, style: {fill: 'cool'}},
-    ptext('limit', px, py(0.6), `As h → 0, the slope → f′(${n2(a0)}) = ${n2(slope, 3)}`, 34 * k, {weight: 700, style: {fill: 'accent'}, show: [t1 + 0.4, 1e9]}),
-    ptext('df', px, py(0.72), `f′(x) = ${show(derivative(tree(s.expr)))}`, 30 * k, {style: {fill: 'muted'}, show: [t1 + 0.8, 1e9]}),
+    ptext('f', px, py(0.24), `${phys ? w.y : 'f(x)'} = ${name(pretty(s.expr))}`, 40 * k, {weight: 700}),
+    ptext('pq', px, py(0.33), c ? `P and Q close in on ${w.t} = ${at}${w.tu} from both sides, ${w.dt} apart.`
+      : phys ? `P is fixed at t = ${at} s. Q, ${w.dt} later, slides in.` : `P is fixed at x = ${at}. Q = P + h slides in.`, 30 * k, {style: {fill: 'muted'}}),
   ];
-  return scene(s, W, H, t1 + 3, plane, props, [P, Q], {verb: 'secant_to_tangent', slope: round(slope, 6)});
+  let after = 0.6;
+  if (steps.length) {
+    // The table: one row per step, its numbers computed from f (the book's own table, when the book gives one).
+    const size = 30 * k, row = 1.35 * size, cols = [0, 0.3, 0.62].map(c => px + c * (W - px - 40 * k));
+    const head = [w.dt + (w.tu ? ` (${w.tu.trim()})` : ''), w.dy + (w.yu ? ` (${w.yu.trim()})` : ''), phys ? `${w.dy}/${w.dt}` + (w.ru ? ` (${w.ru.trim()})` : '') : 'slope'];
+    const y0 = py(0.42);
+    head.forEach((t, c) => props.push(ptext(`th${c}`, cols[c], y0, t, size, {weight: 700, style: {fill: 'muted'}, show: [arrive[0] - 0.3, 1e9]})));
+    steps.forEach((v, i) => {
+      const dy = chord(v), cells = [cell(v, 3), cell(dy, 6), cell(dy / v, 6)];
+      cells.forEach((t, c) => props.push(ptext(`tr${i}-${c}`, cols[c], y0 + (i + 1) * row, t, size, {weight: c === 2 ? 700 : 400, style: {fill: c === 2 ? 'cool' : 'ink'}, show: [arrive[i], 1e9]})));
+    });
+    after = 0.42 + (steps.length + 1.6) * 1.35 * 30 / 1080;
+  } else {
+    props.push({id: 'ro-h', type: 'readout', width: W - px - 40 * k, x: px, y: py(0.42), size: 36 * k, text: `${w.dt} = {h}${w.tu}`, decimals: 3, measures: {h: {kind: 'run', a: {actor: 'P', joint: 'p'}, b: {actor: 'Q', joint: 'p'}, plane: 'p'}}, style: {fill: 'cool'}},
+      {id: 'ro-m', type: 'readout', width: W - px - 40 * k, x: px, y: py(0.49), size: 36 * k, weight: 700, text: `${w.rate} = {m}${w.ru}`, decimals: 3, measures: {m: {kind: 'slope', a: {actor: 'P', joint: 'p'}, b: {actor: 'Q', joint: 'p'}, plane: 'p'}}, style: {fill: 'cool'}});
+  }
+  props.push(ptext('limit', px, py(after), phys ? `As ${w.dt} → 0, ${w.dy}/${w.dt} → ${w.limit(at)} = ${cell(slope, 4)}${w.ru}: the ${w.name}`
+    : `As h → 0, the slope → f′(${at}) = ${n2(slope, 3)}`, 34 * k, {weight: 700, style: {fill: 'accent'}, show: [t1 + 0.4, 1e9]}));
+  if (!phys) props.push(ptext('df', px, py(0.72), `f′(x) = ${show(derivative(tree(s.expr)))}`, 30 * k, {style: {fill: 'muted'}, show: [t1 + 0.8, 1e9]}));
+  return scene(s, W, H, t1 + 3, plane, props, [...O, P, Q], {verb: 'secant_to_tangent', slope: round(slope, 6),
+    facts: [`at ${w.t} = ${at}${w.tu} the ${w.name} is ${cell(slope, 4)}${w.ru}`,
+      ...steps.map(v => { const dy = chord(v), [p, q] = ends(v);
+        return `${w.dt} = ${cell(v, 3)}${w.tu} (${w.t} from ${cell(p, 4)} to ${cell(q, 4)}${w.tu}): ${w.dy} = ${cell(dy, 6)}${w.yu}, ${w.dy}/${w.dt} = ${cell(dy / v, 6)}${w.ru}`; })]});
 }
 
 // ---------------------------------------------------------------------------------------------------------------

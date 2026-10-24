@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {claimErrors, compile, criticalPoints, derivative, dfOf, evaluate, exprErrors, fOf, frame, integrate, parse, riemann, show} from '../src/index.ts';
+import {check, claimErrors, compile, criticalPoints, derivative, dfOf, evaluate, exprErrors, fOf, frame, integrate, parse, riemann, show} from '../src/index.ts';
 
 test('expressions parse safely and refuse anything else', () => {
   assert.deepEqual(exprErrors('2x^2 - 3(x + 1) + sin(x)/x'), []);
@@ -101,4 +101,17 @@ test('graph: refuses specs a planner might get wrong', () => {
   assert.match(err({series: [{label: 'a', points: [[1, 5], [2, 2]]}], tangent: {series: 0, x: 1.5}}), /formula series/);
   assert.match(err({series: [{label: 'a', expr: '24/V'}], marks: [{series: 0, x: 0.5, label: 'too high'}]}), /outside the graph/);
   assert.match(err({series: [{label: 'a', expr: '24/V'}], x: {name: 'V', range: [0, 0.01], step: 0.0005}}), /rescale/);
+});
+
+test("secant_to_tangent in physics words reproduces NCERT's Table 2.1 (x = 0.08t³, centred on t = 4 s)", () => {
+  const out = compile({verb: 'secant_to_tangent', quantity: 'velocity', centred: true, expr: '0.08*x^3', at: 4, h: 2,
+    steps: [2, 1, 0.5, 0.1, 0.01], x: [0, 7], y: [0, 20], step: [1, 5]} as never);
+  assert.deepEqual(out.errors, []);
+  const facts = (out.scene!.meta as {facts: string[]}).facts.join('\n');
+  for (const v of ['3.92', '3.86', '3.845', '3.8402', '3.840002']) assert.match(facts, new RegExp(`Δx/Δt = ${v.replace('.', '\\.')} m/s`));
+  assert.match(facts, /instantaneous velocity is 3\.84 m\/s/);
+  assert.deepEqual(check(out.scene!, {every: 3}), []);
+  const texts = out.scene!.props.filter(p => p.type === 'text').map(p => (p as {text: string}).text).join(' | ');
+  assert.match(texts, /x = 0\.08t³/);
+  assert.doesNotMatch(texts, /f′|slope of PQ/);
 });
