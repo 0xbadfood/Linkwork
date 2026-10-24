@@ -82,7 +82,8 @@ export function motionOnLine(s: MotionSpec): Scene {
       {id: `num${i}`, type: 'text', x: px, y: yAxis + 40 * k, text: fmt(round(v, 9)), size: 26 * k, align: 'middle', style: {fill: zero ? 'ink' : 'muted'}});
     if (zero) props.push({id: 'origin', type: 'text', x: px, y: yAxis + 76 * k, text: 'O', size: 30 * k, align: 'middle', weight: 700});
   }
-  (s.marks ?? []).forEach((m, i) => {
+  // The origin is already labelled O: a mark repeating it is dropped.
+  (s.marks ?? []).filter(m => !(Math.abs(m.x) < 1e-9 && /^(o|origin)$/i.test(m.label.trim()))).forEach((m, i) => {
     const [px] = X(m.x);
     props.push({id: `mark${i}`, type: 'circle', x: px, y: yAxis, r: 8 * k, style: {fill: 'cool'}, layer: 1},
       {id: `mark${i}-label`, type: 'text', x: px, y: yAxis + 112 * k, text: m.label, size: 26 * k, align: 'middle', weight: 700, style: {fill: 'cool'}});
