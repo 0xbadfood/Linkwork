@@ -172,8 +172,10 @@ export type ScaleSpec = Common & {
   object: (typeof COMPARED)[number];
   /** The object's length in metres. */
   length: number;
-  cases: {label: string; distance: number}[];
+  cases: {label: string; distance: number; setting?: (typeof SETTINGS)[number]}[];
 };
+/** What the distance is drawn as: a platform beside the track, a road, a parking bay, or a route between two places. */
+const SETTINGS = ['route', 'platform', 'road', 'parking'] as const;
 
 /** Each object's height over its length (local units), so a large first view stays under its label. */
 const HEIGHT: Record<string, number> = {car: 92, bus: 118, train: 146, bicycle: 185, ball: 40, block: 70};
@@ -191,6 +193,7 @@ export function scaleErrors(s: ScaleSpec): string[] {
     if (typeof c?.label !== 'string' || !c.label.trim() || c.label.length > 40) e.push(`${where} needs a short label (40 characters)`);
     if (!(isNum(c?.distance) && c.distance > 0)) e.push(`${where}: distance (metres) must be positive`);
     else if (c.distance < s.length) e.push(`${where}: the distance must be at least the object's length`);
+    if (c?.setting !== undefined && !SETTINGS.includes(c.setting)) e.push(`${where}: setting is one of ${SETTINGS.join(', ')}`);
   });
   return e;
 }
@@ -209,17 +212,22 @@ export function scaleCompare(s: ScaleSpec): Scene {
   const big = Math.min(0.22 * span, 0.42 * gap * OBJECTS[s.object].length / HEIGHT[s.object]);   // recognisable, below its label
   let t = 0.6;
   const cases = s.cases.map((c, i) => {
-    const y = top + gap * (i + 0.72), ratio = s.length / c.distance, small = Math.max(ratio * span, 0.6 * k);
+    // A long object against a short distance (a bus in a parking bay) would be drawn too tall for its row: the whole
+    // case is drawn smaller instead, so it stays to scale and fits.
+    const ratio = s.length / c.distance, reach = Math.min(span, big / ratio), end = x0 + reach;
+    const y = top + gap * (i + 0.72), small = Math.max(ratio * reach, 0.6 * k);
     const at = t, shrink = at + 1.2, done = shrink + 2.6;
     props.push(
       {id: `label${i}`, type: 'text', x: x0, y: y - gap * 0.52, text: c.label, size: 32 * k, weight: 700, show: [at, 1e9]},
-      {id: `bar${i}`, type: 'line', x1: x0, y1: y + 12 * k, x2: x1, y2: y + 12 * k, draw: 0, keys: {draw: [[at, 0], [at + 1, 1, 'inOut']]}, style: {stroke: 'accent', width: 6 * k}},
+      (c.setting ?? 'route') === 'route'
+        ? {id: `bar${i}`, type: 'line', x1: x0, y1: y + 12 * k, x2: end, y2: y + 12 * k, draw: 0, keys: {draw: [[at, 0], [at + 1, 1, 'inOut']]}, style: {stroke: 'accent', width: 6 * k}}
+        : {id: `bar${i}`, type: 'object', name: c.setting!, x: (x0 + end) / 2, y: y + 9 * k, size: reach, show: [at, 1e9], fade: 0.6, layer: 1},
       {id: `end${i}a`, type: 'line', x1: x0, y1: y, x2: x0, y2: y + 24 * k, style: {stroke: 'accent', width: 4 * k}, show: [at, 1e9]},
-      {id: `end${i}b`, type: 'line', x1: x1, y1: y, x2: x1, y2: y + 24 * k, style: {stroke: 'accent', width: 4 * k}, show: [at + 1, 1e9]},
-      {id: `dist${i}`, type: 'text', x: x1, y: y + 50 * k, text: `D = ${metres(c.distance)}`, size: 28 * k, align: 'end', style: {fill: 'accent'}, show: [at + 1, 1e9]},
+      {id: `end${i}b`, type: 'line', x1: end, y1: y, x2: end, y2: y + 24 * k, style: {stroke: 'accent', width: 4 * k}, show: [at + 1, 1e9]},
+      {id: `dist${i}`, type: 'text', x: end, y: y + 50 * k, text: `D = ${metres(c.distance)}`, size: 28 * k, align: 'end', style: {fill: 'accent'}, show: [at + 1, 1e9]},
       // Recognisable first, then its true size against the distance; its left end stays on the start of the bar.
       {id: `obj${i}`, type: 'object', name: s.object, x: x0 + big / 2, y: y + 9 * k, size: big, show: [at, 1e9], layer: 2, params: {smoke: 0},
-        keys: {size: [[shrink, big], [done, small, 'inOut']], x: [[shrink, x0 + big / 2], [done, x0 + small / 2, 'inOut']]}},
+        keys: {size: [[shrink, big], [done, Math.min(big, small), 'inOut']], x: [[shrink, x0 + big / 2], [done, x0 + Math.min(big, small) / 2, 'inOut']]}},
       {id: `len${i}`, type: 'text', x: x0, y: y + 50 * k, text: `L = ${metres(s.length)}`, size: 28 * k, style: {fill: 'ink'}, show: [at, shrink + 0.4]},
       {id: `ratio${i}`, type: 'text', x: px, y: y - 10 * k, width: pw, size: 34 * k, weight: 700, show: [done, 1e9],
         text: `L/D = ${sig(ratio)} (${sig(100 * ratio)}%)`},

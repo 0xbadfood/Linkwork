@@ -5,12 +5,14 @@
  "length": 25,
  "cases": [
   {
-   "label": "Passing a 100 m platform",
-   "distance": 100
+   "label": "Beside a 100 m platform",
+   "distance": 100,
+   "setting": "platform"
   },
   {
    "label": "Delhi to Agra, about 200 km",
-   "distance": 200000
+   "distance": 200000,
+   "setting": "route"
   }
  ]
 }

@@ -30,6 +30,9 @@ export const OBJECTS: Record<string, Def> = {
   sling: {about: 'a stone whirled on a string (circular motion), with its path and, optionally, its velocity arrow',
     length: 240, a: 'the angle of the string in degrees, counter-clockwise from the right', b: 'velocity arrow length as a share of the radius (0: none)', ground: false},
   ball: {about: 'a ball', length: 40, ground: true},
+  platform: {about: 'a railway platform beside the track (its length is its size)', length: 300, ground: true},
+  road: {about: 'a stretch of road with a dashed centre line (its length is its size)', length: 300, ground: true},
+  parking: {about: 'a parking bay between two kerbs, with a P sign (its length is its size)', length: 300, ground: true},
 };
 
 export function objectErrors(o: ObjectSpec, where: string): string[] {
@@ -193,6 +196,26 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
     case 'ball':
       circle([0, -20], 20, {fill: 'accent', stroke: 'ink', width: W(3)});
       break;
+    // Settings are long and thin: their thickness keeps a fixed screen size (k), whatever their length.
+    case 'platform': {
+      const h = 16 / s;
+      poly(box(-150, 0, 150, h), {fill: 'faint', stroke: 'ink', width: 3});
+      line([-150, 0], [150, 0], {stroke: 'accent', width: 4});
+      break;
+    }
+    case 'road': {
+      const h = 14 / s;
+      poly(box(-150, 0, 150, h), {fill: 'faint', stroke: 'muted', width: 2});
+      line([-150, h / 2], [150, h / 2], {stroke: 'ink', width: 2, dash: [10, 10]});
+      break;
+    }
+    case 'parking': {
+      const h = 14 / s;
+      poly(box(-150, 0, 150, h), {fill: 'faint', stroke: 'muted', width: 2});
+      for (const x of [-150, 150]) poly(box(x - 3 / s, -18 / s, x + 3 / s, 0), {fill: 'ink', stroke: 'ink', width: 1});
+      text([-150 + 22 / s, -30 / s], 'P', 26 / s, 'cool');
+      break;
+    }
   }
   return items;
 }
