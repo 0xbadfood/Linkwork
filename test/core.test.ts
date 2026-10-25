@@ -258,3 +258,20 @@ test('an illustrative scene shows shape and motion with every number hidden', ()
   assert.ok(!/>\s*[\d.]+ m\/s\s*</.test(svg(scene, 3)));                     // the speedometer shows no digits
   assert.deepEqual(check(scene, {every: 3}), []);
 });
+
+test('motion_on_line: a ball thrown up from a building on an upright axis; a drop marked every second', () => {
+  // 2026-10-26: the free-fall film's scene plan failed: stage cannot throw straight up, and a 45 m peak left its frame.
+  const spec = {verb: 'motion_on_line', axis: {range: [0, 50], unit: 'm', vertical: true}, object: 'ball',
+    accelerate: {x0: 25, v0: 20, a: -10, t: [0, 5]}, ground: 0, building: {top: 25, label: '25 m building'}, readouts: ['t', 'y', 'v'], graph: true};
+  const {scene, errors} = compile(spec as never);
+  assert.deepEqual(errors, []);
+  assert.ok((scene!.meta!.facts as string[]).some(f => /turns back at t = 2 s, at y = 45 m/.test(f)));
+  assert.ok(scene!.props.some(p => p.id === 'building'));
+  const drop = compile({verb: 'motion_on_line', axis: {range: [0, 50], vertical: true}, object: 'ball', accelerate: {x0: 45, v0: 0, a: -9.8, t: [0, 3]}, ground: 0, every: 1} as never);
+  assert.deepEqual((drop.scene!.meta as {intervals: {distance: number}[]}).intervals.map(g => g.distance), [4.9, 14.7, 24.5]);
+  const errs = (s: object) => compile({...spec, ...s} as never).errors.join(' ');
+  assert.match(errs({accelerate: {x0: 25, v0: 20, a: -10, t: [0, 6]}}), /leaves the axis/);
+  assert.match(errs({object: 'car'}), /upright axis the object is one of/);
+  assert.match(errs({moves: [{t: 0, x: 0}, {t: 1, x: 1}]}), /one of moves, formula or accelerate/);
+  assert.match(errs({axis: {range: [0, 50]}}), /ground and building need an upright axis/);
+});
