@@ -161,7 +161,7 @@ export const CARDS: Record<string, Card> = {
     fields: {x: '{name: one letter for a formula ("t", "V", "T"), unit, range: [low, high], step?}', y: '{name, unit, range, step?}',
       series: "1–4 curves, each {label, expr: formula in x's name} or {label, points: [[x, y], ...] from the book, join: line | smooth | none, names?: one per point}",
       trace: '{series, from, to, time?}: a dot runs along the curve with live readouts', tangent: '{series, x}: the tangent and its slope (formula series)',
-      shade: '{series, from, to, label?, unit?}: the area under a formula series, computed', marks: 'list of {series?, x, y?, label}: points to point out',
+      shade: '{series, from, to, label?, unit?, above?}: the area under a formula series, computed; or a list of up to 4 areas, each in its own tone; above: the series a part sits on instead of the x axis (the v–t area of uniform acceleration as rectangle OACD under v = u plus triangle ABC between v = u and v = u + at: series ["u", "u + a*t"], shade [{series: 0, from: 0, to: T, label: "rectangle OACD"}, {series: 1, above: 0, from: 0, to: T, label: "triangle ABC"}])', marks: 'list of {series?, x, y?, label}: points to point out',
       at: 'optional time (seconds) on any series, trace, shade, tangent or mark, to place it on a word of the narration'},
     example: {verb: 'graph', title: 'Distance is the area under v–t', x: {name: 't', unit: 's', range: [0, 6]}, y: {name: 'v', unit: 'm/s', range: [0, 22], step: 4},
       series: [{label: 'uniform acceleration', expr: '2 + 3t'}], trace: {series: 0, from: 0, to: 5},

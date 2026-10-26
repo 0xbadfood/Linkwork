@@ -122,3 +122,19 @@ test('physics formulas may be written in t', () => {
   assert.match((v.scene!.meta as {facts: string[]}).facts[0], /3\.84 m\/s/);
   assert.deepEqual(compile({verb: 'motion_on_line', axis: {range: [0, 20]}, formula: {expr: '0.5*t^2', t: [0, 6]}} as never).errors, []);
 });
+
+test('a v–t area splits into rectangle OACD and triangle ABC, each in its own tone (graphical analysis of motion)', () => {
+  const vt = (shade: unknown) => compile({verb: 'graph', title: 'Area under v–t', x: {name: 't', unit: 's', range: [0, 6]},
+    y: {name: 'v', unit: 'm/s', range: [0, 10], step: 2}, series: [{label: 'v = u', expr: '2'}, {label: 'v = u + at', expr: '2 + t'}], shade} as never);
+  const c = vt([{series: 0, from: 0, to: 5, label: 'rectangle OACD', unit: 'm'}, {series: 1, above: 0, from: 0, to: 5, label: 'triangle ABC', unit: 'm'}]);
+  assert.deepEqual(c.errors, []);
+  assert.deepEqual(check(c.scene!, {every: 3}), []);
+  const facts = c.scene!.meta!.facts as string[];
+  assert.ok(facts.some(f => f.startsWith('rectangle OACD') && f.includes(': 10 m')));
+  assert.ok(facts.some(f => f.startsWith('triangle ABC') && f.includes(': 12.5 m')));
+  assert.ok(facts.includes('together: rectangle OACD + triangle ABC = 22.5'));    // u T + ½ a T² = 10 + 12.5
+  const regions = c.scene!.props.filter(p => p.type === 'region') as {style: {fill: string}}[];
+  assert.equal(regions.length, 2);
+  assert.notEqual(regions[0].style.fill, regions[1].style.fill);
+  assert.match(vt([{series: 0, above: 1, from: 0, to: 5}]).errors.join(' '), /series 0 must be on top of series 1/);
+});

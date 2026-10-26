@@ -19,12 +19,16 @@ export type GraphSpec = {
    * at an even pace), so it can follow a mover in another part of a compound. */
   trace?: {series: number; from: number; to: number; at?: number; time?: number; clock?: boolean};
   tangent?: {series: number; x: number; at?: number};
-  shade?: {series: number; from: number; to: number; label?: string; unit?: string; at?: number; time?: number};
+  /** The area under a formula series, or a list of areas; `above` names the series a part sits on (default the x
+   * axis), so a v–t area splits into a rectangle under v = u and a triangle between v = u and v = u + at. */
+  shade?: Shade | Shade[];
   marks?: {series?: number; x: number; y?: number; label: string; at?: number}[];
   width?: number; height?: number; fps?: number; theme?: 'dark' | 'light';
 };
 
+type Shade = {series: number; above?: number; from: number; to: number; label?: string; unit?: string; at?: number; time?: number};
 const COLOURS = ['accent', 'cool', 'good', 'bad'];
+const shadesOf = (s: GraphSpec): Shade[] => (s.shade === undefined ? [] : Array.isArray(s.shade) ? s.shade : [s.shade]);
 const DRAW = 1.8;
 /** Up to `places` decimals, without trailing zeros. */
 const trim = (v: number, places = 3) => n2(Number(v.toFixed(places)), places).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
@@ -142,11 +146,21 @@ export function graphErrors(s: GraphSpec): string[] {
     if (!('expr' in ser)) e.push('graph: a tangent needs a formula series (for data, mark two points and give the slope)');
     else if (!isNum(x) || !inside(x, fn(inX(ser.expr, v))(x)) || !Number.isFinite(dfn(inX(ser.expr, v))(x))) e.push(`graph: the tangent point ${v} = ${x} must be on the curve, inside the graph`);
   }
-  if (s.shade && pick(s.shade.series, 'shade')) {
-    const ser = s.series[s.shade.series], {from, to} = s.shade;
-    if (!('expr' in ser)) e.push('graph: shading needs a formula series');
-    else if (!isNum(from) || !isNum(to) || !(from < to) || from < a || to > b) e.push(`graph: shade runs from < to, inside ${n2(a)} to ${n2(b)}`);
-    else if (!Number.isFinite(integrate(fn(inX(ser.expr, v)), from, to))) e.push('graph: the curve must be defined across the shaded part');
+  if (Array.isArray(s.shade) && !(s.shade.length >= 1 && s.shade.length <= 4)) e.push('graph: shade is one area, or a list of 1 to 4');
+  for (const [j, sh] of shadesOf(s).slice(0, 4).entries()) {
+    const what = Array.isArray(s.shade) ? `shade ${j + 1}` : 'shade';
+    if (!sh || !pick(sh.series, what) || (sh.above !== undefined && !pick(sh.above, `${what} above`))) continue;
+    const ser = s.series[sh.series], low = sh.above !== undefined ? s.series[sh.above] : undefined, {from, to} = sh;
+    if (!('expr' in ser) || (low && !('expr' in low))) e.push(`graph: ${what}: shading needs formula series`);
+    else if (!isNum(from) || !isNum(to) || !(from < to) || from < a || to > b) e.push(`graph: ${what} runs from < to, inside ${n2(a)} to ${n2(b)}`);
+    else if (!Number.isFinite(integrate(fn(inX(ser.expr, v)), from, to))) e.push(`graph: ${what}: the curve must be defined across the shaded part`);
+    else if (low && 'expr' in low) {
+      const f = fn(inX(ser.expr, v)), g = fn(inX(low.expr, v));
+      for (let k = 0; k <= 100; k++) {
+        const x = from + (to - from) * k / 100;
+        if (!(f(x) >= g(x) - 1e-9)) { e.push(`graph: ${what}: series ${sh.series} must be on top of series ${sh.above} (it is below at ${v} = ${n2(x)}); swap series and above`); break; }
+      }
+    }
   }
   (s.marks ?? []).forEach((m, j) => {
     const where = `graph: mark ${j + 1}`;
@@ -240,17 +254,27 @@ export function graph(s: GraphSpec): Scene {
     t = Math.max(t, at + time + 0.6);
   }
 
-  if (s.shade) {
-    const sh = s.shade, ser = s.series[sh.series] as Series & {expr: string}, at = sh.at ?? t, time = sh.time ?? 3;
-    const area = integrate(fn(inX(ser.expr, v)), sh.from, sh.to);
+  const shades = shadesOf(s), areas: {label: string; from: number; to: number; value: number; shown: number}[] = [];
+  for (const [j, sh] of shades.entries()) {
+    const ser = s.series[sh.series] as Series & {expr: string}, at = sh.at ?? t, time = sh.time ?? 3;
+    const low = sh.above !== undefined ? inX((s.series[sh.above] as Series & {expr: string}).expr, v) : undefined, top = inX(ser.expr, v);
+    const g = low ? fn(low) : () => 0, f = fn(top), area = integrate((x: number) => f(x) - g(x), sh.from, sh.to);
     const units = sh.unit ?? (s.x.unit && s.y.unit ? `${s.y.unit} × ${s.x.unit}` : '');
-    props.push({id: 'shade', type: 'region', plane: 'p', expr: inX(ser.expr, v), from: sh.from, to: sh.from, keys: {to: [[at, sh.from + 1e-6], [at + time, sh.to, 'inOut']]},
-      style: {fill: COLOURS[sh.series], opacity: 0.3}, show: [at, 1e9], layer: 1},
-    ptext('area', px, row, `${sh.label ?? 'area'} = ${trim(area)}${units ? ' ' + units : ''}`, 34 * k, {weight: 700, show: [at + time, 1e9]}));
-    row += wrapText(`${sh.label ?? 'area'} = ${trim(area)} ${units}`, 34 * k, pw).length * 1.25 * 34 * k + 16 * k;
-    facts.push(`${sh.label ?? 'area'} from ${v} = ${fx(sh.from)} to ${fx(sh.to)}: ${trim(area)}${units ? ' ' + units : ''}`);
-    meta.area = {from: sh.from, to: sh.to, value: round(area, 8), shown: at + time};
+    // Each part in its own tone: the series' colour, or the next one when two parts share a series.
+    const tone = COLOURS[(sh.series + shades.slice(0, j).filter(o => o.series === sh.series).length) % COLOURS.length];
+    const id = j ? `shade-${j + 1}` : 'shade', label = sh.label ?? 'area';
+    props.push({id, type: 'region', plane: 'p', expr: top, ...(low ? {lower: low} : {}), from: sh.from, to: sh.from, keys: {to: [[at, sh.from + 1e-6], [at + time, sh.to, 'inOut']]},
+      style: {fill: tone, opacity: 0.3}, show: [at, 1e9], layer: 1},
+    ptext(j ? `area-${j + 1}` : 'area', px, row, `${label} = ${trim(area)}${units ? ' ' + units : ''}`, 34 * k, {weight: 700, style: {fill: tone}, show: [at + time, 1e9]}));
+    row += wrapText(`${label} = ${trim(area)} ${units}`, 34 * k, pw).length * 1.25 * 34 * k + 16 * k;
+    facts.push(`${label} from ${v} = ${fx(sh.from)} to ${fx(sh.to)}: ${trim(area)}${units ? ' ' + units : ''}`);
+    areas.push({label, from: sh.from, to: sh.to, value: round(area, 8), shown: at + time});
     t = Math.max(t, at + time + 0.6);
+  }
+  if (areas.length) meta.area = areas[0];
+  if (areas.length > 1) {
+    meta.areas = areas;
+    facts.push(`together: ${areas.map(a => a.label).join(' + ')} = ${trim(areas.reduce((m, a) => m + a.value, 0))}`);
   }
 
   if (s.tangent) {
