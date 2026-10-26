@@ -11,12 +11,14 @@
 // (run), a speedometer that reads a mover's computed speed (follows).
 // Every value the narration may quote (range, flight time, top height, time down the slope, speeds after a collision)
 // is computed here and listed in meta.facts. Arrows (velocity, force, direction), labels and readouts of position and
-// height (measured from the drawing) are optional.
+// height (measured from the drawing) are optional. Velocity arrows follow a mover's computed velocity: v and its
+// components vx and vy change length as it flies, with snapshots left behind every few seconds if asked (the book's
+// Fig. 3.16: vx stays the same, vy shrinks to zero at the top and grows downwards; user, 2026-10-26).
 import type {Key} from '../keys.ts';
 import {OBJECTS, type Role} from '../objects.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
-import type {Vec} from '../vec.ts';
+import {round, type Vec} from '../vec.ts';
 import {n2, walking} from './calculus.ts';
 
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
@@ -41,7 +43,11 @@ export type StageSpec = Common & {
   arrows?: {item: string; dx: number; dy: number; kind?: 'velocity' | 'force' | 'direction'; label?: string; t0?: number; t1?: number}[];
   labels?: {text: string; x: number; y: number; t0?: number; t1?: number}[];
   readouts?: {item: string; show: ('x' | 'height')[]}[];
+  /** Arrows of a mover's computed velocity: v and/or its components, `scale` metres of arrow per m/s (default: the
+   * fastest arrow is 12% of the stage), a faint copy left every `every` seconds, and readouts of the values. */
+  velocity?: {item: string; show?: ('v' | 'vx' | 'vy')[]; scale?: number; every?: number; readouts?: boolean}[];
 };
+const VELOCITY = ['v', 'vx', 'vy'] as const;
 
 /** Natural sizes in metres, when a spec gives none. */
 export const SIZES: Record<string, number> = {car: 4, bus: 12, train: 20, bicycle: 1.8, block: 1, wedge: 4, pulley: 1, sling: 2,
@@ -264,8 +270,17 @@ export function stageErrors(s: StageSpec): string[] {
   }
   for (const [n, a] of (s.arrows ?? []).entries()) if (!items.has(a?.item) || !isNum(a?.dx) || !isNum(a?.dy)) e.push(`stage: arrow ${n + 1} needs an item and dx, dy in metres`);
   for (const [n, r] of (s.readouts ?? []).entries()) if (!items.has(r?.item)) e.push(`stage: readout ${n + 1} names no item`);
+  for (const [n, v] of (s.velocity ?? []).entries()) {
+    const where = `stage: velocity ${n + 1}`;
+    if (!has(items.get(v?.item), 'mover')) e.push(`${where}: item names something that moves (a ball, a block, a cart)`);
+    if (v?.show !== undefined && !(Array.isArray(v.show) && v.show.length && v.show.every(q => VELOCITY.includes(q as never)))) e.push(`${where}: show is any of v, vx, vy`);
+    if (v?.scale !== undefined && !(isNum(v.scale) && v.scale > 0)) e.push(`${where}: scale is metres of arrow per m/s, more than 0`);
+    if (v?.every !== undefined && !(isNum(v.every) && v.every >= 0.2)) e.push(`${where}: every is seconds between snapshots, 0.2 or more`);
+  }
   if (e.length) return e;
-  return simulate(s).errors;
+  const sim = simulate(s);
+  for (const [n, v] of (s.velocity ?? []).entries()) if ((sim.paths.get(v.item)?.length ?? 0) < 2) sim.errors.push(`stage: velocity ${n + 1}: ${v.item} never moves; give it an event (launch, slide, roll, collide)`);
+  return sim.errors;
 }
 
 export function stage(s: StageSpec): Scene {
@@ -359,6 +374,58 @@ export function stage(s: StageSpec): Scene {
     props.push({id: `label${n}`, type: 'text', x, y, text: l.text, size: 30 * k, align: 'middle', weight: 700, show: [l.t0 ?? 0, l.t1 ?? 1e9], layer: 4});
   }
   let row = 0.08 * Hpx;
+  // Velocity arrows: from the mover's centre, keyed sample by sample from its computed path (each sample's velocity is
+  // that of the step after it), so they stretch, shrink and turn as it moves; zero-length arrows draw nothing.
+  const COLOURS = {v: 'accent', vx: 'cool', vy: 'good'} as const;
+  for (const [n, vel] of (s.velocity ?? []).entries()) {
+    const path = paths.get(vel.item)!, item = s.items.find(i => i.id === vel.item)!, h = sizeOf(item) * 0.5 * unit;
+    const steps = path.slice(0, -1).map((q, i) => {
+      const r = path[i + 1], dt = r.t - q.t;
+      // At the step's middle, where its average velocity is the true one under constant acceleration.
+      return dt > 1e-9 ? {t: q.t + dt / 2, x: (q.x + r.x) / 2, y: (q.y + r.y) / 2, vx: (r.x - q.x) / dt, vy: (r.y - q.y) / dt} : null;
+    }).filter((q): q is {t: number; x: number; y: number; vx: number; vy: number} => q !== null);
+    const last = path.at(-1)!;
+    steps.push({t: last.t, x: last.x, y: last.y, vx: 0, vy: 0});
+    const moving = steps.filter(q => Math.hypot(q.vx, q.vy) > 1e-6);
+    if (!moving.length) continue;
+    const fastest = Math.max(...moving.map(q => Math.hypot(q.vx, q.vy)));
+    const scale = (vel.scale ?? 0.12 * W / fastest) * unit, show = vel.show ?? ['v', 'vx', 'vy'];
+    const span: [number, number] = [moving[0].t, moving.at(-1)!.t + DT];
+    const parts = {v: (q: typeof steps[0]) => [q.vx, q.vy], vx: (q: typeof steps[0]) => [q.vx, 0], vy: (q: typeof steps[0]) => [0, q.vy]};
+    const arrowAt = (q: typeof steps[0], part: 'v' | 'vx' | 'vy') => {
+      const [x, y] = P(q.x, q.y), [dx, dy] = parts[part](q);
+      return {x1: x, y1: y - h, x2: x + dx * scale, y2: y - h - dy * scale, head: Math.min(18 * k, 0.45 * Math.hypot(dx, dy) * scale)};
+    };
+    for (const part of show) {
+      const keys: Record<string, Key[]> = {x1: [], y1: [], x2: [], y2: [], head: []};
+      for (const q of steps) for (const [f, v] of Object.entries(arrowAt(q, part))) keys[f].push([q.t, v, 'linear']);
+      props.push({id: `vel${n}-${part}`, type: 'arrow', x1: 0, y1: 0, x2: 0, y2: 0, keys, show: span, fade: 0.15,
+        style: {stroke: COLOURS[part], width: (part === 'v' ? 6 : 4.5) * k}, layer: 5});
+      props.push({id: `vel${n}-${part}-label`, type: 'text', x: 0, y: 0, text: part === 'v' ? 'v' : part === 'vx' ? 'vₓ' : 'vᵧ', size: 28 * k, weight: 700,
+        align: 'middle', show: span, fade: 0.15, style: {fill: COLOURS[part]}, layer: 5,
+        keys: {x: steps.map(q => [q.t, arrowAt(q, part).x2 + (part === 'vy' ? 26 * k : 0), 'linear'] as Key),
+          y: steps.map(q => [q.t, arrowAt(q, part).y2 - (part === 'vy' ? 0 : 22 * k), 'linear'] as Key)}});
+      // Snapshots: a faint copy where the mover was, every few seconds of its flight.
+      if (vel.every) for (let t = moving[0].t, i = 0; t <= span[1] && i < 40; t += vel.every, i++) {
+        const q = steps.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
+        const a = arrowAt(q, part);
+        if (Math.hypot(a.x2 - a.x1, a.y2 - a.y1) > 2) props.push({id: `vel${n}-${part}-at${i}`, type: 'arrow', ...a, show: [q.t, 1e9],
+          style: {stroke: COLOURS[part], width: 3 * k, opacity: 0.45}, layer: 4});
+      }
+      if (vel.readouts !== false) {
+        const value = (q: typeof steps[0]) => (part === 'v' ? Math.hypot(q.vx, q.vy) : part === 'vx' ? q.vx : q.vy);
+        props.push({id: `vel${n}-${part}-ro`, type: 'readout', x: 0.7 * Wpx, y: row, size: 32 * k, decimals: 2, show: span, fade: 0.15,
+          text: `${vel.item} ${part === 'v' ? 'speed v' : part === 'vx' ? 'vₓ' : 'vᵧ'} = {v} m/s`,
+          measures: {v: {kind: 'keys', keys: steps.map(q => [q.t, round(value(q), 6), 'linear'] as Key)}}, style: {fill: COLOURS[part]}});
+        row += 1.3 * 32 * k;
+      }
+    }
+    const launch = (s.events ?? []).find(e => e.item === vel.item && e.kind === 'launch') as {speed: number; angle?: number; from?: string} | undefined;
+    if (launch) {
+      const angle = (launch.angle ?? (launch.from ? s.items.find(i => i.id === launch.from)?.a ?? 40 : 45)) * DEG;
+      facts.push(`${vel.item}'s velocity at launch: horizontal part vₓ = ${fmt(launch.speed * Math.cos(angle))} m/s (it stays the same), vertical part vᵧ = ${fmt(launch.speed * Math.sin(angle))} m/s (zero at the top)`);
+    }
+  }
   for (const [n, r] of (s.readouts ?? []).entries()) {
     const at = ref(r.item) ?? {plane: 'w', at: [paths.get(r.item)![0].x, paths.get(r.item)![0].y] as Vec};
     for (const q of r.show) {

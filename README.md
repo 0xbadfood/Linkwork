@@ -49,6 +49,9 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `scale_compare` (trial): an object's length against distances, drawn to scale: it shrinks to its true size beside each
   distance and L/D is shown (when can a train or a bus be treated as a point?).
 
+- `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
+  vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.
+
 ## Compound scenes
 
 Several verbs on one canvas: each part is a verb spec in a box, compiled at the box's size, on its own clock (`start`,

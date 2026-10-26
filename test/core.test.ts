@@ -304,3 +304,17 @@ test('compound: parts in boxes on one clock; a linked graph traces the mover; se
   const grid = compile({compound: true, parts: [part('a', [0, 0, 960, 540]), part('b', [960, 0, 960, 540]), part('c', [0, 540, 960, 540]), part('d', [960, 540, 960, 540])]} as never);
   assert.equal(check(grid.scene!, {every: 10}).filter(e => /text is drawn at \d+ px/.test(e)).length, 4);
 });
+
+test('stage velocity arrows follow the computed velocity: vₓ unchanged, vᵧ zero at the top (the book\'s cricket ball)', () => {
+  // 2026-10-26, before the projectile film: keph1 Fig. 3.16 draws v and its components along the path.
+  const {scene, errors} = compile({verb: 'stage', width_m: 80, ground: 'grass', items: [{id: 'ball', object: 'ball', x: 3, size: 0.8}],
+    events: [{t: 0.5, item: 'ball', kind: 'launch', speed: 28, angle: 30}], velocity: [{item: 'ball', every: 0.7}]} as never);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(check(scene!, {every: 3}), []);
+  const read = (t: number, id: string) => Number(/(−?[\d.]+) m\/s/.exec(String((frame(scene!, t).props.find(p => p.id === id) as {text?: string}).text))![1].replace('−', '-'));
+  for (const t of [0.6, 1.4, 2.5, 3.2]) assert.ok(Math.abs(read(t, 'vel0-vx-ro') - 24.25) < 0.01);
+  assert.ok(Math.abs(read(0.5 + 14 / 9.8, 'vel0-vy-ro')) < 0.02);                    // the top: tₘ = v₀ sin θ / g
+  assert.ok(Math.abs(read(1.5, 'vel0-vy-ro') - (14 - 9.8)) < 0.02);
+  assert.ok((scene!.meta!.facts as string[]).some(f => /vₓ = 24.25 m\/s.*vᵧ = 14 m\/s/.test(f)));
+  assert.match(compile({verb: 'stage', items: [{id: 'b', object: 'ball', x: 2}], velocity: [{item: 'b'}]} as never).errors.join(' '), /never moves/);
+});
