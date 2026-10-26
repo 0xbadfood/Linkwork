@@ -365,8 +365,8 @@ export function areaUnder(s: AreaSpec): Scene {
     const sum = riemann(f, a0, b0, n, s.rule ?? 'mid');
     sums.push({n, sum: round(sum, 6)});
     const until = i < (s.riemann!.length - 1) ? t + 1.8 : 1e9;
-    props.push({id: `rects${i}`, type: 'riemann', plane: 'p', expr: s.expr, from: a0, to: b0, n, rule: s.rule ?? 'mid',
-      style: {fill: 'cool', stroke: 'cool', width: 2, opacity: 0.35}, show: [t, until], fade: 0.2, layer: 1},
+    props.push({id: `rects${i}`, type: 'riemann', plane: 'p', expr: s.expr, from: a0, to: b0, n, rule: s.rule ?? 'mid', alternate: 'good',
+      style: {fill: 'cool', stroke: 'cool', width: 2, opacity: 0.55}, show: [t, until], fade: 0.2, layer: 1},
     ptext(`sum${i}`, px, py(0.6), `${n} rectangles: ${n2(sum, 4)}  (off by ${n2(Math.abs(sum - exact), 4)})`, 32 * k, {style: {fill: 'cool'}, show: [t, until], fade: 0.2}));
     t += 1.8;
   });

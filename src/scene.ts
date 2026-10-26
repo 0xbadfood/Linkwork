@@ -95,7 +95,8 @@ export type Prop = PropBase & (
   /** The region between y = f(x) and y = lower(x) (default 0) from `from` to `to`. */
   | {type: 'region'; plane: string; expr: string; lower?: string; from: number; to: number}
   /** n rectangles under y = f(x) from `from` to `to`. */
-  | {type: 'riemann'; plane: string; expr: string; from: number; to: number; n: number; rule?: 'left' | 'right' | 'mid'}
+  /** Rectangles under f; `alternate` fills every other one in a second colour, so each strip reads as its own piece. */
+  | {type: 'riemann'; plane: string; expr: string; from: number; to: number; n: number; rule?: 'left' | 'right' | 'mid'; alternate?: string}
   /** The straight line through two points, extended to the plane's box (or by `extend` scene units). */
   | {type: 'through'; a: Ref; b: Ref; plane?: string; extend?: number}
   | {type: 'group'; items: Prop[]}
@@ -444,7 +445,8 @@ export function propFrame(prop: Prop, t: number, actors: Map<string, ActorFrame>
         const x0 = a + w * i, h = f(x0 + w * (rule === 'left' ? 0 : rule === 'right' ? 1 : 0.5));
         if (!Number.isFinite(h)) continue;
         const p0 = toScene(plane, [x0, Math.max(h, 0)]), p1 = toScene(plane, [x0 + w, Math.min(h, 0)]);
-        items.push({id: `${prop.id}.${i}`, type: 'rect', x: p0[0], y: p0[1], w: p1[0] - p0[0], h: p1[1] - p0[1], style: prop.style});
+        const style = i % 2 && prop.alternate ? {...prop.style, fill: prop.alternate, stroke: prop.alternate} : prop.style;
+        items.push({id: `${prop.id}.${i}`, type: 'rect', x: p0[0], y: p0[1], w: p1[0] - p0[0], h: p1[1] - p0[1], style});
       }
       Object.assign(out, {type: 'group', items});
       break;

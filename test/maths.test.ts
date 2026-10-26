@@ -138,3 +138,11 @@ test('a v–t area splits into rectangle OACD and triangle ABC, each in its own 
   assert.notEqual(regions[0].style.fill, regions[1].style.fill);
   assert.match(vt([{series: 0, above: 1, from: 0, to: 5}]).errors.join(' '), /series 0 must be on top of series 1/);
 });
+
+test('Riemann strips alternate two colours, so each piece under the curve reads on its own', () => {
+  const c = compile({verb: 'area_under', expr: '0.5*x^2+1', from: 0, to: 2, x: [-0.5, 2.5], y: [-0.5, 5], riemann: [4, 8], rule: 'mid'} as never);
+  assert.deepEqual(c.errors, []);
+  const rects = c.scene!.props.find(p => p.id === 'rects0')!;
+  const shown = frame(c.scene!, (rects.show as number[])[0] + 0.5).props.find(p => p.id === 'rects0') as unknown as {items: {style: {fill: string}}[]};
+  assert.deepEqual(shown.items.map(r => r.style.fill), ['cool', 'good', 'cool', 'good']);
+});
