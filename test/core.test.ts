@@ -318,3 +318,9 @@ test('stage velocity arrows follow the computed velocity: vₓ unchanged, vᵧ z
   assert.ok((scene!.meta!.facts as string[]).some(f => /vₓ = 24.25 m\/s.*vᵧ = 14 m\/s/.test(f)));
   assert.match(compile({verb: 'stage', items: [{id: 'b', object: 'ball', x: 2}], velocity: [{item: 'b'}]} as never).errors.join(' '), /never moves/);
 });
+
+test('a stage list written as one object is an error, not a crash (projectile film, 2026-10-26)', () => {
+  const spec = {verb: 'stage', width_m: 40, items: [{id: 'b', object: 'ball', x: 2}], events: [{t: 0.5, item: 'b', kind: 'launch', speed: 15, angle: 40}],
+    velocity: {item: 'b'}};
+  assert.match(compile(spec as never).errors.join(' '), /velocity is a list/);
+});

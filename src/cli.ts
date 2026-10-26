@@ -55,8 +55,10 @@ function main(argv: string[]): number {
     const every = Number(arg(rest, '--every') ?? 3);
     const items = JSON.parse(readFileSync(file, 'utf8')) as {id: string; spec: {verb: string}}[];
     console.log(JSON.stringify(items.map(({id, spec}) => {
-      const {scene, errors} = compile(spec);
-      const problems = scene ? check(scene, {every}) : errors;
+      // One spec that throws is that spec's error, never the whole batch's (a crash here left a film with no reply).
+      let scene, errors, problems;
+      try { ({scene, errors} = compile(spec)); problems = scene ? check(scene, {every}) : errors; }
+      catch (err) { scene = undefined; problems = [`${(spec as {verb?: string})?.verb ?? 'spec'}: it could not be compiled (${(err as Error).message})`]; }
       return {id, errors: problems, duration: scene?.duration ?? null, facts: (scene?.meta as {facts?: string[]})?.facts ?? [],
         scene: problems.length ? null : scene};
     })));

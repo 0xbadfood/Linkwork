@@ -232,7 +232,7 @@ export const CARDS: Record<string, Card> = {
       events: "{t in seconds, item, kind} and: move {to, duration, ease?} (a figure walks); pose {pose: think | point | cheer | shrug | stand} for a figure; light {on} for a bulb; run {duration} for a stopwatch; launch {speed m/s, angle°, from: cannon id?}; slide {on: wedge id, friction μ?, then: seconds along the ground after}; roll {on: wedge id, then?}; collide {with, speed m/s, elastic true|false, after: seconds}",
       arrows: '{item, dx, dy in metres, kind: velocity | force | direction, label, t0, t1}', labels: '{text, x, y in metres, t0, t1}',
       readouts: "{item, show: ['x', 'height']}",
-      velocity: "{item (a mover), show?: ['v', 'vx', 'vy'] (default all), scale?: metres of arrow per m/s (default: the fastest arrow is 12% of the stage), every?: seconds between faint snapshots left along the path, readouts?: true}",
+      velocity: "a list of {item (a mover), show?: ['v', 'vx', 'vy'] (default all), scale?: metres of arrow per m/s (default: the fastest arrow is 12% of the stage), every?: seconds between faint snapshots left along the path, readouts?: true}",
       title: 'short title'},
     example: {verb: 'stage', title: 'A ball fired from a cannon', width_m: 40, ground: 'grass',
       items: [{id: 'cannon', object: 'cannon', x: 2, size: 2, a: 40}, {id: 'ball', object: 'ball', x: 2, size: 0.5}],

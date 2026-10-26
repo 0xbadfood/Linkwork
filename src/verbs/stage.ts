@@ -268,6 +268,8 @@ export function stageErrors(s: StageSpec): string[] {
       default: e.push(`${where}: kind is move, launch, slide, roll, collide, pose, light or run`);
     }
   }
+  // Lists must be lists: a planner wrote velocity as one object, and the crash took a film's whole batch check with it.
+  for (const f of ['arrows', 'labels', 'readouts', 'velocity'] as const) if (s[f] !== undefined && !Array.isArray(s[f])) return [...e, `stage: ${f} is a list ([{...}, ...]), even for one`];
   for (const [n, a] of (s.arrows ?? []).entries()) if (!items.has(a?.item) || !isNum(a?.dx) || !isNum(a?.dy)) e.push(`stage: arrow ${n + 1} needs an item and dx, dy in metres`);
   for (const [n, r] of (s.readouts ?? []).entries()) if (!items.has(r?.item)) e.push(`stage: readout ${n + 1} names no item`);
   for (const [n, v] of (s.velocity ?? []).entries()) {
