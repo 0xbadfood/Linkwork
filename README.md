@@ -43,6 +43,9 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `motion_on_line` (trial): an object (dot, walker, car, bus, train, cyclist, ball, block) moves along an x-axis with its
   origin and direction marked; between given positions it moves at constant velocity. Time, position and displacement are
   read off the drawing; each stretch's velocity and the distance covered are computed; its x–t graph can draw itself.
+  The axis can stand upright (the ground and a building drawn) and the motion can be uniformly accelerated
+  (`accelerate: {x0, v0, a}`): a ball thrown up from a building, a stone dropped from rest, marked every second so the
+  growing distances (1 : 3 : 5) show.
 - `scale_compare` (trial): an object's length against distances, drawn to scale: it shrinks to its true size beside each
   distance and L/D is shown (when can a train or a bus be treated as a point?).
 
