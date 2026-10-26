@@ -327,11 +327,30 @@ test('a stage list written as one object is an error, not a crash (projectile fi
 
 test('a stage too narrow for a tall setup says how wide it must be (the 490 m cliff)', () => {
   const cliff = (w: number) => compile({verb: 'stage', width_m: w, ground: 'grass', items: [{id: 'cliff', object: 'wall', x: 20, size: 81.7},
-    {id: 'stone', object: 'ball', x: 20, size: 2, on: 'cliff'}], events: [{t: 1, item: 'stone', kind: 'launch', speed: 15, angle: 0}]} as never);
+    {id: 'stone', object: 'ball', x: 60, size: 2, on: 'cliff'}], events: [{t: 1, item: 'stone', kind: 'launch', speed: 10, angle: 0}]} as never);
   const e = cliff(200).errors.join(' ');
   assert.match(e, /set width_m to at least (\d+)/);
   const wide = Number(/at least (\d+)/.exec(e)![1]);
   const fitted = cliff(wide);
   assert.deepEqual(fitted.errors, []);
   assert.deepEqual(check(fitted.scene!, {every: 3}), []);
+});
+
+test('a ball dropped and one flicked off a table at the same moment land together', () => {
+  const two = (dropX: number) => compile({verb: 'stage', width_m: 15, ground: 'floor', items: [{id: 'table', object: 'table', x: 7, size: 5},
+    {id: 'dropped', object: 'ball', x: dropX, on: 'table', size: 0.3}, {id: 'flicked', object: 'ball', x: 9.3, on: 'table', size: 0.3}],
+    events: [{t: 0.5, item: 'dropped', kind: 'launch', speed: 0, from: 'table'}, {t: 0.5, item: 'flicked', kind: 'launch', speed: 3}],
+    velocity: [{item: 'flicked', show: ['vx', 'vy']}]} as never);
+  const c = two(9.0);
+  assert.deepEqual(c.errors, []);
+  assert.deepEqual(check(c.scene!, {every: 3}), []);
+  const facts = c.scene!.meta!.facts as string[];
+  const drop = facts.find(f => f.startsWith('dropped'))!, flick = facts.find(f => f.startsWith('flicked is launched'))!;
+  assert.match(drop, /dropped from rest/);
+  assert.match(flick, /off the table's edge/);
+  assert.equal(/after ([\d.]+) s/.exec(drop)![1], /after ([\d.]+) s/.exec(flick)![1]);
+  assert.match(two(7.5).errors.join(' '), /put it at the edge: x = 9\.\d+/);
+  const down = compile({verb: 'stage', width_m: 15, items: [{id: 'table', object: 'table', x: 7, size: 5}, {id: 'b', object: 'ball', x: 9.3, on: 'table'}],
+    events: [{t: 0, item: 'b', kind: 'launch', speed: 2, angle: 270}]} as never);
+  assert.match(down.errors.join(' '), /give speed 0, not a downward angle/);
 });

@@ -93,6 +93,8 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
     return under ? restY(under) + top(under) * sizeOf(under) : 0;
   };
   for (const i of s.items) state.set(i.id, {t: 0, x: i.x, y: restY(i), angle: i.angle ?? 0, travel: 0});
+  /** The support a launched ball leaves from: the one it rests on (a table, block, wall), when no cannon fires it. */
+  const supportOf = (i: StageItem) => { const u = i.on ? items.get(i.on) : undefined; return has(u, 'support') ? u : undefined; };
   /** Where a launcher's ball sits: its centre at the muzzle, along the barrel. */
   const muzzle = (launcher: StageItem, ball: StageItem, angle: number): Vec => {
     const sc = sizeOf(launcher) / OBJECTS[launcher.object].length, f = launcher.facing ?? 1, a = angle * DEG, st = state.get(launcher.id)!;
@@ -108,7 +110,7 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
     const item = items.get(e.item);
     if (!item || placed.has(item.id)) continue;
     placed.add(item.id);
-    const launcher = e.kind === 'launch' && e.from ? items.get(e.from) : undefined;
+    const launcher = e.kind === 'launch' && e.from && has(items.get(e.from), 'launcher') ? items.get(e.from) : undefined;
     if (launcher && e.kind === 'launch') { const [x, y] = muzzle(launcher, item, e.angle ?? launcher.a ?? 40); state.set(item.id, {...state.get(item.id)!, x, y}); }
     const wedge = (e.kind === 'slide' || e.kind === 'roll') ? items.get(e.on) : undefined;
     if (wedge) { const [x, y] = onSlope(wedge, sizeOf(item) / 2, 0); state.set(item.id, {...state.get(item.id)!, x, y, angle: (wedge.facing ?? 1) * slopeOf(wedge) / DEG}); }
@@ -135,12 +137,19 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
       facts.push(`${id} moves from x = ${fmt(c.x)} m to ${fmt(e.to)} m in ${fmt(e.duration)} s` +
         (e.ease === 'inOut' ? '' : `, at ${fmt(Math.abs(e.to - c.x) / e.duration)} m/s`));
     } else if (e.kind === 'launch') {
-      const launcher = e.from ? items.get(e.from) : undefined;
-      let x0 = c.x, y0 = c.y, angle = e.angle ?? 45, dir = item.facing ?? 1;
+      const launcher = e.from && has(items.get(e.from), 'launcher') ? items.get(e.from) : undefined;
+      const ledge = launcher ? undefined : supportOf(item);
+      let x0 = c.x, y0 = c.y, angle = e.angle ?? (ledge ? 0 : 45), dir = item.facing ?? 1;
       if (launcher) {                                  // from the cannon's muzzle, along its barrel
         angle = e.angle ?? launcher.a ?? 40; dir = launcher.facing ?? 1;
         [x0, y0] = muzzle(launcher, item, angle);
+      } else if (ledge) {                              // off the edge of what it rests on: a ball rolled or dropped off a table
+        const L = sizeOf(ledge), lx = state.get(ledge.id)!.x, r = sizeOf(item) / 2;
+        const side = c.x >= lx ? 1 : -1, edge = lx + side * L / 2;
+        if (Math.abs(c.x - edge) > 2 * sizeOf(item)) errors.push(`${where}: ${id} leaves the ${ledge.id} from its edge, so put it at the edge: x = ${fmt(edge - side * r)}`);
+        x0 = edge + side * r; dir = side;
       }
+      if (e.speed === 0 && y0 <= 0) errors.push(`${where}: a dropped ball must start above the ground: put it on a support (on: a table or wall id) or give it a height y`);
       const a = angle * DEG, vx = e.speed * Math.cos(a) * dir, vy = e.speed * Math.sin(a);
       const flight = (vy + Math.sqrt(vy * vy + 2 * g * y0)) / g, top = y0 + vy * vy / (2 * g);
       const n = Math.max(1, Math.ceil(flight / DT));
@@ -150,7 +159,8 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
       }
       const land = x0 + vx * flight;
       if (land < 0 || land > W) errors.push(`${where}: it lands at x = ${fmt(land)} m, off the stage (0 to ${W} m); widen width_m or lower the speed`);
-      facts.push(`${id} is launched at ${fmt(e.speed)} m/s, ${fmt(angle, 1)}° above the horizontal: it rises to ${fmt(top)} m, ` +
+      facts.push(e.speed === 0 ? `${id} is dropped from rest at ${fmt(y0)} m: it falls straight down and lands after ${fmt(flight)} s`
+        : `${id} is launched at ${fmt(e.speed)} m/s, ${fmt(angle, 1)}° above the horizontal${ledge ? ` off the ${ledge.id}'s edge` : ''}: it rises to ${fmt(top)} m, ` +
         `lands at x = ${fmt(land)} m (${fmt(Math.abs(land - x0))} m away) after ${fmt(flight)} s`);
     } else if (e.kind === 'slide' || e.kind === 'roll') {
       const wedge = items.get(e.on)!, L = sizeOf(wedge), th = slopeOf(wedge), f = wedge.facing ?? 1;
@@ -242,9 +252,11 @@ export function stageErrors(s: StageSpec): string[] {
         break;
       case 'launch':
         if (!has(item, 'mover')) e.push(`${where}: only something that can fly (a ball) is launched`);
-        if (!(ev.speed > 0 && ev.speed <= 200)) e.push(`${where}: speed is 0 to 200 m/s`);
-        if (ev.angle !== undefined && !(ev.angle >= 0 && ev.angle < 90)) e.push(`${where}: angle is 0 to 89 degrees`);
-        if (ev.from !== undefined && !has(items.get(ev.from), 'launcher')) e.push(`${where}: from must name a launcher (a cannon)`);
+        if (!(isNum(ev.speed) && ev.speed >= 0 && ev.speed <= 200)) e.push(`${where}: speed is 0 to 200 m/s (0 drops it from rest)`);
+        if (ev.angle !== undefined && ev.speed !== 0 && !(ev.angle >= 0 && ev.angle < 90)) e.push(`${where}: angle is 0 to 89 degrees above the horizontal; to drop a ball straight down give speed 0, not a downward angle`);
+        if (ev.from !== undefined && !has(items.get(ev.from), 'launcher') && !(ev.from === item.on && has(items.get(ev.from), 'support')))
+          e.push(`${where}: from names a cannon, or the support the ball rests on (its on), which it leaves from the edge`);
+        if (ev.speed === 0 && has(items.get(ev.from ?? ''), 'launcher')) e.push(`${where}: a cannon fires at a speed above 0; to drop a ball, rest it on a table (on) and give speed 0`);
         break;
       case 'slide': case 'roll':
         if (items.get(ev.on)?.object !== 'wedge') e.push(`${where}: on must name a wedge`);
@@ -436,7 +448,8 @@ export function stage(s: StageSpec): Scene {
     }
     const launch = (s.events ?? []).find(e => e.item === vel.item && e.kind === 'launch') as {speed: number; angle?: number; from?: string} | undefined;
     if (launch) {
-      const angle = (launch.angle ?? (launch.from ? s.items.find(i => i.id === launch.from)?.a ?? 40 : 45)) * DEG;
+      const from = s.items.find(i => i.id === launch.from), on = s.items.find(i => i.id === s.items.find(j => j.id === vel.item)?.on);
+      const angle = (launch.angle ?? (from && has(from, 'launcher') ? from.a ?? 40 : has(on, 'support') ? 0 : 45)) * DEG;
       facts.push(`${vel.item}'s velocity at launch: horizontal part vₓ = ${fmt(launch.speed * Math.cos(angle))} m/s (it stays the same), vertical part vᵧ = ${fmt(launch.speed * Math.sin(angle))} m/s (zero at the top)`);
     }
   }
