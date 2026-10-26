@@ -324,3 +324,14 @@ test('a stage list written as one object is an error, not a crash (projectile fi
     velocity: {item: 'b'}};
   assert.match(compile(spec as never).errors.join(' '), /velocity is a list/);
 });
+
+test('a stage too narrow for a tall setup says how wide it must be (the 490 m cliff)', () => {
+  const cliff = (w: number) => compile({verb: 'stage', width_m: w, ground: 'grass', items: [{id: 'cliff', object: 'wall', x: 20, size: 81.7},
+    {id: 'stone', object: 'ball', x: 20, size: 2, on: 'cliff'}], events: [{t: 1, item: 'stone', kind: 'launch', speed: 15, angle: 0}]} as never);
+  const e = cliff(200).errors.join(' ');
+  assert.match(e, /set width_m to at least (\d+)/);
+  const wide = Number(/at least (\d+)/.exec(e)![1]);
+  const fitted = cliff(wide);
+  assert.deepEqual(fitted.errors, []);
+  assert.deepEqual(check(fitted.scene!, {every: 3}), []);
+});

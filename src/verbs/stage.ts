@@ -212,7 +212,7 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
 export function stageErrors(s: StageSpec): string[] {
   const e: string[] = [];
   const W = s.width_m ?? 10;
-  if (s.width_m !== undefined && !(s.width_m >= 1 && s.width_m <= 1000)) e.push('stage: width_m is 1 to 1000 metres');
+  if (s.width_m !== undefined && !(s.width_m >= 1 && s.width_m <= 5000)) e.push('stage: width_m is 1 to 5000 metres');
   if (!Array.isArray(s.items) || !s.items.length) return [...e, 'stage: give at least one item'];
   const ids = new Set<string>();
   const items = new Map(s.items.map(i => [i.id, i]));
@@ -281,6 +281,18 @@ export function stageErrors(s: StageSpec): string[] {
   }
   if (e.length) return e;
   const sim = simulate(s);
+  // The stage's height follows its width (16:9): a tall setup needs a wide stage. Say exactly how wide, or a planner
+  // sees only "leaves the frame" (the projectile film's 490 m cliff on a 200 m stage failed every round, 2026-10-26).
+  if (!sim.errors.length) {
+    const Wpx = s.width ?? 1920, Hpx = s.height ?? 1080, W = s.width_m ?? 10;
+    const shown = 0.78 * Hpx * W / (0.9 * Wpx);
+    let tallest = 0, what = '';
+    for (const i of s.items) {
+      const h = OBJECTS[i.object]?.height ?? 1;
+      for (const q of sim.paths.get(i.id) ?? []) if (q.y + sizeOf(i) * h > tallest) { tallest = q.y + sizeOf(i) * h; what = i.id; }
+    }
+    if (tallest > shown) sim.errors.push(`stage: ${what} reaches ${fmt(tallest)} m up, but a ${fmt(W)} m wide stage shows only ${fmt(shown)} m of height; set width_m to at least ${Math.ceil(1.05 * tallest * W / shown)}`);
+  }
   for (const [n, v] of (s.velocity ?? []).entries()) if ((sim.paths.get(v.item)?.length ?? 0) < 2) sim.errors.push(`stage: velocity ${n + 1}: ${v.item} never moves; give it an event (launch, slide, roll, collide)`);
   return sim.errors;
 }
