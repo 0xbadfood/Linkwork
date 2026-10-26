@@ -154,5 +154,22 @@ function textBox(p: Prop & {type: 'text'}): Vec[] {
 
 export function check(scene: Scene, options: CheckOptions = {}): string[] {
   const errors = sceneErrors(scene);
-  return errors.length ? errors : motionErrors(scene, options);
+  return errors.length ? errors : [...motionErrors(scene, options), ...partErrors(scene, options)];
 }
+
+/** A compound's own checks: each part's checks in its own frame, and legibility (the smallest text drawn). */
+/** The smallest text a compound's part may draw, in canvas pixels on a 1080-high canvas. */
+export const MIN_TEXT = 18;
+
+export function partErrors(scene: Scene, options: CheckOptions = {}): string[] {
+  const out: string[] = [];
+  for (const p of scene.parts ?? []) {
+    const own = sceneErrors(p.scene);
+    out.push(...(own.length ? own : motionErrors(p.scene, options)).map(e => `part ${p.id}: ${e}`));
+    const sizes = p.scene.props.filter(q => q.type === 'text' || q.type === 'readout').map(q => ((q as {size?: number}).size ?? 32) * p.scale * 1080 / scene.height);
+    const smallest = Math.min(...sizes);
+    if (sizes.length && smallest < MIN_TEXT - 1e-6) out.push(`part ${p.id}: its text is drawn at ${smallest.toFixed(0)} px (at least ${MIN_TEXT}); give it a taller box`);
+  }
+  return out;
+}
+

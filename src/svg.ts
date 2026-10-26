@@ -34,12 +34,23 @@ export function drawFrame(f: Frame, theme: Record<string, string>, options: SvgO
     const v = c ?? fallback;
     return v === 'none' || v.startsWith('#') || v.startsWith('rgb') || v.startsWith('var(') ? v : theme[v] ?? v;
   };
+  const bg = options.background === false ? '' : `<rect width="${f.width}" height="${f.height}" fill="${colour('paper', '#000')}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.width} ${f.height}" width="${f.width}" height="${f.height}">${bg}${drawItems(f, colour)}</svg>`;
+}
+
+/** A frame's props and actors in layer order; a compound's parts are drawn among them by their layer (a part's own
+ * layers stay inside it), each moved into its box and clipped to it. */
+function drawItems(f: Frame, colour: Colour): string {
   const items: {layer: number; i: number; svg: string}[] = [];
   f.props.forEach((p, i) => { if (p.opacity > 0.001) items.push({layer: p.layer, i, svg: drawProp(p, colour)}); });
   f.actors.forEach((a, i) => { if (a.opacity > 0.001) items.push({layer: a.layer, i: 1000 + i, svg: drawActor(a, colour)}); });
+  (f.parts ?? []).forEach((p, i) => {
+    const [x, y, w, h] = p.box, clip = `lw-part-${esc(p.id)}`;
+    items.push({layer: p.layer, i: -1000 + i, svg: `<defs><clipPath id="${clip}"><rect x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}"/></clipPath></defs>`
+      + `<g clip-path="url(#${clip})"><g transform="translate(${num(p.offset[0])} ${num(p.offset[1])}) scale(${+p.scale.toFixed(5)})">${drawItems(p.frame, colour)}</g></g>`});
+  });
   items.sort((a, b) => a.layer - b.layer || a.i - b.i);
-  const bg = options.background === false ? '' : `<rect width="${f.width}" height="${f.height}" fill="${colour('paper', '#000')}"/>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.width} ${f.height}" width="${f.width}" height="${f.height}">${bg}${items.map(x => x.svg).join('')}</svg>`;
+  return items.map(x => x.svg).join('');
 }
 
 type Colour = (c: string | undefined, fallback: string) => string;
@@ -65,7 +76,9 @@ export function wrapText(text: string, size: number, width: number): string[] {
   let line = '';
   for (const word of text.split(/\s+/)) {
     const next = line ? `${line} ${word}` : word;
-    if (line && textWidth(next, size) > width) { lines.push(line); line = word; } else line = next;
+    // Wrapped at 0.6 of the size a glyph, not textWidth's 0.55: bold titles are wider than average, and a line that
+    // runs past its panel is cut off at the canvas edge (seen in a compound's smoke test, 2026-10-26).
+    if (line && 0.6 * size * [...next].length > width) { lines.push(line); line = word; } else line = next;
   }
   if (line) lines.push(line);
   return lines;

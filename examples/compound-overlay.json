@@ -1,0 +1,87 @@
+{
+ "compound": true,
+ "parts": [
+  {
+   "id": "throw",
+   "spec": {
+    "verb": "motion_on_line",
+    "title": "Thrown up from a building",
+    "axis": {
+     "range": [
+      0,
+      50
+     ],
+     "unit": "m",
+     "vertical": true,
+     "step": 5
+    },
+    "object": "ball",
+    "accelerate": {
+     "x0": 25,
+     "v0": 20,
+     "a": -10,
+     "t": [
+      0,
+      5
+     ]
+    },
+    "ground": 0,
+    "building": {
+     "top": 25,
+     "label": "25 m"
+    },
+    "readouts": [
+     "t",
+     "y",
+     "v"
+    ],
+    "graph": true
+   }
+  },
+  {
+   "id": "idea",
+   "box": [
+    1440,
+    520,
+    460,
+    540
+   ],
+   "start": 2,
+   "layer": 2,
+   "spec": {
+    "verb": "stage",
+    "width_m": 3,
+    "ground": "none",
+    "items": [
+     {
+      "id": "kid",
+      "object": "figure",
+      "x": 1.5,
+      "size": 1.6,
+      "pose": "stand"
+     },
+     {
+      "id": "bulb",
+      "object": "bulb",
+      "on": "kid",
+      "x": 1.5
+     }
+    ],
+    "events": [
+     {
+      "t": 0.4,
+      "item": "kid",
+      "kind": "pose",
+      "pose": "think"
+     },
+     {
+      "t": 1.4,
+      "item": "bulb",
+      "kind": "light",
+      "on": true
+     }
+    ]
+   }
+  }
+ ]
+}

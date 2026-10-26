@@ -15,7 +15,9 @@ export type Series = {label: string; at?: number} & (
   | {points: Vec[]; join?: 'line' | 'smooth' | 'none'; names?: string[]});
 export type GraphSpec = {
   verb: 'graph'; title?: string; x: Axis; y: Axis; series: Series[];
-  trace?: {series: number; from: number; to: number; at?: number; time?: number};
+  /** clock: the x axis is time in seconds and the tracer moves in step with it (from `at`, taking to - from seconds,
+   * at an even pace), so it can follow a mover in another part of a compound. */
+  trace?: {series: number; from: number; to: number; at?: number; time?: number; clock?: boolean};
   tangent?: {series: number; x: number; at?: number};
   shade?: {series: number; from: number; to: number; label?: string; unit?: string; at?: number; time?: number};
   marks?: {series?: number; x: number; y?: number; label: string; at?: number}[];
@@ -214,9 +216,9 @@ export function graph(s: GraphSpec): Scene {
   row += 14 * k;
 
   if (s.trace) {
-    const tr = s.trace, ser = s.series[tr.series], f = valueOf(ser), at = tr.at ?? t, time = tr.time ?? 4;
+    const tr = s.trace, ser = s.series[tr.series], f = valueOf(ser), at = tr.at ?? t, time = tr.clock ? tr.to - tr.from : tr.time ?? 4;
     const dot: Actor = {id: 'tracer', rig: 'dot', at: P(tr.from, f(tr.from)), scale: 1.3 * k, layer: 4, show: [at, 1e9]};
-    if ('expr' in ser) dot.drivers = [{t0: 0, t1: 1e9, driver: 'curve', plane: 'p', expr: inX(ser.expr, v), x: [[0, tr.from], [at, tr.from], [at + time, tr.to, 'inOut']]}];
+    if ('expr' in ser) dot.drivers = [{t0: 0, t1: 1e9, driver: 'curve', plane: 'p', expr: inX(ser.expr, v), x: [[0, tr.from], [at, tr.from], [at + time, tr.to, tr.clock ? 'linear' : 'inOut']]}];
     else {
       // Along the drawn data path, moving steadily in x.
       const path = pathOf(ser).filter(p => p[0] > tr.from && p[0] < tr.to);

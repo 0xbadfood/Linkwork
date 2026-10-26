@@ -1,0 +1,53 @@
+{
+ "compound": true,
+ "parts": [
+  {
+   "id": "line",
+   "spec": {
+    "verb": "number_line",
+    "title": "3 + (−5) on a number line",
+    "range": [
+     -5,
+     5
+    ],
+    "start": 0,
+    "hops": [
+     {
+      "at": 1.0,
+      "by": 3
+     },
+     {
+      "at": 3.6,
+      "by": -5
+     }
+    ],
+    "duration": 7.5
+   }
+  },
+  {
+   "id": "arrows",
+   "after": "line",
+   "start": 0.5,
+   "spec": {
+    "verb": "vector_add",
+    "title": "The same sum as arrows",
+    "a": [
+     3,
+     0
+    ],
+    "b": [
+     -5,
+     0
+    ],
+    "x": [
+     -6,
+     4
+    ],
+    "y": [
+     -3,
+     3
+    ]
+   }
+  }
+ ]
+}

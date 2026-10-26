@@ -115,15 +115,22 @@ export type Scene = {
   surfaces?: {x0: number; x1: number; y: number}[];
   planes?: Plane[];
   props: Prop[]; actors: Actor[];
+  /** A compound scene's parts (compose.ts): whole scenes drawn into boxes on this canvas, each on its own clock. */
+  parts?: ScenePart[];
   meta?: Record<string, unknown>;
 };
+/** A part of a compound: its scene is drawn scaled by `scale` from `offset` (inside `box`, clipped to it), at its
+ * local time t - start; before `start` (or after `until`) it is not drawn, and after its end it holds its last frame. */
+export type ScenePart = {id: string; box: [number, number, number, number]; offset: Vec; scale: number; start: number;
+  until?: number; layer: number; wait?: boolean; scene: Scene};
 
 export type ActorFrame = {
   id: string; rig: Rig; joints: Map<string, Vec>; scale: number; facing: 1 | -1; opacity: number; face: Face;
   glow: number; residual: number; skin: SkinOptions; layer: number;
 };
 export type PropFrame = Prop & {opacity: number; glow: number; layer: number};
-export type Frame = {t: number; width: number; height: number; actors: ActorFrame[]; props: PropFrame[]};
+export type PartFrame = {id: string; box: [number, number, number, number]; offset: Vec; scale: number; layer: number; frame: Frame};
+export type Frame = {t: number; width: number; height: number; actors: ActorFrame[]; props: PropFrame[]; parts?: PartFrame[]};
 
 export const rigOf = (rig: string | Rig): Rig | undefined => (typeof rig === 'string' ? RIGS[rig] : rig);
 
@@ -585,5 +592,8 @@ function axesItems(p: Prop & {type: 'axes'}, plane: Plane): Prop[] {
 export function frame(scene: Scene, t: number): Frame {
   const actors = actorsAt(scene, t);
   const props = scene.props.map(p => propFrame(p, t, actors, scene));
-  return {t, width: scene.width, height: scene.height, actors: [...actors.values()], props};
+  const out: Frame = {t, width: scene.width, height: scene.height, actors: [...actors.values()], props};
+  if (scene.parts?.length) out.parts = scene.parts.filter(p => (t >= p.start || p.wait) && (p.until === undefined || t < p.until))
+    .map(p => ({id: p.id, box: p.box, offset: p.offset, scale: p.scale, layer: p.layer, frame: frame(p.scene, Math.min(Math.max(0, t - p.start), p.scene.duration))}));
+  return out;
 }

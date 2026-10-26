@@ -26,7 +26,7 @@ function arg(args: string[], name: string): string | undefined {
 function load(path: string): {scene?: Scene; errors: string[]} {
   let data: any;
   try { data = JSON.parse(readFileSync(path, 'utf8')); } catch (e) { return {errors: [`${path}: ${(e as Error).message}`]}; }
-  return data && typeof data.verb === 'string' ? compile(data) : {scene: data as Scene, errors: []};
+  return data && (typeof data.verb === 'string' || data.compound !== undefined) ? compile(data) : {scene: data as Scene, errors: []};
 }
 
 function main(argv: string[]): number {

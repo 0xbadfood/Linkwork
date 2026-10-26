@@ -58,7 +58,13 @@ const fmt = (v: number) => n2(Number(v.toFixed(3)), 3).replace(/(\.\d*?)0+$/, '$
 const signed = (v: number) => (v > 0 ? `+${fmt(v)}` : fmt(v));
 
 /** x0 + v0 t + a t²/2, written in the formula's variable. */
-const accelerated = (c: NonNullable<MotionSpec['accelerate']>) => ({expr: `${c.x0} + (${c.v0})*x + (${c.a / 2})*x^2`, t: c.t});
+const accelerated = (c: NonNullable<MotionSpec['accelerate']>) => {
+  // Written as a person would (25 + 20x - 5x^2): it is shown in facts and a linked graph's legend.
+  const term = (v: number, tail: string, first: boolean) => (v === 0 ? '' : `${v < 0 ? (first ? '-' : ' - ') : first ? '' : ' + '}${
+    !tail ? Math.abs(v) : Math.abs(v) === 1 ? tail : `${Math.abs(v)}*${tail}`}`);
+  const expr = [term(c.x0, '', true), term(c.v0, 'x', !c.x0), term(c.a / 2, 'x^2', !c.x0 && !c.v0)].join('') || '0';
+  return {expr, t: c.t};
+};
 
 export function motionErrors(s: MotionSpec): string[] {
   const e: string[] = [];
@@ -142,7 +148,8 @@ export function motionOnLine(s: MotionSpec): Scene {
   const T = moves.at(-1)!.t, kind = s.object ?? 'dot';
   const left = 0.06 * W, right = 0.6 * W, yAxis = (s.graph ? 0.3 : 0.6) * H;
   // Upright: the axis is a column (with the building just right of it, and the graph beyond); its top and bottom.
-  const xAxis = (s.graph ? 0.12 : 0.3) * W, top = 0.1 * H, bottom = 0.88 * H, house = s.building ? 0.07 * W : 0;
+  // In a narrow box (a compound's part) the column moves left and the panel follows it, instead of starting at 0.66 W.
+  const narrow = W < H, xAxis = (s.graph ? 0.12 : narrow ? 0.16 : 0.3) * W, top = 0.1 * H, bottom = 0.88 * H, house = s.building ? (narrow ? 0.1 : 0.07) * W : 0;
   const axis: Plane = up ? {id: 'axis', x: [0, 1], y: [a, b], box: [xAxis, top, xAxis + 10, bottom]}
     : {id: 'axis', x: [a, b], y: [0, 1], box: [left, yAxis - 10, right, yAxis]};
   const X = (x: number) => (up ? [xAxis, toScene(axis, [0, x])[1]] as [number, number] : toScene(axis, [x, 0]));
@@ -208,7 +215,7 @@ export function motionOnLine(s: MotionSpec): Scene {
   }
 
   const tip = {actor: 'mover', joint: 'p'};
-  const px = 0.66 * W, pw = W - px - 40 * k;
+  const px = up && !s.graph ? xAxis + house + 0.12 * W : 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
   if (s.title) {
     props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw});
@@ -308,7 +315,9 @@ export function motionOnLine(s: MotionSpec): Scene {
   ];
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T + 1.5, theme: s.theme ?? 'dark', planes, props, actors,
     surfaces: kind === 'figure' ? [{x0: left - 30 * k, x1: right + 50 * k, y: yAxis}] : undefined,
-    meta: {verb: 'motion_on_line', facts, segments, displacement: round(total, 9), distance: round(distance, 9), ...(intervals.length ? {intervals} : {})}};
+    meta: {verb: 'motion_on_line', facts, segments, displacement: round(total, 9), distance: round(distance, 9), ...(intervals.length ? {intervals} : {}),
+      // Its motion as a formula of time, for a compound's link to plot (compose.ts).
+      ...(formula ? {signal: {name, unit, expr: formula.expr.replace(/(?<![a-z])x(?![a-z])/g, 't'), t: formula.t}} : {})}};
 }
 
 // ---------------------------------------------------------------------------------------------------------------

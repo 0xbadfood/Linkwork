@@ -1,5 +1,6 @@
 // Verbs compile a short, meaningful spec into a low-level scene, and check the spec first.
 import type {Scene} from '../scene.ts';
+import {compose, type CompoundSpec} from '../compose.ts';
 import {CARDS, type Card} from './cards.ts';
 import {energyLadder, ladderErrors, type LadderSpec} from './energy-ladder.ts';
 import {compassArc, compassErrors, crankErrors, ladderSlideErrors, pendulum, pendulumErrors, sliderCrank, slidingLadder,
@@ -84,7 +85,10 @@ export function shortlist(text: string, subject: string, statuses: Card['status'
  * shape the picture (a car speeding up, a curve bending upwards) when the narration states no numbers, so every
  * number is hidden (user, 2026-10-25: a plan for a definitions-only concept could neither paint the car nor give it
  * numbers the narration never states). */
-export function compile(spec: {verb: string; illustrative?: boolean}): {scene?: Scene; errors: string[]} {
+export function compile(spec: {verb: string; illustrative?: boolean} | CompoundSpec): {scene?: Scene; errors: string[]} {
+  if ((spec as CompoundSpec)?.compound === true) return compose(spec as CompoundSpec, compile);
+  if ('compound' in (spec ?? {})) return {errors: ['compound: write "compound": true']};
+  spec = spec as {verb: string; illustrative?: boolean};
   const verb = VERBS[spec?.verb];
   if (!verb) return {errors: [`unknown verb ${JSON.stringify(spec?.verb)}; known: ${Object.keys(VERBS).join(', ')}`]};
   if (spec.illustrative !== undefined && typeof spec.illustrative !== 'boolean') return {errors: [`${spec.verb}: illustrative is true or false`]};

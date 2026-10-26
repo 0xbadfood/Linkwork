@@ -1,0 +1,10 @@
+{"compound": true,
+ "parts": [
+  {"id": "throw", "box": [0, 0, 760, 1080],
+   "spec": {"verb": "motion_on_line", "title": "Thrown up", "axis": {"range": [0, 50], "unit": "m", "vertical": true, "step": 5},
+     "object": "ball", "accelerate": {"x0": 25, "v0": 20, "a": -10, "t": [0, 5]}, "ground": 0, "building": {"top": 25, "label": "25 m"},
+     "readouts": ["t", "y", "v"]}},
+  {"id": "graph", "box": [760, 0, 1160, 1080],
+   "spec": {"verb": "graph", "title": "Its height against time", "x": {"name": "t", "unit": "s", "range": [0, 5]},
+     "y": {"name": "y", "unit": "m", "range": [0, 50], "step": 10}, "series": [{"label": "height of the ball"}]}}],
+ "links": [{"kind": "trace", "from": "throw", "to": "graph"}]}

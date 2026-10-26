@@ -49,6 +49,12 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `scale_compare` (trial): an object's length against distances, drawn to scale: it shrinks to its true size beside each
   distance and L/D is shown (when can a train or a bus be treated as a point?).
 
+## Compound scenes
+
+Several verbs on one canvas: each part is a verb spec in a box, compiled at the box's size, on its own clock (`start`,
+`after`, `layer`). A `trace` link makes a graph plot and trace another part's motion in step with it. See
+`docs/compound-scenes.md` and `examples/compound-*.json`.
+
 ## Objects
 
 The common things of physics problems are drawn by code, as an `object` prop: `car`, `bus`, `train` (with carriages and

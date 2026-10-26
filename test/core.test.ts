@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {check, compile, dist, frame, ladderFacts, place, poseAt, RIGS, solve, svg, valueAt, wavelengthColour, type Key,
+import {readFileSync} from 'node:fs';
+import {check, compile, dist, frame, toPlane, ladderFacts, place, poseAt, RIGS, solve, svg, valueAt, wavelengthColour, type Key,
   type Rig, type Scene} from '../src/index.ts';
 
 const figure = RIGS.figure;
@@ -274,4 +275,32 @@ test('motion_on_line: a ball thrown up from a building on an upright axis; a dro
   assert.match(errs({object: 'car'}), /upright axis the object is one of/);
   assert.match(errs({moves: [{t: 0, x: 0}, {t: 1, x: 1}]}), /one of moves, formula or accelerate/);
   assert.match(errs({axis: {range: [0, 50]}}), /ground and building need an upright axis/);
+});
+
+test('compound: parts in boxes on one clock; a linked graph traces the mover; sequences, overlaps and small text', () => {
+  // docs/compound-scenes.md, 2026-10-26: the smoke tests that decided the design (geometry-based parts).
+  const load = (name: string) => JSON.parse(readFileSync(`examples/${name}`, 'utf8'));
+  const {scene} = compile(load('compound-side-by-side.json'));
+  assert.deepEqual(check(scene!, {every: 3}), []);
+  // The graph's tracer reads the ball's height at every moment: one clock, one formula.
+  const throwPart = scene!.parts!.find(p => p.id === 'throw')!, graphPart = scene!.parts!.find(p => p.id === 'graph')!;
+  for (const t of [3, 4, 4.6, 6, 7.5]) {
+    const f = frame(scene!, t), local = (id: string) => f.parts!.find(p => p.id === id)!.frame;
+    const ball = local('throw').actors.find(a => a.id === 'mover')!.joints.get('p')!;
+    const dot = local('graph').actors.find(a => a.id === 'tracer')!.joints.get('p')!;
+    const y = (part: typeof throwPart, plane: string, p: [number, number]) => toPlane(part.scene.planes!.find(q => q.id === plane)!, p)[1];
+    assert.ok(Math.abs(y(throwPart, 'axis', ball as [number, number]) - y(graphPart, 'p', dot as [number, number])) < 0.05, `at ${t} s`);
+  }
+  assert.match(svg(scene!, 4), /clipPath id="lw-part-throw"/);
+  assert.ok(frame(scene!, 0.5).parts!.some(p => p.id === 'throw'));            // a linked part waits on screen
+  // A sequence: the arrows start half a second after the number line ends, and the line gives way.
+  const seq = compile(load('compound-sequence.json')).scene!;
+  const [line, arrows] = seq.parts!;
+  assert.equal(arrows.start, line.scene.duration + 0.5);
+  assert.equal(line.until, arrows.start);
+  // Overlapping boxes on one layer, and a 2×2 grid whose type would be too small to read, are refused.
+  const part = (id: string, box: number[]) => ({id, box, spec: {verb: 'vector_add', a: [4, 1], b: [1, 3]}});
+  assert.match(compile({compound: true, parts: [part('a', [0, 0, 1200, 1080]), part('b', [900, 0, 1020, 1080])]} as never).errors.join(' '), /overlap on layer 0/);
+  const grid = compile({compound: true, parts: [part('a', [0, 0, 960, 540]), part('b', [960, 0, 960, 540]), part('c', [0, 540, 960, 540]), part('d', [960, 540, 960, 540])]} as never);
+  assert.equal(check(grid.scene!, {every: 10}).filter(e => /text is drawn at \d+ px/.test(e)).length, 4);
 });
