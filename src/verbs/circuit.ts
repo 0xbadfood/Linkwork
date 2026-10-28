@@ -33,6 +33,8 @@ export type CircuitSpec = Common & {
   current?: number;
   /** Show the main current in A, mA and µA together. */
   units?: boolean;
+  /** mains: the supply is the AC mains (220 V by default), drawn as ~, not as cells. */
+  source?: 'cells' | 'mains';
   ammeter?: boolean;
   /** Voltmeters across these items (component or group ids). */
   voltmeters?: string[];
@@ -85,7 +87,9 @@ export function circuitErrors(s: CircuitSpec): string[] {
   }
   const cells = Array.isArray(s.cells) ? s.cells : s.cells === undefined ? [] : [s.cells];
   if (s.cells !== undefined && s.volts !== undefined) e.push('circuit: give cells or volts, not both');
-  if (s.cells === undefined && s.volts === undefined) e.push('circuit: give the battery: cells (1.5 V each, or a list shown in turn) or volts');
+  if (s.source !== undefined && !['cells', 'mains'].includes(s.source)) e.push('circuit: source is cells or mains');
+  if (s.source === 'mains' && s.cells !== undefined) e.push('circuit: mains has no cells: give volts (220 by default) or leave it out');
+  if (s.cells === undefined && s.volts === undefined && s.source !== 'mains') e.push('circuit: give the battery: cells (1.5 V each, or a list shown in turn) or volts, or source: mains');
   if (cells.length > 5 || !cells.every(c => Number.isInteger(c) && c >= 1 && c <= 8)) e.push('circuit: cells is 1 to 8, or a list of up to 5 such counts');
   if (s.volts !== undefined && !(isNum(s.volts) && s.volts > 0 && s.volts <= 250)) e.push('circuit: volts is the battery\'s potential difference, more than 0 and at most 250');
   if (!Array.isArray(s.items) || s.items.length < 1 || s.items.length > 5) return [...e, 'circuit: items is 1 to 5 components or parallel groups, in series'];
@@ -133,20 +137,24 @@ export function circuit(s: CircuitSpec): Scene {
     style: {stroke: 'ink', width: 4 * k}, layer: 2, ...extra} as Prop);
   const text = (id: string, t: string, x: number, y: number, fill = 'ink', size = 26, align: 'start' | 'middle' | 'end' = 'middle', show?: [number, number]) =>
     props.push({id, type: 'text', x: round(x, 2), y: round(y, 2), text: t, size: size * k, align, weight: 700, ...(show ? {show, fade: 0.3} : {}), style: {fill, stroke: 'paper', width: 7 * k}, layer: 6});
-  const states = (Array.isArray(s.cells) ? s.cells : [s.cells]).map(c => (c === undefined ? s.volts! : c * CELL));
+  const states = (Array.isArray(s.cells) ? s.cells : [s.cells]).map(c => (c === undefined ? s.volts ?? 220 : c * CELL));
   // key closes: open at first, plugged at closeT, when current, glow and moving charges begin.
   const closed = (s.key ?? 'closed') !== 'open', E = s.seconds_each ?? 6, T0 = 0.6, closeT = s.key === 'closes' ? 1.8 : 0;
   // Battery on the left side: cells as long (+) and short (−) plates; key and ammeter on the top wire.
   // A battery given in volts is drawn as the usual two-cell symbol; one given in cells, cell by cell.
+  const mains = s.source === 'mains';
   const by = (Y0 + Y1) / 2, nCells = Array.isArray(s.cells) ? Math.max(...s.cells) : s.cells ?? 2, pitch = 16 * k;
   const bTop = by - (nCells * pitch) / 2, bBot = by + (nCells * pitch) / 2;
   line('wire-left-top', [X0, Y0], [X0, bTop - 6 * k]); line('wire-left-bottom', [X0, bBot + 6 * k], [X0, Y1]);
-  for (let c = 0; c < Math.min(nCells, 8); c++) {
+  if (mains) {
+    props.push({id: 'mains', type: 'circle', x: round(X0, 2), y: round(by, 2), r: 30 * k, style: {stroke: 'ink', width: 4 * k, fill: 'paper'}, layer: 3});
+    text('mains-wave', '~', X0, by + 2 * k, 'accent', 44);
+  } else for (let c = 0; c < Math.min(nCells, 8); c++) {
     const y = bTop + c * pitch;
     line(`cell${c}-plus`, [X0 - 26 * k, y], [X0 + 26 * k, y], {style: {stroke: 'ink', width: 4 * k}});
     line(`cell${c}-minus`, [X0 - 13 * k, y + 8 * k], [X0 + 13 * k, y + 8 * k], {style: {stroke: 'ink', width: 9 * k}});
   }
-  text('plus', '+', X0 - 44 * k, bTop + 4 * k, 'accent'); text('minus', '−', X0 - 44 * k, bBot + 4 * k, 'accent');
+  if (!mains) { text('plus', '+', X0 - 44 * k, bTop + 4 * k, 'accent'); text('minus', '−', X0 - 44 * k, bBot + 4 * k, 'accent'); }
   anchors.battery = [X0, by];
   const keyX = X0 + 0.22 * (X1 - X0), amX = X0 + 0.5 * (X1 - X0), amR = 26 * k;
   line('wire-top-1', [X0, Y0], [keyX - 22 * k, Y0]);
@@ -234,7 +242,8 @@ export function circuit(s: CircuitSpec): Scene {
   const maxP = Math.max(1e-9, ...sols.flatMap(sol => Object.values(sol.parts).map(q => q.P)));
   sols.forEach((sol, n) => {
     const s0 = T0 + n * E, end = n === sols.length - 1 ? 1e9 : s0 + E, show: [number, number] = [Math.max(s0, closeT), end];
-    text(`battery-v${n}`, `${fmt(sol.V)} V`, X0 - 60 * k, by, 'accent', 28, 'end', [s0, end]);
+    // To the right of the supply: on its left it ran out of a half-frame (C1 of Electricity, 2026-10-29).
+    text(`battery-v${n}`, `${fmt(sol.V)} V${mains ? ' mains' : ''}`, X0 + 44 * k, by + (mains ? 0 : 0), 'accent', 28, 'start', [s0, end]);
     const reading = s.units && sol.I < 1 && sol.I > 0 ? `I = ${fmt(sol.I * 1000, 3)} mA` : `I = ${fmt(sol.I, 3)} A`;
     if (s.ammeter !== false) text(`ammeter-read${n}`, reading, amX, Y0 - 44 * k, 'cool', 28, 'middle', show);
     if (s.ammeter !== false && closeT && n === 0) text('ammeter-zero', 'I = 0 A', amX, Y0 - 44 * k, 'cool', 28, 'middle', [T0, closeT]);

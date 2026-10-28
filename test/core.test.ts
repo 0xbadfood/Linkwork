@@ -737,3 +737,15 @@ test('circuit: electrons move from − to +, against conventional current', asyn
   assert.ok(both.props.some(p => p.id === 'conv-arrow0') && (both.props.find(p => p.id === 'main-charge0') as any).style.fill === 'cool');
   assert.match(compile({...spec, flow: 'sideways'} as any).errors.join(), /flow is true \(conventional current\), electrons, or both/);
 });
+
+test('circuit: the mains as a supply, and the supply\'s label inside a half-frame', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const half = compile({compound: true, parts: [
+    {id: 'led', box: [0, 0, 960, 1080], spec: {verb: 'circuit', title: 'LED', source: 'mains', items: [{id: 'led', kind: 'bulb', R: 3235}], panel: false}},
+    {id: 'kettle', box: [960, 0, 960, 1080], spec: {verb: 'circuit', title: 'Kettle', source: 'mains', items: [{id: 'kettle', kind: 'resistor', R: 32.35}], panel: false}}]} as any);
+  assert.deepEqual(half.errors, []);
+  assert.deepEqual(check(half.scene!, {every: 3}), []);
+  const one = compile({verb: 'circuit', source: 'mains', items: [{id: 'kettle', kind: 'resistor', R: 32.35}]} as any).scene!;
+  assert.ok(Math.abs((one.meta as any).solution[0].I - 220 / 32.35) < 1e-3, '220 V by default');
+  assert.equal((one.props.find(p => p.id === 'battery-v0') as any).text, '220 V mains');
+});
