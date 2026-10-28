@@ -53,6 +53,9 @@ A verb turns a short spec into a full scene and checks the spec first.
   after another (or a parallel beam from infinity): the image comes from the mirror or lens formula (New Cartesian
   signs), the principal rays are drawn to meet exactly at it (dashed behind for a virtual image), and the image is
   described as the book's tables do; u, v, f, m with signs, the formula with numbers, a lens's power in dioptres.
+- `eye` (trial): the eye as a lens and a screen: accommodation (40 to 44 D), myopia and hypermetropia or presbyopia,
+  and the concave or convex lens of computed power that corrects each (rays from the far or near point); distances
+  outside the eye compressed and the focus's miss drawn 10× wider, as the book's figures do, and said so.
 - `prism` (trial): light through a triangular prism, traced colour by colour with Cauchy refractive indices: one ray with
   i, r, e, A and the deviation D; white light dispersed into VIBGYOR (spread drawn wider, and said so); Newton's second
   prism recombining it; a raindrop with one internal reflection (red at 42.4°, violet at 40.7°).

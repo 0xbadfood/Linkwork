@@ -304,7 +304,21 @@ export const CARDS: Record<string, Card> = {
     anchors: 'A (the apex), incidence, emergence (a single ray); violet, red (the ends of the spectrum or the rainbow\'s rays); drop',
     example: {verb: 'prism', title: 'Refraction through a prism', setup: 'prism', light: 'ray', angle: 60, incidence: 40},
     status: 'trial',
+  },  eye: {
+    subjects: ['physics', 'biology'],
+    concepts: ['human eye', 'power of accommodation', 'accommodation', 'near point', 'far point', 'least distance of distinct vision', 'defects of vision',
+      'myopia', 'near-sightedness', 'hypermetropia', 'far-sightedness', 'presbyopia', 'correction of myopia', 'correction of hypermetropia', 'corrective lens', 'eye lens', 'retina'],
+    kinds: ['ray_diagram', 'model'], motions: ['draw_on', 'stages', 'labels'],
+    use_when: "the eye focusing light on the retina: its lens fattening for a near object and thinning for a far one (accommodation, 25 cm to infinity); myopia (a distant object's image falls in front of the retina; far point nearer than infinity) and its concave lens; hypermetropia or presbyopia (a near object's image falls behind the retina; near point beyond 25 cm) and its convex lens; the powers are computed (P = −1/far point, P = 1/0.25 − 1/near point)",
+    not_when: "the parts of the eye named on a cross-section (use the book's figure of the eye), mirrors or lenses in general (use ray_diagram)",
+    fields: {condition: 'normal | myopia | hypermetropia | presbyopia', objects: 'object distances from the eye in cm, or "infinity", 1 to 4, shown in turn (the lens changes shape for each)',
+      far_point: 'myopia: the far point in cm (default 80)', near_point: 'hypermetropia or presbyopia: the near point in cm (default 100)',
+      correct: 'true: the corrective lens in front of the eye, with its power; rays then run as if from the far or near point', seconds_each: '3 to 12 (default 7)', panel: 'false: no side panel', title: 'short title'},
+    anchors: 'retina, lens, spectacle (with correct), image (image2 ... for later objects)',
+    example: {verb: 'eye', title: 'Myopia and its correction', condition: 'myopia', far_point: 80, objects: ['infinity'], correct: true},
+    status: 'trial',
   },
+
 
 
 };

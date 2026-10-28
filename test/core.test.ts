@@ -599,3 +599,21 @@ test('refraction: wavefronts, several media compared, and labels that fit a half
   assert.ok(label.align === 'end' ? label.x - label.text.length * 28 * 0.58 >= 0 : label.x + label.text.length * 28 * 0.58 <= 960, 'inside the half-frame');
   assert.match(compile({verb: 'refraction', from: 'air', to: ['water'], angles: [40]} as any).errors.join(), /compares 2 to 6 media/);
 });
+
+test('eye: accommodation, myopia and hypermetropia with their corrective lenses', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {correction, eyeRange} = await import('../src/verbs/eye.ts');
+  assert.deepEqual(eyeRange({verb: 'eye', objects: []} as any), [40, 44]);
+  // NCERT: the far point of a myopic eye at 80 cm needs a concave lens of power −1.25 D; a near point of 1 m, +3 D.
+  assert.equal(correction({verb: 'eye', condition: 'myopia', far_point: 80, objects: []} as any), -1.25);
+  assert.equal(correction({verb: 'eye', condition: 'hypermetropia', near_point: 100, objects: []} as any), 3);
+  const facts = (spec: object) => (compile({verb: 'eye', ...spec} as any).scene!.meta as any).facts.join(' | ');
+  assert.match(facts({objects: ['infinity', 25]}), /at infinity\): the eye focuses at 40 D and the image falls on the retina.*25 cm away: the eye focuses at 44 D and the image falls on the retina/);
+  assert.match(facts({condition: 'myopia', far_point: 80, objects: ['infinity']}), /falls in front of the retina \(blurred\)/);
+  assert.match(facts({condition: 'myopia', far_point: 80, objects: ['infinity'], correct: true}), /through the lens: .* on the retina \(sharp\)/);
+  assert.match(facts({condition: 'hypermetropia', near_point: 100, objects: [25]}), /falls behind the retina \(blurred\)/);
+  assert.match(facts({condition: 'presbyopia', near_point: 100, objects: [25], correct: true}), /on the retina \(sharp\)/);
+  const err = (x: object) => compile({verb: 'eye', objects: ['infinity'], ...x} as any).errors.join(' | ');
+  assert.match(err({correct: true}), /a normal eye needs no correction/);
+  assert.match(err({far_point: 80}), /far_point .* is for myopia/);
+});
