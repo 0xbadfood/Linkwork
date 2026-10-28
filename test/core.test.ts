@@ -484,3 +484,28 @@ test('optics: panel false fills the box for a side-by-side compound; media keep 
   assert.ok(texts.includes('air') && texts.includes('glass') && !texts.some(t => /\d/.test(t)));
   assert.match(compile({verb: 'refraction', from: 'air', to: 'glass', angles: [40], panel: 'no'} as any).errors.join(), /panel is true or false/);
 });
+
+test('ray_diagram exact: rays reflect off the true sphere, so edge rays cross nearer the mirror (spherical aberration)', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {scene, errors} = compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: ['infinity'], exact: true, aperture: 0.6} as any);
+  assert.deepEqual(errors, []);
+  // A ray at height y = 0.6 R meets the sphere at incidence θ with sin θ = 0.6; it crosses the axis R/(2 cos θ) = 12.5 cm
+  // from C, so 7.5 cm from P; the innermost ray (0.15 × 0.6 R) crosses 9.96 cm from P, next to the paraxial focus.
+  const fact = (scene!.meta as any).facts.find((f: string) => f.includes('traced exactly'));
+  assert.match(fact, /edge rays cross the axis 7\.5 cm from P and the central ones 10 cm, against the small-aperture focus at 10 cm/);
+  assert.ok(!scene!.props.some(p => p.id === 'p0-image'), 'no single image point');
+  const anchors = (scene!.meta as any).anchors;
+  assert.ok(anchors.focus_edge[0] > anchors.focus_centre[0], 'the edge focus is nearer P (to the right)');
+  const err = (x: object) => compile({verb: 'ray_diagram', focal_length: 10, ...x} as any).errors.join(' | ');
+  assert.match(err({device: 'convex_lens', objects: ['infinity'], exact: true}), /exact is for a concave or convex mirror/);
+  assert.match(err({device: 'concave_mirror', objects: [30], exact: true}), /exact traces a parallel beam/);
+  assert.match(err({device: 'concave_mirror', objects: ['infinity'], aperture: 0.5}), /aperture \(with exact\)/);
+});
+
+test('annotate: a label that would overlap another moves until both read', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const s = compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: ['infinity'], exact: true,
+    annotate: [{text: 'central rays', at: 'focus_centre', point: true}, {text: 'edge rays', at: 'focus_edge', point: true}]} as any).scene!;
+  const [a, b] = ['note0-label', 'note1-label'].map(id => s.props.find(p => p.id === id) as any);
+  assert.ok(Math.abs(a.y - b.y) >= 36, `labels ${a.y} and ${b.y} apart`);
+});

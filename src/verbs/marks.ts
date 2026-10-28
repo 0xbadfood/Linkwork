@@ -61,6 +61,18 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     if (at[0] < 0 || at[0] > scene.width || at[1] < 0 || at[1] > scene.height) { errors.push(`${verb}: annotate[${i}].${field} is off the picture`); return; }
     return at;
   };
+  // Labels placed so far (x0, y0, x1, y1): a label that would overlap one is moved up, then down, until it is clear,
+  // so two marks at nearby points (edge and central rays crossing the axis close together) both read.
+  const placed: [number, number, number, number][] = [];
+  const clear = (x: number, y: number, text: string, align: 'start' | 'middle' | 'end'): number => {
+    const w = text.length * 30 * k * 0.58, h = 36 * k, x0 = align === 'start' ? x : align === 'end' ? x - w : x - w / 2;
+    for (const dy of [0, -40, 40, -80, 80, -120, 120].map(v => v * k)) {
+      const box: [number, number, number, number] = [x0, y + dy - h / 2, x0 + w, y + dy + h / 2];
+      if (!placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { placed.push(box); return y + dy; }
+    }
+    placed.push([x0, y - h / 2, x0 + w, y + h / 2]);
+    return y;
+  };
   marks.forEach((m, i) => {
     const at = resolve(m.at, i, 'at');
     if (!at) return;
@@ -81,7 +93,7 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
         const upright = Math.abs(u[1]) > 0.7, side = n[1] > 0 ? -1 : 1;
         const top = at[1] < to[1] ? at : to, bottom = top === at ? to : at;
         const [x, y] = upright ? [Math.min(top[0], bottom[0]) - 20 * k, top[1] + (bottom[1] - top[1]) * 0.25] : [mid[0] + side * n[0] * 30 * k, mid[1] + side * n[1] * 30 * k];
-        props.push({id: `note${i}-label`, type: 'text', x: round(x, 2), y: round(y, 2), text: m.text, size: 30 * k, weight: 700,
+        props.push({id: `note${i}-label`, type: 'text', x: round(x, 2), y: round(clear(x, y, m.text, upright ? 'end' : 'middle'), 2), text: m.text, size: 30 * k, weight: 700,
           align: upright ? 'end' : 'middle', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
       }
       return;
@@ -90,7 +102,8 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     if (m.point) props.push({id: `note${i}-point`, type: 'circle', x, y, r: 9 * k, show, fade: 0.3, style: {fill}, layer: 8});
     if (m.text) {
       const right = x > 0.85 * scene.width;   // near the right edge the label reads leftwards
-      props.push({id: `note${i}-label`, type: 'text', x: right ? x - 14 * k : x + 14 * k, y: y - 16 * k, text: m.text, size: 30 * k, weight: 700,
+      const lx = right ? x - 14 * k : x + 14 * k;
+      props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(clear(lx, y - 16 * k, m.text, right ? 'end' : 'start'), 2), text: m.text, size: 30 * k, weight: 700,
         align: right ? 'end' : 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     }
   });

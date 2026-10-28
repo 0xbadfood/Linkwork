@@ -46,6 +46,10 @@ export type RaySpec = Common & {
   seconds_each?: number;
   /** false: no side panel; the drawing fills the frame, the title above it (a part of a side-by-side compound). */
   panel?: boolean;
+  /** A spherical mirror and a parallel beam: reflect each ray off the true sphere, without the small-aperture
+   * approximation, over a wide aperture (0.2 to 0.9 of R, default 0.6): edge rays cross the axis nearer the mirror
+   * than central ones (spherical aberration). Leave out for the book's ideal ray diagrams. */
+  exact?: boolean; aperture?: number;
 };
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -141,10 +145,15 @@ export function rayDiagramErrors(s: RaySpec): string[] {
   if (s.distances && !plane) e.push('ray_diagram: distances is for a plane mirror (object and image equally far from it)');
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('ray_diagram: seconds_each is 3 to 12');
   if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('ray_diagram: panel is true or false');
+  if (s.exact !== undefined && typeof s.exact !== 'boolean') e.push('ray_diagram: exact is true or false');
+  if (s.exact && !(s.device === 'concave_mirror' || s.device === 'convex_mirror')) e.push('ray_diagram: exact is for a concave or convex mirror');
+  if (s.exact && !s.objects.every(o => o === 'infinity')) e.push('ray_diagram: exact traces a parallel beam: objects ["infinity"]');
+  if (s.aperture !== undefined && !(s.exact && isNum(s.aperture) && s.aperture >= 0.2 && s.aperture <= 0.9)) e.push('ray_diagram: aperture (with exact) is 0.2 to 0.9 of R');
   return e;
 }
 
-type Ray = {name: RayName; from: Vec; hit: Vec; dir: Vec; back?: Vec};
+/** stop: an exact ray that meets the axis there runs on a little past it (real); back: its dashed extension's end. */
+type Ray = {name: RayName; from: Vec; hit: Vec; dir: Vec; back?: Vec; stop?: Vec};
 
 export function rayDiagram(s: RaySpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
@@ -156,11 +165,25 @@ export function rayDiagram(s: RaySpec): Scene {
   // The surface a ray meets at height y: a spherical mirror's arc (concave: centre in front, at x = −R), else x = 0.
   const surface = (y: number) => (dev === 'concave_mirror' ? -R + Math.sqrt(Math.max(0, R * R - y * y))
     : dev === 'convex_mirror' ? R - Math.sqrt(Math.max(0, R * R - y * y)) : 0);
-  const reach = mirror && !plane ? 0.75 * R : Infinity;
+  const reach = mirror && !plane ? (s.exact ? (s.aperture ?? 0.6) : 0.75) * R : Infinity;
   const xC = dev === 'concave_mirror' ? -2 * f : 2 * f, xF = dev === 'convex_mirror' || dev === 'concave_lens' ? f : -f;
   type Position = {d: number; img: Image; rays: Ray[]};
   // Each position's rays, in optical cm (x along the axis, the mirror or lens at 0, y up).
   const positions: Position[] = s.objects.map(o => {
+    if (o === 'infinity' && s.exact) {
+      // Each ray reflects off the sphere itself: r = d − 2(d·n)n, n the surface normal at the hit (along the radius).
+      // It crosses the axis at a distance R/(2 cos θ) from C (θ: the angle of incidence), nearer the mirror the
+      // farther out the ray, so the reflected rays do not meet at one point.
+      const centre: Vec = [dev === 'concave_mirror' ? -R : R, 0], real = dev === 'concave_mirror';
+      const img: Image = {u: -Infinity, v: fc, m: 0, atInfinity: false, real};
+      const rays = [-1, -0.72, -0.42, -0.15, 0.15, 0.42, 0.72, 1].map(q => q * reach).map((y): Ray => {
+        const hit: Vec = [surface(y), y], n: Vec = [(hit[0] - centre[0]) / R, (hit[1] - centre[1]) / R];
+        const dot = n[0], dir: Vec = [1 - 2 * dot * n[0], -2 * dot * n[1]];
+        const cross: Vec = [hit[0] - hit[1] * dir[0] / dir[1], 0];       // where the reflected line meets the axis
+        return {name: 'parallel', from: [NaN, y], hit, dir, ...(real ? {stop: cross} : {back: cross})};
+      });
+      return {d: Infinity, img, rays};
+    }
     if (o === 'infinity') {
       const focus: Vec = [fc, 0], img: Image = {u: -Infinity, v: fc, m: 0, atInfinity: false, real: fc < 0 === mirror};
       const rays = [-0.55, -0.25, 0.25, 0.55].map(q => q * Math.min(reach, 1.2 * f)).map((y): Ray => {
@@ -290,7 +313,7 @@ export function rayDiagram(s: RaySpec): Scene {
     p.rays.forEach((r, j) => {
       const id = `${tag}-ray${j}`, from = isNaN(r.from[0]) ? [bx0, r.hit[1]] as Vec : r.from;
       // A parallel beam meeting at F stops a little past it, as in the book, rather than crossing the whole picture.
-      const meet = !isFinite(p.d) && img.real ? Math.hypot(img.v - r.hit[0], r.hit[1]) / Math.hypot(r.dir[0], r.dir[1]) * 1.45 : Infinity;
+      const meet = !isFinite(p.d) && img.real ? Math.hypot((r.stop?.[0] ?? img.v) - r.hit[0], r.hit[1]) / Math.hypot(r.dir[0], r.dir[1]) * 1.45 : Infinity;
       const edge = exit(r.hit, r.dir), far = Math.hypot(edge[0] - r.hit[0], edge[1] - r.hit[1]) / Math.hypot(r.dir[0], r.dir[1]);
       const out: Vec = meet < far ? [r.hit[0] + r.dir[0] * meet, r.hit[1] + r.dir[1] * meet] : edge;
       props.push({id: `${id}-in`, type: 'line', ...xy(P(from), P(r.hit)), ...draw(s0 + 0.5 + 0.25 * j, s0 + 1.7 + 0.25 * j), show, fade: 0.3, style: {stroke: 'ink', width: 4 * k}, layer: 2},
@@ -334,7 +357,7 @@ export function rayDiagram(s: RaySpec): Scene {
         {id: `${tag}-dist-i-label`, type: 'text', x: (Xm + Xi) / 2, y: Y + 40 * k, text: `${fmt(p.d)} cm`, size: 28 * k, align: 'middle', show: [s0 + 4.8, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6});
     }
     const shownImage: [number, number] = [s0 + 3.3, show[1]];
-    if (!img.atInfinity && isFinite(img.v)) {
+    if (!img.atInfinity && isFinite(img.v) && !s.exact) {      // exact rays have no single image point
       const height = isFinite(p.d) ? img.m * h : 0, [X, Y] = P([img.v, 0]), [, Yt] = P([img.v, height]);
       if (Math.abs(height) * unitY > 6 * k) props.push({id: `${tag}-image`, type: 'arrow', x1: X, y1: Y, x2: X, y2: Yt, head: 22 * k, show: shownImage, fade: 0.3,
         style: {stroke: img.real ? 'good' : 'cool', width: 7 * k, ...(img.real ? {} : {dash: [14 * k, 8 * k]})}, layer: 5});
@@ -346,6 +369,16 @@ export function rayDiagram(s: RaySpec): Scene {
     const where = img.atInfinity ? 'at infinity' : zone(dev, f, Math.abs(img.v), 'image', real);
     const lines: [string, string, number][] = [[`Object: ${zone(dev, f, p.d, 'object')}`, 'accent', s0 + 0.2],
       [`Image: ${where}`, real ? 'good' : 'cool', s0 + 3.4], [`${nature[0].toUpperCase()}${nature.slice(1)}; ${size}`, real ? 'good' : 'cool', s0 + 3.6]];
+    if (s.exact) {
+      // Where the edge and the central rays cross the axis, measured from P (dashed back behind a convex mirror).
+      const crossings = p.rays.map(r => Math.abs((r.stop ?? r.back)![0]));
+      const edge = Math.min(...crossings), centre = Math.max(...crossings);
+      lines.splice(0, lines.length, ['Object: at infinity (a wide parallel beam)', 'accent', s0 + 0.2],
+        [`Edge rays ${real ? 'cross the axis' : 'seem to come from a point'} nearer the mirror than central rays`, real ? 'good' : 'cool', s0 + 3.4],
+        ['No single focus: the image blurs (spherical aberration); a small aperture keeps the rays near F', real ? 'good' : 'cool', s0 + 3.8]);
+      anchors[`focus_edge${i ? i + 1 : ''}`] = P([(real ? -1 : 1) * edge, 0]); anchors[`focus_centre${i ? i + 1 : ''}`] = P([(real ? -1 : 1) * centre, 0]);
+      facts.push(`traced exactly off the sphere (R = ${fmt(R)} cm), a beam out to ${fmt(reach)} cm from the axis: the edge rays ${real ? 'cross the axis' : 'seem to diverge from'} ${fmt(edge, 1)} cm from P and the central ones ${fmt(centre, 1)} cm, against the small-aperture focus at ${fmt(f)} cm`);
+    }
     if (plane) lines.push([`${fmt(p.d)} cm in front, image ${fmt(p.d)} cm behind`, 'ink', s0 + 3.8]);
     if (angleLine) lines.push([angleLine, 'accent', s0 + 3.3]);
     if (s.formula && isFinite(p.d)) {
@@ -367,7 +400,7 @@ export function rayDiagram(s: RaySpec): Scene {
     const oz = zone(dev, f, p.d, 'object'), plain = (z: string) => /^in front of the|^behind the mirror|same side/.test(z);
     const obj = isFinite(p.d) ? `object ${fmt(p.d)} cm from the ${mirror ? 'mirror' : 'lens'}${plain(oz) ? '' : ` (${oz})`}` : 'object at infinity (a parallel beam)';
     const imgText = img.atInfinity ? 'image at infinity' : `image ${fmt(Math.abs(img.v))} cm ${mirror ? (img.v < 0 ? 'in front of' : 'behind') + ' the mirror' : (img.v > 0 ? 'beyond the lens' : 'on the object\'s side of the lens')}${plain(where) ? '' : ` (${where})`}`;
-    facts.push(`${obj}: ${imgText}, ${nature}, ${size}${isFinite(p.d) && !img.atInfinity ? `; v = ${signed(img.v)} cm, m = ${signed(img.m)}` : ''}`);
+    if (!s.exact) facts.push(`${obj}: ${imgText}, ${nature}, ${size}${isFinite(p.d) && !img.atInfinity ? `; v = ${signed(img.v)} cm, m = ${signed(img.m)}` : ''}`);
   });
   if (!plane) facts.unshift(`${NAME[dev]} of focal length ${fmt(f)} cm (f = ${signed(fc)} cm in the New Cartesian sign convention)${mirror ? `; radius of curvature ${fmt(R)} cm` : ''}`);
   if (s.power && !mirror) facts.push(`power P = 1/f = ${signed(100 / fc)} dioptre`);
