@@ -493,8 +493,11 @@ export const MEDIA: Record<string, number> = {air: 1.0003, ice: 1.31, water: 1.3
   'rock salt': 1.54, 'carbon disulphide': 1.63, 'dense flint glass': 1.65, ruby: 1.71, sapphire: 1.77, diamond: 2.42};
 /** Other names a narration uses: the book's turpentine is its turpentine oil; plastic is not in the book's table, so
  * it takes a typical value (acrylic) and its facts say so. */
-const ALIASES: Record<string, string> = {turpentine: 'turpentine oil', vacuum: 'air'};
+const ALIASES: Record<string, string> = {turpentine: 'turpentine oil'};
 const TYPICAL: Record<string, number> = {plastic: 1.49, perspex: 1.49, acrylic: 1.49};
+/** Exact by definition: vacuum's refractive index is 1 (it was once mapped to air's 1.0003, so a film said n of air
+ * relative to vacuum is 1). */
+const EXACT: Record<string, number> = {vacuum: 1};
 
 export type RefractionSpec = Common & {
   verb: 'refraction';
@@ -521,8 +524,8 @@ export type RefractionSpec = Common & {
 
 const C_LIGHT = 3e8;
 const canon = (m: string) => { const k = m.toLowerCase().trim(); return ALIASES[k] ?? k; };
-const known = (m: unknown) => typeof m === 'string' && (canon(m) in MEDIA || canon(m) in TYPICAL);
-const indexOf = (m: string | number | (string | number)[]): number => (Array.isArray(m) ? indexOf(m[0]) : typeof m === 'number' ? m : MEDIA[canon(m)] ?? TYPICAL[canon(m)]);
+const known = (m: unknown) => typeof m === 'string' && (canon(m) in MEDIA || canon(m) in TYPICAL || canon(m) in EXACT);
+const indexOf = (m: string | number | (string | number)[]): number => (Array.isArray(m) ? indexOf(m[0]) : typeof m === 'number' ? m : MEDIA[canon(m)] ?? EXACT[canon(m)] ?? TYPICAL[canon(m)]);
 const mediumName = (m: string | number | (string | number)[]): string => (Array.isArray(m) ? mediumName(m[0]) : typeof m === 'number' ? `n = ${fmt(m, 4)}` : m.toLowerCase().trim());
 
 export function refractionErrors(s: RefractionSpec): string[] {
@@ -531,7 +534,7 @@ export function refractionErrors(s: RefractionSpec): string[] {
   if (Array.isArray(s.to) && (s.to.length < 2 || s.to.length > 6)) e.push('refraction: to as a list compares 2 to 6 media');
   for (const [key, m] of [['from', s.from], ...media.map(x => ['to', x])] as [string, unknown][]) {
     if (typeof m === 'number') { if (!(isNum(m) && m >= 1 && m <= 3)) e.push(`refraction: ${key} as a refractive index is 1 to 3`); }
-    else if (!known(m)) e.push(`refraction: ${key} ${JSON.stringify(m)} is a refractive index or one of ${[...Object.keys(MEDIA), ...Object.keys(ALIASES), ...Object.keys(TYPICAL)].join(', ')}`);
+    else if (!known(m)) e.push(`refraction: ${key} ${JSON.stringify(m)} is a refractive index or one of ${[...Object.keys(MEDIA), ...Object.keys(EXACT), ...Object.keys(ALIASES), ...Object.keys(TYPICAL)].join(', ')}`);
   }
   if (Array.isArray(s.to) && (s.slab !== undefined || s.object_depth !== undefined || s.wavefronts)) e.push('refraction: comparing media (to as a list) goes with angles only: one ray, no slab, depth or wavefronts');
   if (Array.isArray(s.to) && Array.isArray(s.angles) && s.angles.length !== 1) e.push('refraction: comparing media takes one angle of incidence');
@@ -677,14 +680,14 @@ export function refraction(s: RefractionSpec): Scene {
   });
   const end = T0 + angles.length * E;
   const n21 = n2v / n1;
-  const tail: string[] = [`n of ${name2} relative to ${name1} = ${fmt(n2v, 4)} ÷ ${fmt(n1, 4)} = ${fmt(n21, 2)}`];
+  const tail: string[] = [`n of ${name2} relative to ${name1} = ${fmt(n2v, 4)} ÷ ${fmt(n1, 4)} = ${fmt(n21, Math.abs(n21 - 1) < 0.01 ? 4 : 2)}`];
   if (s.speeds) tail.push(`Speed of light: ${fmt(C_LIGHT / n1 / 1e8, 2)} × 10⁸ m/s in ${name1}, ${fmt(C_LIGHT / n2v / 1e8, 2)} × 10⁸ m/s in ${name2}`);
   let y = 0.72 * H;
   if (panel) tail.forEach((text, j) => {
     props.push({id: `tail${j}`, type: 'text', x: px, y, text, size: 30 * k, width: pw, weight: 700, show: [end - E + 4.4 + 0.4 * j, 1e9], fade: 0.3, style: {fill: 'cool'}});
     y += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 12 * k;
   });
-  facts.push(`refractive index of ${name2} relative to ${name1}: ${fmt(n21, 2)} (absolute indices ${fmt(n1, 4)} and ${fmt(n2v, 4)})`);
+  facts.push(`refractive index of ${name2} relative to ${name1}: ${fmt(n21, Math.abs(n21 - 1) < 0.01 ? 4 : 2)} (absolute indices ${fmt(n1, 4)} and ${fmt(n2v, 4)})`);
   if (s.speeds) facts.push(`light travels at about ${fmt(C_LIGHT / n1 / 1e8, 2)} × 10^8 m/s in ${name1} and ${fmt(C_LIGHT / n2v / 1e8, 2)} × 10^8 m/s in ${name2}`);
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: end + 1.5, theme: s.theme ?? 'dark', props, actors: [],
     meta: {verb: 'refraction', facts, anchors, n21: round(n21, 6)}};

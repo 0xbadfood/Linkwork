@@ -661,3 +661,10 @@ test('ray_diagram: lenses in contact act as one lens of power P1 + P2; without a
   const alone = compile({verb: 'ray_diagram', device: 'concave_lens', focal_length: 25, objects: ['infinity'], power: true, panel: false} as any).scene!;
   assert.equal((alone.props.find(p => p.id === 'lens-power') as any).text, 'P = −4 D (f = −25 cm)');
 });
+
+test('refraction: vacuum is exactly 1, so air relative to vacuum is 1.0003', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const facts = (compile({verb: 'refraction', from: 'vacuum', to: 'air', angles: [30]} as any).scene!.meta as any).facts.join(' ');
+  assert.match(facts, /refractive index of air relative to vacuum: 1\.0003 \(absolute indices 1 and 1\.0003\)/);
+  assert.equal((compile({verb: 'refraction', from: 'vacuum', to: 'air', angles: [30]} as any).scene!.meta as any).n21, 1.0003);
+});
