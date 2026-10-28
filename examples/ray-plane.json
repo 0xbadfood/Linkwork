@@ -1,1 +1,1 @@
-{"verb": "ray_diagram", "title": "Image in a plane mirror", "device": "plane_mirror", "objects": [20], "angles": true}
+{"verb": "ray_diagram", "title": "Image in a plane mirror", "device": "plane_mirror", "objects": [20], "angles": true, "distances": true}

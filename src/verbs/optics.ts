@@ -40,6 +40,8 @@ export type RaySpec = Common & {
   power?: boolean;
   /** A plane mirror: draw the normal where a ray meets the mirror and mark the angles of incidence and reflection. */
   angles?: boolean;
+  /** A plane mirror: mark the object's and the image's distances from the mirror as equal. */
+  distances?: boolean;
   /** Seconds each object position is shown (3 to 12, default 6). */
   seconds_each?: number;
 };
@@ -73,14 +75,15 @@ const nearly = (a: number, b: number, f: number) => Math.abs(a - b) < 1e-6 * Mat
 /** Where a point d cm from the mirror or lens is, in the book's words, for the object's side or the image's. */
 function zone(device: Device, f: number, d: number, side: 'object' | 'image', real = true): string {
   if (!isFinite(d)) return 'at infinity';
-  if (device === 'plane_mirror') return side === 'object' ? `${fmt(d)} cm in front of the mirror` : `${fmt(d)} cm behind the mirror`;
+  // Words only: the distances are in their own lines, so a picture without numbers (illustrative) still says where.
+  if (device === 'plane_mirror') return side === 'object' ? 'in front of the mirror' : 'behind the mirror, as far behind as the object is in front';
   const lens = !isMirror(device);
   if (side === 'image' && !real) {
     if (device === 'convex_mirror') return nearly(d, f, f) ? 'at F, behind the mirror' : 'between P and F, behind the mirror';
     if (device === 'concave_lens') return nearly(d, f, f) ? 'at F₁' : 'between F₁ and the optical centre O, on the object\'s side';
     return lens ? 'on the same side of the lens as the object' : 'behind the mirror';
   }
-  if (side === 'object' && (device === 'convex_mirror' || device === 'concave_lens')) return `${fmt(d)} cm in front of the ${lens ? 'lens' : 'mirror'}`;
+  if (side === 'object' && (device === 'convex_mirror' || device === 'concave_lens')) return `in front of the ${lens ? 'lens' : 'mirror'}`;
   const [F, C, P] = lens ? (side === 'object' ? ['F₁', '2F₁', 'O'] : ['F₂', '2F₂', 'O']) : ['F', 'C', 'P'];
   if (nearly(d, 2 * f, f)) return `at ${C}`;
   if (nearly(d, f, f)) return `at ${F}`;
@@ -133,6 +136,7 @@ export function rayDiagramErrors(s: RaySpec): string[] {
   }
   if (s.power && isMirror(s.device)) e.push('ray_diagram: power is for a lens');
   if (s.angles && !plane) e.push('ray_diagram: angles is for a plane mirror (the normal and i = r)');
+  if (s.distances && !plane) e.push('ray_diagram: distances is for a plane mirror (object and image equally far from it)');
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('ray_diagram: seconds_each is 3 to 12');
   return e;
 }
@@ -165,7 +169,9 @@ export function rayDiagram(s: RaySpec): Scene {
     }
     const d = o, img = imageOf(dev, f, d), top: Vec = [-d, h];
     if (plane) {
+      // Two slanting rays; 'parallel' adds one along the normal, which comes straight back.
       const rays = [h - 0.45 * d, h + 0.45 * d].map((y): Ray => ({name: 'pole', from: top, hit: [0, y], dir: [-d, y - h], back: [d, h]}));
+      if (s.rays?.includes('parallel')) rays.push({name: 'parallel', from: top, hit: [0, h], dir: [-1, 0], back: [d, h]});
       return {d, img, rays};
     }
     const heights: Record<RayName, number | null> = {
@@ -221,7 +227,7 @@ export function rayDiagram(s: RaySpec): Scene {
   };
 
   // The device and its axis, drawn once.
-  const aperture = Math.min(Math.max(1.3 * Math.max(...positions.flatMap(p => p.rays.map(r => Math.abs(r.hit[1])))), 1.4 * h), mirror && !plane ? reach : 0.98 * by);
+  const aperture = Math.min(Math.max((plane ? 1.45 : 1.3) * Math.max(...positions.flatMap(p => p.rays.map(r => Math.abs(r.hit[1])))), 1.4 * h), mirror && !plane ? reach : 0.98 * by);
   const props: Prop[] = [{id: 'axis', type: 'line', ...xy(P([bx0, 0]), P([bx1, 0])), style: {stroke: 'muted', width: 2.5 * k, dash: [16 * k, 10 * k]}}];
   const arc = Array.from({length: 41}, (_, i) => -aperture + (2 * aperture * i) / 40);
   if (mirror) {
@@ -260,6 +266,7 @@ export function rayDiagram(s: RaySpec): Scene {
   positions.forEach((p, i) => {
     const s0 = T0 + i * E, last = i === positions.length - 1, show: [number, number] = [s0, last ? 1e9 : s0 + E];
     const tag = `p${i}`, img = p.img;
+    let angleLine = '';
     if (isFinite(p.d)) {
       const [X, Y] = P([-p.d, 0]), [, Yt] = P([-p.d, h]);
       props.push({id: `${tag}-object`, type: 'arrow', x1: X, y1: Y, x2: X, y2: Yt, head: 22 * k, show, fade: 0.3, style: {stroke: 'accent', width: 7 * k}, layer: 5});
@@ -269,16 +276,43 @@ export function rayDiagram(s: RaySpec): Scene {
       const out = exit(r.hit, r.dir);
       props.push({id: `${id}-in`, type: 'line', ...xy(P(from), P(r.hit)), ...draw(s0 + 0.5 + 0.25 * j, s0 + 1.7 + 0.25 * j), show, fade: 0.3, style: {stroke: 'ink', width: 4 * k}, layer: 2},
         {id: `${id}-out`, type: 'line', ...xy(P(r.hit), P(out)), ...draw(s0 + 1.9 + 0.25 * j, s0 + 3.1 + 0.25 * j), show, fade: 0.3, style: {stroke: 'ink', width: 4 * k}, layer: 2},
-        head(`${id}-hin`, P(from), P(r.hit), [s0 + 1.7 + 0.25 * j, show[1]], k), head(`${id}-hout`, P(r.hit), P(out), [s0 + 3.1 + 0.25 * j, show[1]], k));
+        head(`${id}-hin`, P(from), P(r.hit), [s0 + 1.7 + 0.25 * j, show[1]], k));
+      // A ray along the normal comes straight back over itself: one arrowhead each way would cross, so it gets none back.
+      if (!(plane && r.name === 'parallel')) props.push(head(`${id}-hout`, P(r.hit), P(out), [s0 + 3.1 + 0.25 * j, show[1]], k));
       if (r.back) props.push({id: `${id}-back`, type: 'line', ...xy(P(r.hit), P(r.back)), ...draw(s0 + 3.3, s0 + 3.9), show, fade: 0.3,
         style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k]}, layer: 1});
     });
-    if (plane && s.angles && p.rays[0]) {
-      const r = p.rays[0], [X, Y] = P(r.hit), i0 = deg(Math.atan2(Math.abs(r.hit[1] - h), p.d));
-      props.push({id: `${tag}-normal`, type: 'line', x1: X, y1: Y, x2: X - 0.3 * (right - left), y2: Y, show: [s0 + 1.6, show[1]], fade: 0.3, style: {stroke: 'muted', width: 2.5 * k, dash: [8 * k, 8 * k]}, layer: 1},
-        {id: `${tag}-angle-i`, type: 'text', x: X - 0.17 * (right - left), y: Y + (r.hit[1] < h ? -24 : 44) * k, text: `i = ${fmt(i0, 1)}°`, size: 28 * k, align: 'middle', show: [s0 + 1.8, show[1]], style: {fill: 'accent'}, layer: 6},
-        {id: `${tag}-angle-r`, type: 'text', x: X - 0.17 * (right - left), y: Y + (r.hit[1] < h ? 44 : -24) * k, text: `r = ${fmt(i0, 1)}°`, size: 28 * k, align: 'middle', show: [s0 + 3.2, show[1]], style: {fill: 'good'}, layer: 6});
+    if (plane && s.angles && p.rays[1]) {
+      // The normal where the upper ray meets the mirror (room above the axis), the two angles drawn as arcs and named i and r (letters, so
+      // they stay in a picture without numbers); their size is a line of the panel.
+      const r = p.rays[1], hit = P(r.hit), i0 = deg(Math.atan2(Math.abs(r.hit[1] - h), p.d));
+      const toObject = Math.atan2(P(top0(p.d, h))[1] - hit[1], P(top0(p.d, h))[0] - hit[0]), out = exit(r.hit, r.dir);
+      const toOut = Math.atan2(P(out)[1] - hit[1], P(out)[0] - hit[0]);
+      props.push({id: `${tag}-normal`, type: 'line', x1: hit[0], y1: hit[1], x2: hit[0] - 0.3 * (right - left), y2: hit[1], show: [s0 + 1.6, show[1]], fade: 0.3,
+        style: {stroke: 'muted', width: 2.5 * k, dash: [8 * k, 8 * k]}, layer: 1},
+        {id: `${tag}-normal-label`, type: 'text', x: hit[0] - 0.3 * (right - left) - 10 * k, y: hit[1] + 9 * k, text: 'normal', size: 24 * k, align: 'end', show: [s0 + 1.6, show[1]], fade: 0.3, style: {fill: 'muted'}, layer: 1});
+      for (const [key, angle, t, fill] of [['i', toObject, s0 + 1.8, 'accent'], ['r', toOut, s0 + 3.2, 'good']] as const) {
+        const a0 = Math.PI * Math.sign(angle || 1), R0 = 110 * k;
+        const pts = Array.from({length: 13}, (_, q) => { const a = a0 + (angle - a0) * q / 12; return [round(hit[0] + R0 * Math.cos(a), 2), round(hit[1] + R0 * Math.sin(a), 2)] as Vec; });
+        const mid = (a0 + angle) / 2;
+        props.push({id: `${tag}-arc-${key}`, type: 'polyline', points: pts, show: [t, show[1]], fade: 0.3, style: {stroke: fill, width: 3.5 * k}, layer: 6},
+          {id: `${tag}-angle-${key}`, type: 'text', x: round(hit[0] + 1.55 * R0 * Math.cos(mid), 2), y: round(hit[1] + 1.55 * R0 * Math.sin(mid) + 11 * k, 2), text: key,
+            size: 34 * k, align: 'middle', weight: 700, show: [t, show[1]], fade: 0.3, style: {fill}, layer: 6});
+      }
+      angleLine = `∠i = ∠r = ${fmt(i0, 1)}°`;
       facts.push(`the angle of incidence and the angle of reflection are both ${fmt(i0, 1)}°`);
+    }
+    if (plane && s.distances) {
+      // Equal distances: a measuring line from the object to the mirror and one from the mirror to the image, each with
+      // the same tick marks (equal at a glance, numbers or not), and the distance written beside each.
+      const yy = -0.42 * by, [Xo, Y] = P([-p.d, yy]), [Xm] = P([0, yy]), [Xi] = P([p.d, yy]);
+      const ticks = (x: number, id: string) => [-1, 1].map(q => ({id: `${id}${q}`, type: 'line', x1: x + q * 6 * k - 5 * k, y1: Y - 12 * k, x2: x + q * 6 * k + 5 * k, y2: Y + 12 * k,
+        show: [s0 + 3.6, show[1]], fade: 0.3, style: {stroke: 'accent', width: 3 * k}, layer: 6}) as Prop);
+      props.push({id: `${tag}-dist-o`, type: 'line', x1: Xo, y1: Y, x2: Xm, y2: Y, ...draw(s0 + 3.6, s0 + 4.2), show, fade: 0.3, style: {stroke: 'accent', width: 3 * k}, layer: 6},
+        {id: `${tag}-dist-i`, type: 'line', x1: Xm, y1: Y, x2: Xi, y2: Y, ...draw(s0 + 4.2, s0 + 4.8), show, fade: 0.3, style: {stroke: 'accent', width: 3 * k}, layer: 6},
+        ...ticks((Xo + Xm) / 2, `${tag}-tick-o`), ...ticks((Xm + Xi) / 2, `${tag}-tick-i`),
+        {id: `${tag}-dist-o-label`, type: 'text', x: (Xo + Xm) / 2, y: Y + 40 * k, text: `${fmt(p.d)} cm`, size: 28 * k, align: 'middle', show: [s0 + 4.2, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6},
+        {id: `${tag}-dist-i-label`, type: 'text', x: (Xm + Xi) / 2, y: Y + 40 * k, text: `${fmt(p.d)} cm`, size: 28 * k, align: 'middle', show: [s0 + 4.8, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6});
     }
     const shownImage: [number, number] = [s0 + 3.3, show[1]];
     if (!img.atInfinity && isFinite(img.v)) {
@@ -293,6 +327,8 @@ export function rayDiagram(s: RaySpec): Scene {
     const where = img.atInfinity ? 'at infinity' : zone(dev, f, Math.abs(img.v), 'image', real);
     const lines: [string, string, number][] = [[`Object: ${zone(dev, f, p.d, 'object')}`, 'accent', s0 + 0.2],
       [`Image: ${where}`, real ? 'good' : 'cool', s0 + 3.4], [`${nature[0].toUpperCase()}${nature.slice(1)}; ${size}`, real ? 'good' : 'cool', s0 + 3.6]];
+    if (plane) lines.push([`${fmt(p.d)} cm in front, image ${fmt(p.d)} cm behind`, 'ink', s0 + 3.8]);
+    if (angleLine) lines.push([angleLine, 'accent', s0 + 3.3]);
     if (s.formula && isFinite(p.d)) {
       const u = img.u;
       if (plane) lines.push([`u = ${signed(u)} cm, v = ${signed(img.v)} cm, m = +1`, 'ink', s0 + 3.9]);
@@ -309,7 +345,7 @@ export function rayDiagram(s: RaySpec): Scene {
       props.push({id: `${tag}-line${j}`, type: 'text', x: px, y, text, size: 30 * k, width: pw, show: [t, show[1]], fade: 0.3, style: {fill}, weight: j < 3 ? 700 : 400});
       y += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 10 * k;
     });
-    const oz = zone(dev, f, p.d, 'object'), plain = (z: string) => /^\d.*cm (in front|behind)|^behind the mirror$|same side/.test(z);
+    const oz = zone(dev, f, p.d, 'object'), plain = (z: string) => /^in front of the|^behind the mirror|same side/.test(z);
     const obj = isFinite(p.d) ? `object ${fmt(p.d)} cm from the ${mirror ? 'mirror' : 'lens'}${plain(oz) ? '' : ` (${oz})`}` : 'object at infinity (a parallel beam)';
     const imgText = img.atInfinity ? 'image at infinity' : `image ${fmt(Math.abs(img.v))} cm ${mirror ? (img.v < 0 ? 'in front of' : 'behind') + ' the mirror' : (img.v > 0 ? 'beyond the lens' : 'on the object\'s side of the lens')}${plain(where) ? '' : ` (${where})`}`;
     facts.push(`${obj}: ${imgText}, ${nature}, ${size}${isFinite(p.d) && !img.atInfinity ? `; v = ${signed(img.v)} cm, m = ${signed(img.m)}` : ''}`);
@@ -319,6 +355,8 @@ export function rayDiagram(s: RaySpec): Scene {
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T0 + positions.length * E + 1.5, theme: s.theme ?? 'dark', props, actors: [],
     meta: {verb: 'ray_diagram', facts, images: positions.map(p => ({d: p.d, v: p.img.v, m: p.img.m, real: p.img.real}))}};
 }
+
+const top0 = (d: number, h: number): Vec => [-d, h];
 
 function xy(a: Vec, b: Vec) { return {x1: a[0], y1: a[1], x2: b[0], y2: b[1]}; }
 

@@ -416,3 +416,14 @@ test('refraction: Snell\'s law with the book\'s indices, the slab\'s shift, and 
   assert.match(errs({from: 'air', to: 'glass', angles: [95]}), /0 to 85 degrees/);
   assert.match(errs({from: 'glass', to: 'air', angles: [30], slab: 4}), /slab is of the optically denser medium/);
 });
+
+test('ray_diagram: a picture without numbers still names i and r and says where the image is', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {scene, errors} = compile({verb: 'ray_diagram', device: 'plane_mirror', objects: [10], rays: ['parallel', 'pole'], angles: true, distances: true, illustrative: true} as any);
+  assert.deepEqual(errors, []);
+  const texts = scene!.props.filter(p => p.type === 'text').map(p => (p as any).text);
+  for (const t of ['i', 'r', 'normal', 'Object: in front of the mirror', 'Image: behind the mirror, as far behind as the object is in front']) assert.ok(texts.includes(t), t);
+  assert.ok(!texts.some(t => /\d/.test(t)), 'no numbers');
+  assert.ok(scene!.props.some(p => p.id === 'p0-dist-o') && scene!.props.some(p => p.id === 'p0-ray2-in'), 'distances and the ray along the normal');
+  assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: [20], distances: true} as any).errors.join(), /distances is for a plane mirror/);
+});
