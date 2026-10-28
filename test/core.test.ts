@@ -554,3 +554,11 @@ test('annotate: no point named twice, no point ids as words; a part without its 
   const part = compile({...base, title: 'Large aperture', panel: false} as any).scene!;
   assert.ok((part.props.find(p => p.id === 'title') as any).y >= 0.15 * 1080, 'below the header strip');
 });
+
+test('ray_diagram exact: one scale for every aperture, so a small one looks small', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const top = (aperture: number) => (compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: ['infinity'], exact: true, aperture} as any).scene!.meta as any).anchors;
+  const wide = top(0.6), small = top(0.25);
+  const half = (a: any) => a.edge_bottom[1] - a.edge_top[1];
+  assert.ok(Math.abs(half(small) / half(wide) - 0.25 / 0.6) < 0.02, `${half(small)} vs ${half(wide)}`);
+});

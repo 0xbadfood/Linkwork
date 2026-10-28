@@ -236,6 +236,9 @@ export function rayDiagram(s: RaySpec): Scene {
   x0 -= 0.12 * span; x1 += 0.12 * span;
   if (mirror) x1 = Math.max(x1, 0.18 * span);
   const ys = [h, ...positions.flatMap(p => [isFinite(p.img.m) ? Math.abs(p.img.m * h) : 0, ...p.rays.map(r => Math.abs(r.hit[1]))])];
+  // Exact rays are drawn to one scale whatever the aperture (the sphere's 0.9 R), so a small aperture looks small
+  // beside a large one (C2: both were zoomed to fill their halves and looked alike).
+  if (s.exact) ys.push(0.9 * R / 1.22);
   // Marked angles need the reflected ray in view for a while above the point of incidence.
   const ymax = (plane && s.angles ? 1.55 : 1.22) * Math.max(...ys);
   // Without the panel the drawing takes the whole width under its title (a part of a side-by-side compound).
@@ -258,7 +261,7 @@ export function rayDiagram(s: RaySpec): Scene {
   };
 
   // The device and its axis, drawn once.
-  const aperture = Math.min(Math.max((plane ? 1.45 : 1.3) * Math.max(...positions.flatMap(p => p.rays.map(r => Math.abs(r.hit[1])))), 1.4 * h), mirror && !plane ? reach : 0.98 * by);
+  const aperture = s.exact ? reach : Math.min(Math.max((plane ? 1.45 : 1.3) * Math.max(...positions.flatMap(p => p.rays.map(r => Math.abs(r.hit[1])))), 1.4 * h), mirror && !plane ? reach : 0.98 * by);
   const props: Prop[] = [{id: 'axis', type: 'line', ...xy(P([bx0, 0]), P([bx1, 0])), style: {stroke: 'muted', width: 2.5 * k, dash: [16 * k, 10 * k]}}];
   const arc = Array.from({length: 41}, (_, i) => -aperture + (2 * aperture * i) / 40);
   if (mirror) {
