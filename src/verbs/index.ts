@@ -54,9 +54,9 @@ export const VERBS: Record<string, Verb<any>> = {
   stage: {errors: stageErrors, compile: stage,
     about: 'a small mechanics world laid out in metres (ground, tables, wedges, walls, a cannon) where things move by computed physics: a mover at constant speed, a ball launched as a projectile, a block sliding or a ball rolling down a wedge, two things colliding; ranges, times and speeds are computed and shown'} as Verb<StageSpec>,
   ray_diagram: {errors: rayDiagramErrors, compile: rayDiagram,
-    about: 'a plane, concave or convex mirror or a convex or concave lens: an object at one distance after another (or a parallel beam), principal rays drawn to the image found by the mirror or lens formula, and the image described as the book does (where, real or virtual, inverted or erect, size)'} as Verb<RaySpec>,
+    about: 'a plane, concave or convex mirror or a convex or concave lens: an object at one distance after another (or a parallel beam), principal rays drawn to the image found by the mirror or lens formula, and the image described as the book does (where, real or virtual, inverted or erect, size); also each ray rule on its own (one ray, no image), a plane mirror\'s i = r and equal distances, a wide beam traced exactly off the sphere (spherical aberration: large against small aperture), and two mirrors or lenses side by side'} as Verb<RaySpec>,
   refraction: {errors: refractionErrors, compile: refraction,
-    about: "a ray entering another medium (or crossing a glass slab and coming out): bent by Snell's law with the book's refractive indices, i and r from the normal, sin i ÷ sin r for each angle, the lateral shift through a slab"} as Verb<RefractionSpec>,
+    about: "a ray entering another medium (or crossing a glass slab and coming out): bent by Snell's law with the book's refractive indices, i and r from the normal, sin i ÷ sin r for each angle, the speed of light in each medium, the lateral shift through a slab, total internal reflection; and apparent depth: a coin, a pencil tip or a tank's bottom under water seen from above looks raised (its rays bend away from the normal and, traced back, meet nearer the surface)"} as Verb<RefractionSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */
