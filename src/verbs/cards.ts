@@ -21,6 +21,8 @@ export type Card = {
   example: Record<string, unknown>;
   /** candidate → trial (studios only) → trusted (anywhere). */
   status: 'candidate' | 'trial' | 'trusted';
+  /** The named points a mark (annotate) can sit at, when they depend on the spec; else read from its example. */
+  anchors?: string;
   /** Offered for its subjects whatever the concept is about (the general props: a thinker, a stopwatch, a speedometer). */
   always?: boolean;
 };
@@ -253,6 +255,7 @@ export const CARDS: Record<string, Card> = {
       formula: 'true: u, v, f, m with signs and the formula with numbers (use when the narration states them)', power: 'a lens: true shows P = 1/f in dioptres',
       angles: 'a plane mirror: true marks the normal and the angles i and r (named even when illustrative)',
       distances: 'a plane mirror: true marks the object and the image as equally far from the mirror (equal tick marks; the distances in cm unless illustrative)', seconds_each: 'seconds per object position, 3 to 12 (default 6)', title: 'short title'},
+    anchors: 'mirrors: P, F, C; lenses: O, F1, F2, 2F1, 2F2; object, image and incidence (where the first ray meets the mirror or lens) for the first position, object2, image2, incidence2 ... for later ones',
     example: {verb: 'ray_diagram', title: 'Images by a concave mirror', device: 'concave_mirror', focal_length: 10, objects: [30, 20, 15, 5], formula: true},
     status: 'trial',
   },
@@ -267,6 +270,7 @@ export const CARDS: Record<string, Card> = {
       to: 'the medium entered, the same way', angles: 'angles of incidence in degrees (0 to 85), 1 to 5, shown in turn',
       slab: 'optional: a slab of `to` this many cm thick, with `from` on both sides', speeds: 'true: the speed of light in each medium (v = c/n)',
       seconds_each: '3 to 12 (default 6)', title: 'short title'},
+    anchors: 'incidence (where the ray meets the surface), normal (the top of the normal), exit (with a slab: where the ray leaves it)',
     example: {verb: 'refraction', title: 'Light entering glass', from: 'air', to: 'glass', angles: [30, 45, 60], speeds: true},
     status: 'trial',
   },

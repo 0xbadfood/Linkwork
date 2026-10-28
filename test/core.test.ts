@@ -427,3 +427,32 @@ test('ray_diagram: a picture without numbers still names i and r and says where 
   assert.ok(scene!.props.some(p => p.id === 'p0-dist-o') && scene!.props.some(p => p.id === 'p0-ray2-in'), 'distances and the ray along the normal');
   assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: [20], distances: true} as any).errors.join(), /distances is for a plane mirror/);
 });
+
+test('annotate: labels and points at a verb\'s named points or in its own units, optional for every verb', async () => {
+  const {compile, cards} = await import('../src/verbs/index.ts');
+  const base = {verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: [30]};
+  const plain = compile(base as any).scene!, noted = compile({...base, annotate: [{text: 'centre of curvature', at: 'C', point: true}, {text: 'pole', at: [0, -4]}]} as any).scene!;
+  assert.equal(noted.props.length, plain.props.length + 3, 'a dot and two labels, nothing else changed');
+  const anchors = (plain.meta as any).anchors, dot = noted.props.find(p => p.id === 'note0-point') as any;
+  assert.deepEqual([dot.x, dot.y], anchors.C.map((v: number) => Math.round(v * 100) / 100));
+  const units = (plain.meta as any).units, pole = noted.props.find(p => p.id === 'note1-label') as any;
+  assert.ok(Math.abs(pole.x - 14 * 1 - (units.ox + units.sx * 0)) < 0.01 && Math.abs(pole.y + 16 - (units.oy + units.sy * 4)) < 0.01);
+  // A plane's own coordinates (graph), and errors that name the field and the fix.
+  const g = compile({verb: 'graph', x: {name: 't', unit: 's', range: [0, 6]}, y: {name: 'v', unit: 'm/s', range: [0, 22]}, series: [{label: 'v', expr: '2 + 3t'}],
+    annotate: [{text: 'start', at: [0, 2], point: true}]} as any);
+  assert.deepEqual(g.errors, []);
+  const err = (s: object) => compile(s as any).errors.join(' | ');
+  assert.match(err({...base, annotate: [{text: 'x', at: 'Q'}]}), /no point named "Q"; named points: P, F, C, object, image, incidence/);
+  assert.match(err({...base, annotate: [{at: 'C'}]}), /give text, point: true, or both/);
+  assert.match(err({...base, annotate: [{text: 'x', at: 'C', colour: 'pink'}]}), /colour is one of/);
+  assert.match(err({verb: 'pendulum', length: 1, annotate: [{text: 'x', at: [1, 1]}]}), /takes named points only/);
+  // Without numbers a point's name stays (2F₂ is not a number), and so do the place words that use one.
+  const lens = compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: [15], illustrative: true, annotate: [{text: '2F2', at: '2F2', point: true}]} as any).scene!;
+  const texts = lens.props.filter(p => p.type === 'text').map(p => (p as any).text);
+  for (const t of ['2F₂', '2F2', 'Object: between F₁ and 2F₁', 'Image: beyond 2F₂']) assert.ok(texts.includes(t), t);
+  assert.ok(!texts.some(t => /cm/.test(t)));
+  const all = cards(['trusted', 'trial']);
+  assert.match(all.ray_diagram.fields.annotate, /lenses: O, F1, F2, 2F1, 2F2/);
+  assert.match(all.graph.fields.annotate, /\[x, y\] in the drawing's own x and y/);
+  assert.equal(all.pendulum.fields.annotate, undefined, 'a verb with nowhere to put a mark offers none');
+});

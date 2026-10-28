@@ -60,6 +60,15 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.
 
+## Labels and points of your own (annotate)
+
+Any verb spec may add `annotate`: up to 8 `{text?, at, point?, t?, colour?}`. `at` is a point the verb names
+(ray_diagram: `P`, `F`, `C`, `O`, `F1`, `2F2`, `object`, `image`, `incidence`; refraction: `incidence`, `normal`,
+`exit`) or `[x, y]` in the verb's own units (a plane's axis numbers, a stage's metres, ray_diagram's cm). It is
+optional, so the same verb serves a teaching film and a worked problem; a label gets a halo so it reads across lines,
+and an unknown point is an error listing the ones there are. Without numbers (`illustrative`), a point's name such as
+2F₁ is kept.
+
 ## Compound scenes
 
 Several verbs on one canvas: each part is a verb spec in a box, compiled at the box's size, on its own clock (`start`,

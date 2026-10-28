@@ -252,6 +252,15 @@ export function rayDiagram(s: RaySpec): Scene {
   }
 
   // Each position in turn: the object, its incident rays drawing on, then the reflected or refracted rays, the image.
+  // Named points for marks: the axis's points, and each position's object and image tops (object, image; object2 ...).
+  const anchors: Record<string, Vec> = {};
+  for (const [label, x] of marks) if (x >= bx0 && x <= bx1) anchors[label.replace('₁', '1').replace('₂', '2')] = P([x, 0]);
+  positions.forEach((p, i) => {
+    const n = i ? String(i + 1) : '';
+    if (isFinite(p.d)) anchors[`object${n}`] = P([-p.d, h]);
+    if (!p.img.atInfinity && isFinite(p.img.v)) anchors[`image${n}`] = P([p.img.v, isFinite(p.d) ? p.img.m * h : 0]);
+    if (p.rays[0]) anchors[`incidence${n}`] = P(p.rays[plane && p.rays[1] ? 1 : 0].hit);
+  });
   const E = s.seconds_each ?? 6, T0 = 0.8, facts: string[] = [];
   const px = 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
@@ -353,7 +362,8 @@ export function rayDiagram(s: RaySpec): Scene {
   if (!plane) facts.unshift(`${NAME[dev]} of focal length ${fmt(f)} cm (f = ${signed(fc)} cm in the New Cartesian sign convention)${mirror ? `; radius of curvature ${fmt(R)} cm` : ''}`);
   if (s.power && !mirror) facts.push(`power P = 1/f = ${signed(100 / fc)} dioptre`);
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T0 + positions.length * E + 1.5, theme: s.theme ?? 'dark', props, actors: [],
-    meta: {verb: 'ray_diagram', facts, images: positions.map(p => ({d: p.d, v: p.img.v, m: p.img.m, real: p.img.real}))}};
+    meta: {verb: 'ray_diagram', facts, anchors, units: {ox, oy, sx: unit, sy: unitY, name: `cm: x along the axis (the ${mirror ? 'mirror' : 'lens'} at 0, the object's side negative), y above it`},
+      images: positions.map(p => ({d: p.d, v: p.img.v, m: p.img.m, real: p.img.real}))}};
 }
 
 const top0 = (d: number, h: number): Vec => [-d, h];
@@ -437,6 +447,7 @@ export function refraction(s: RefractionSpec): Scene {
   const normalLen = 0.22 * H;
   props.push({id: 'normal', type: 'line', x1: hx, y1: y1 - normalLen, x2: hx, y2: (slab ? y2 : y1 + normalLen), style: {stroke: 'muted', width: 2.5 * k, dash: [10 * k, 8 * k]}, layer: 1},
     {id: 'normal-label', type: 'text', x: hx + 12 * k, y: y1 - normalLen + 6 * k, text: 'normal', size: 24 * k, style: {fill: 'muted'}, layer: 1});
+  const anchors: Record<string, Vec> = {incidence: [hx, y1], normal: [hx, y1 - normalLen]};
   s.angles.forEach((ai, i) => {
     const s0 = T0 + i * E, last = i === s.angles.length - 1, show: [number, number] = [s0, last ? 1e9 : s0 + E], tag = `a${i}`;
     const si = Math.sin(rad(ai)), sr = n1 * si / n2v, tir = sr > 1;
@@ -478,6 +489,7 @@ export function refraction(s: RefractionSpec): Scene {
         const out: Vec = [exitP[0] + inDir[0] * L2, y2 + inDir[1] * L2];
         const straightL = (y2 - y1 + (out[1] - y2)) / Math.max(inDir[1], 1e-9), straight: Vec = [hx + inDir[0] * straightL, y1 + inDir[1] * straightL];
         const shift = slab * Math.sin(rad(ai - ar)) / Math.cos(rad(ar));
+        if (!i) anchors.exit = exitP;
         props.push({id: `${tag}-emergent`, type: 'line', ...xy(exitP, out), ...draw(s0 + 3.0, s0 + 4.0), show, fade: 0.3, style: {stroke: 'accent', width: 5 * k}, layer: 3},
           head(`${tag}-hem`, exitP, out, [s0 + 4.0, show[1]], k),
           {id: `${tag}-normal2`, type: 'line', x1: exitP[0], y1: y2 - 0.1 * H, x2: exitP[0], y2: y2 + 0.12 * H, show: [s0 + 2.9, show[1]], fade: 0.3, style: {stroke: 'muted', width: 2.5 * k, dash: [10 * k, 8 * k]}, layer: 1},
@@ -504,5 +516,5 @@ export function refraction(s: RefractionSpec): Scene {
   facts.push(`refractive index of ${name2} relative to ${name1}: ${fmt(n21, 2)} (absolute indices ${fmt(n1, 4)} and ${fmt(n2v, 4)})`);
   if (s.speeds) facts.push(`light travels at about ${fmt(C_LIGHT / n1 / 1e8, 2)} × 10^8 m/s in ${name1} and ${fmt(C_LIGHT / n2v / 1e8, 2)} × 10^8 m/s in ${name2}`);
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: end + 1.5, theme: s.theme ?? 'dark', props, actors: [],
-    meta: {verb: 'refraction', facts, n21: round(n21, 6)}};
+    meta: {verb: 'refraction', facts, anchors, n21: round(n21, 6)}};
 }

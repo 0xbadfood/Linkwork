@@ -9,6 +9,7 @@ import {graph, graphErrors, type GraphSpec} from './graph.ts';
 import {motionErrors, motionOnLine, scaleCompare, scaleErrors, type MotionSpec, type ScaleSpec} from './motion.ts';
 import {stage, stageErrors, type StageSpec} from './stage.ts';
 import {pathErrors, pathLength, type PathSpec} from './path.ts';
+import {addMarks, markable, marksErrors, type Mark} from './marks.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -61,7 +62,21 @@ export const VERBS: Record<string, Verb<any>> = {
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */
 export function cards(statuses: Card['status'][] = ['trusted']): Record<string, Card & {about: string}> {
   return Object.fromEntries(Object.entries(VERBS).filter(([name]) => statuses.includes(CARDS[name]?.status))
-    .map(([name, verb]) => [name, {about: verb.about, ...CARDS[name]}]));
+    .map(([name, verb]) => [name, {about: verb.about, ...withMarks(name, CARDS[name])}]));
+}
+
+const MARKABLE = new Map<string, ReturnType<typeof markable> | null>();
+/** A card with the optional annotate field, worded from what its example scene offers (named points, units). */
+function withMarks(name: string, card: Card): Card {
+  if (!MARKABLE.has(name)) {
+    let found: ReturnType<typeof markable> | null = null;
+    try { const scene = VERBS[name].compile(card.example); found = markable(scene); } catch { /* an example that throws offers nothing */ }
+    MARKABLE.set(name, found && (found.anchors.length || found.units) ? found : null);
+  }
+  const m = MARKABLE.get(name);
+  if (!m) return card;
+  const where = [card.anchors ? `a named point (${card.anchors})` : m.anchors.length ? `a named point (${m.anchors.join(', ')})` : '', m.units ? `[x, y] in ${m.units}` : ''].filter(Boolean).join(' or ');
+  return {...card, fields: {...card.fields, annotate: `optional labels and points of your own, up to 8: {text?, at: ${where}, point?: true for a dot, t?: second it appears, colour?: accent | ink | good | bad | cool | muted}; leave out when the verb's own labels say enough`}};
 }
 
 const STOP = new Set(['about', 'their', 'there', 'which', 'where', 'with', 'from', 'that', 'this', 'when', 'what', 'into',
@@ -98,16 +113,21 @@ export function compile(spec: {verb: string; illustrative?: boolean} | CompoundS
   const verb = VERBS[spec?.verb];
   if (!verb) return {errors: [`unknown verb ${JSON.stringify(spec?.verb)}; known: ${Object.keys(VERBS).join(', ')}`]};
   if (spec.illustrative !== undefined && typeof spec.illustrative !== 'boolean') return {errors: [`${spec.verb}: illustrative is true or false`]};
-  const errors = verb.errors(spec);
+  const notes = (spec as {annotate?: Mark[]}).annotate;
+  const errors = [...verb.errors(spec), ...marksErrors(notes).map(e => `${spec.verb}: ${e}`)];
   if (errors.length) return {errors};
-  const scene = verb.compile(spec);
-  return {scene: spec.illustrative ? illustrate(scene) : scene, errors: []};
+  const marked = addMarks(verb.compile(spec), notes, spec.verb);
+  if (!marked.scene) return {errors: marked.errors};
+  return {scene: spec.illustrative ? illustrate(marked.scene) : marked.scene, errors: []};
 }
+
+// Point names (2F₁, F₂, P1, 2F2) are not numbers: they are taken out before looking for digits.
+const NAMES = /(?<![\w.])\d?[A-Z][₀-₉0-9]*(?![\w.])/g;
 
 /** The scene with its numbers hidden: no readouts, no axis numbers, no text with a figure in it (but the title), dials
  * and watches without their digits; no facts for the narration to quote. */
 export function illustrate(scene: Scene): Scene {
-  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && /\d/.test(p.text)))
+  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && /\d/.test(p.text.replace(NAMES, ''))))
     .map(p => (p.type === 'axes' ? {...p, numbers: false}
       : p.type === 'object' && ['speedometer', 'stopwatch'].includes(p.name) ? {...p, params: {...p.params, digits: 'none'}} : p));
   return {...scene, props, meta: {...scene.meta, facts: [], illustrative: true}};

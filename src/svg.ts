@@ -128,9 +128,13 @@ export function drawProp(p: PropFrame, colour: Colour): string {
     case 'text': {
       const anchor = p.align ?? 'start', size = p.size ?? 32;
       const lines = p.width ? wrapText(p.text, size, p.width) : [p.text];
+      // A stroke on text is a halo behind the letters, so a label stays readable across lines: the same text drawn
+      // first as an outline (a copy, not paint-order, which not every SVG renderer honours).
+      const attrs = `x="${num(p.x)}" y="${num(p.y)}" font-family="${esc(FONTS[p.font ?? 'sans'])}" font-size="${num(size)}" font-weight="${p.weight ?? 500}" text-anchor="${anchor}" dominant-baseline="middle"`;
       const body = lines.length === 1 ? esc(lines[0])
         : lines.map((l, i) => `<tspan x="${num(p.x)}" dy="${i ? num(size * 1.25) : 0}">${esc(l)}</tspan>`).join('');
-      return `${open}<text x="${num(p.x)}" y="${num(p.y)}" font-family="${esc(FONTS[p.font ?? 'sans'])}" font-size="${num(size)}" font-weight="${p.weight ?? 500}" text-anchor="${anchor}" dominant-baseline="middle" fill="${colour(s.fill, 'ink')}">${body}</text></g>`;
+      const halo = s.stroke ? `<text ${attrs} fill="none" stroke="${colour(s.stroke, 'paper')}" stroke-width="${num(s.width ?? size * 0.25)}" stroke-linejoin="round">${body}</text>` : '';
+      return `${open}${halo}<text ${attrs} fill="${colour(s.fill, 'ink')}">${body}</text></g>`;
     }
     case 'wave': {
       const a: Vec = [p.x1, p.y1], b: Vec = [p.x2, p.y2], L = dist(a, b) || 1;
