@@ -28,7 +28,11 @@ export type CircuitSpec = Common & {
   /** The plug key: closed (current flows) or open. */
   key?: 'closed' | 'open' | 'closes';
   /** wire: a close-up of a wire, charge crossing a marked cross-section, counted against a clock: I = Q/t. */
-  view?: 'circuit' | 'wire';
+  view?: 'circuit' | 'wire' | 'work';
+  /** view work: the charge moved from A to B, in coulombs (default 1). */
+  charge?: number;
+  /** A bar on the cell showing its chemical energy, running down while current flows. */
+  energy?: boolean;
   /** view wire: the current in amperes (default 1). */
   current?: number;
   /** Show the main current in A, mA and µA together. */
@@ -78,7 +82,13 @@ export function solve(items: (Part | Group)[], V: number, closed = true): Soluti
 
 export function circuitErrors(s: CircuitSpec): string[] {
   const e: string[] = [];
-  if (s.view !== undefined && !['circuit', 'wire'].includes(s.view)) return ['circuit: view is circuit or wire'];
+  if (s.view !== undefined && !['circuit', 'wire', 'work'].includes(s.view)) return ['circuit: view is circuit, wire or work'];
+  if (s.view === 'work') {
+    if (!(isNum(s.volts) && s.volts > 0 && s.volts <= 250)) e.push('circuit: view work needs volts: the potential difference between A and B');
+    if (s.charge !== undefined && !(isNum(s.charge) && s.charge > 0 && s.charge <= 100)) e.push('circuit: charge (view work) is in coulombs, more than 0 and at most 100');
+    if (s.items !== undefined || s.cells !== undefined) e.push('circuit: view work shows a charge moved between two points: leave out items and cells; give volts (and charge)');
+    return e;
+  }
   if (s.view === 'wire') {
     if (s.current !== undefined && !(isNum(s.current) && s.current > 0 && s.current <= 10)) e.push('circuit: current (view wire) is in amperes, more than 0 and at most 10');
     if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('circuit: seconds_each is 3 to 12');
@@ -117,7 +127,7 @@ export function circuitErrors(s: CircuitSpec): string[] {
       });
     } else part(x as Part, `items[${i}]`);
   });
-  for (const v of s.voltmeters ?? []) if (!ids.has(v)) e.push(`circuit: voltmeters: no item ${JSON.stringify(v)}; ids are ${[...ids].join(', ')}`);
+  for (const v of s.voltmeters ?? []) if (!ids.has(v) && v !== 'battery') e.push(`circuit: voltmeters: no item ${JSON.stringify(v)}; ids are ${[...ids].join(', ')}, or battery`);
   if (s.voltmeters !== undefined && s.voltmeters.length > 4) e.push('circuit: voltmeters is up to 4 ids');
   if (s.flow !== undefined && ![true, false, 'conventional', 'electrons', 'both'].includes(s.flow as never)) e.push('circuit: flow is true (conventional current), electrons, or both');
   if (s.key !== undefined && !['open', 'closed', 'closes'].includes(s.key)) e.push('circuit: key is open, closed, or closes (open at first, then closed: the current starts)');
@@ -127,6 +137,7 @@ export function circuitErrors(s: CircuitSpec): string[] {
 
 export function circuit(s: CircuitSpec): Scene {
   if (s.view === 'wire') return wireView(s);
+  if (s.view === 'work') return workView(s);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
   const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.14 * H : (s.title ? 0.24 : 0.14) * H, bottom = 0.92 * H;
   // A circuit with no parallel group is a short, wide loop; with groups it needs height for their branches.
@@ -192,6 +203,7 @@ export function circuit(s: CircuitSpec): Scene {
     // Names below the component, so voltmeters can bridge it from above.
     text(`${id}-name`, p.kind === 'wire' ? `${name}, ${fmt(resistance(p), 3)} Ω` : `${name} = ${fmt(resistance(p))} Ω`, cx, y + 46 * k, p.kind === 'wire' ? 'accent' : 'ink', 24);
     anchors[p.id] = [round(cx, 2), round(y, 2)];
+    anchors[`${p.id}_left`] = [round(cx - half, 2), round(y, 2)]; anchors[`${p.id}_right`] = [round(cx + half, 2), round(y, 2)];   // its two ends (points A and B)
     return half;
   };
   const ends: Record<string, [number, number, number]> = {};                          // id -> [x left, x right, y top]
@@ -225,7 +237,16 @@ export function circuit(s: CircuitSpec): Scene {
     }
   });
   // Voltmeters bridge their item from above.
-  (s.voltmeters ?? []).forEach((id, q) => {
+  // A voltmeter across the battery sits just inside the loop, beside the cells; it reads even with the key open.
+  if ((s.voltmeters ?? []).includes('battery')) {
+    const xv = X0 + 110 * k, st = {style: {stroke: 'cool', width: 2.5 * k}};
+    line('vm-battery-t', [X0, bTop - 10 * k], [xv, bTop - 10 * k], st); line('vm-battery-b', [X0, bBot + 10 * k], [xv, bBot + 10 * k], st);
+    line('vm-battery-l1', [xv, bTop - 10 * k], [xv, by - 24 * k], st); line('vm-battery-l2', [xv, by + 24 * k], [xv, bBot + 10 * k], st);
+    props.push({id: 'vm-battery', type: 'circle', x: round(xv, 2), y: round(by, 2), r: 24 * k, style: {stroke: 'cool', width: 3.5 * k, fill: 'paper'}, layer: 3});
+    text('vm-battery-V', 'V', xv, by + 2 * k, 'cool', 26);
+    anchors.voltmeter_battery = [round(xv, 2), round(by, 2)];
+  }
+  (s.voltmeters ?? []).filter(id => id !== 'battery').forEach((id, q) => {
     const [xa, xb, yt] = ends[id], yv = yt - 40 * k - 0 * q, cx = (xa + xb) / 2;
     line(`vm-${id}-l`, [xa, yt + 50 * k], [xa, yv], {style: {stroke: 'cool', width: 2.5 * k}}); line(`vm-${id}-r`, [xb, yt + 50 * k], [xb, yv], {style: {stroke: 'cool', width: 2.5 * k}});
     line(`vm-${id}-tl`, [xa, yv], [cx - 24 * k, yv], {style: {stroke: 'cool', width: 2.5 * k}}); line(`vm-${id}-tr`, [cx + 24 * k, yv], [xb, yv], {style: {stroke: 'cool', width: 2.5 * k}});
@@ -233,6 +254,15 @@ export function circuit(s: CircuitSpec): Scene {
     text(`vm-${id}-V`, 'V', cx, yv + 2 * k, 'cool', 26);
     anchors[`voltmeter_${id}`] = [round(cx, 2), round(yv, 2)];
   });
+  // The cell's chemical energy: a bar that runs down while current flows (the rate is illustrative).
+  if (s.energy) {
+    const bx = X0 + 30 * k, bw = 0.22 * (X1 - X0), byy = Y1 - 80 * k, runs = closed && totalR(s.items) > 0;
+    const startT = Math.max(T0, closeT), stopT = T0 + states.length * E;
+    props.push({id: 'energy-frame', type: 'rect', x: round(bx, 2), y: round(byy, 2), w: round(bw, 2), h: 22 * k, style: {stroke: 'accent', width: 2.5 * k, fill: 'paper'}, layer: 3},
+      {id: 'energy-level', type: 'rect', x: round(bx, 2), y: round(byy, 2), w: round(bw, 2), h: 22 * k, keys: runs ? {w: [[startT, round(bw, 2)], [stopT, round(0.55 * bw, 2), 'linear']]} : undefined,
+        style: {fill: 'accent', opacity: 0.7}, layer: 4} as Prop);
+    text('energy-label', runs ? 'chemical energy in the cell: being used' : 'chemical energy in the cell', bx, byy - 22 * k, 'accent', 22, 'start');
+  }
   // Each battery in turn: the solution, the meters' readings, the bulbs' glow and the panel.
   const px = 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
@@ -243,11 +273,12 @@ export function circuit(s: CircuitSpec): Scene {
   sols.forEach((sol, n) => {
     const s0 = T0 + n * E, end = n === sols.length - 1 ? 1e9 : s0 + E, show: [number, number] = [Math.max(s0, closeT), end];
     // To the right of the supply: on its left it ran out of a half-frame (C1 of Electricity, 2026-10-29).
-    text(`battery-v${n}`, `${fmt(sol.V)} V${mains ? ' mains' : ''}`, X0 + 44 * k, by + (mains ? 0 : 0), 'accent', 28, 'start', [s0, end]);
+    text(`battery-v${n}`, `${fmt(sol.V)} V${mains ? ' mains' : ''}`, X0 + 44 * k, by - ((s.voltmeters ?? []).includes('battery') ? 70 * k : 0), 'accent', 28, 'start', [s0, end]);
     const reading = s.units && sol.I < 1 && sol.I > 0 ? `I = ${fmt(sol.I * 1000, 3)} mA` : `I = ${fmt(sol.I, 3)} A`;
     if (s.ammeter !== false) text(`ammeter-read${n}`, reading, amX, Y0 - 44 * k, 'cool', 28, 'middle', show);
     if (s.ammeter !== false && closeT && n === 0) text('ammeter-zero', 'I = 0 A', amX, Y0 - 44 * k, 'cool', 28, 'middle', [T0, closeT]);
-    for (const id of s.voltmeters ?? []) {
+    if ((s.voltmeters ?? []).includes('battery')) text(`vm-battery-read${n}`, `${fmt(sol.V, 3)} V`, X0 + 144 * k, by, 'cool', 26, 'start', [s0, end]);
+    for (const id of (s.voltmeters ?? []).filter(v => v !== 'battery')) {
       const v = sol.parts[id]?.V ?? sol.groups[id]?.V ?? 0, [xa, xb, yt] = ends[id];
       text(`vm-${id}-read${n}`, `${fmt(v, 3)} V`, (xa + xb) / 2 + 34 * k, yt - 40 * k, 'cool', 26, 'start', show);
     }
@@ -268,7 +299,8 @@ export function circuit(s: CircuitSpec): Scene {
         [s.items.length > 1 || isGroup(s.items[0]) ? `R = ${series} = ${fmt(sol.R, 3)} Ω` : `R = ${fmt(sol.R, 3)} Ω`, 'ink'],
         [closed ? `I = V/R = ${fmt(sol.V)} ÷ ${fmt(sol.R, 3)} = ${fmt(sol.I, 3)} A` : 'Key open: no current flows', 'cool'],
         ...(s.units && closed ? [[`${fmt(sol.I, 4)} A = ${fmt(sol.I * 1e3, 3)} mA = ${fmt(sol.I * 1e6, 1)} µA`, 'cool'] as [string, string]] : []),
-        ...(s.voltmeters ?? []).map(id => [`V across ${id} = ${fmt(sol.parts[id]?.V ?? sol.groups[id]?.V ?? 0, 3)} V`, 'cool'] as [string, string])];
+        // Across the battery: its full potential difference, current or not (the cell's own).
+        ...(s.voltmeters ?? []).map(id => [`V across ${id} = ${fmt(id === 'battery' ? sol.V : sol.parts[id]?.V ?? sol.groups[id]?.V ?? 0, 3)} V`, 'cool'] as [string, string])];
       let y = row;
       rows.forEach(([t, fill], q) => { props.push({id: `row${n}-${q}`, type: 'text', x: px, y, text: t, size: 30 * k, width: pw, weight: q ? 400 : 700, show, fade: 0.3, style: {fill}}); y += wrapText(t, 30 * k, pw).length * 1.3 * 30 * k + 10 * k; });
     }
@@ -356,4 +388,38 @@ function wireView(s: CircuitSpec): Scene {
     meta: {verb: 'circuit', facts: [`a current of ${fmt(I)} A carries ${fmt(I * T)} C across the cross-section in ${fmt(T)} s: I = Q/t`,
       'one ampere is one coulomb of charge crossing a cross-section each second; one coulomb is the charge of nearly 6 × 10^18 electrons',
       `here each dot stands for ${fmt(packet)} C`], anchors: {section: [round(xs, 2), round(cy, 2)]}}};
+}
+
+/** Potential difference as work per unit charge: a charge Q pushed from A to B across a component, the work done on it
+ * counted as it goes, then V = W/Q. */
+function workView(s: CircuitSpec): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
+  const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.14 * H : (s.title ? 0.24 : 0.14) * H, bottom = 0.92 * H;
+  const V = s.volts!, Q = s.charge ?? 1, Wk = V * Q, T = s.seconds_each ?? 6, T0 = 0.8, y = top + 0.4 * (bottom - top);
+  const ax = left + 0.12 * (right - left), bx = right - 0.12 * (right - left), cx = (ax + bx) / 2, half = 0.16 * (bx - ax), props: Prop[] = [];
+  const st = {stroke: 'ink', width: 4 * k};
+  props.push({id: 'wire-a', type: 'line', x1: round(ax, 2), y1: round(y, 2), x2: round(cx - half, 2), y2: round(y, 2), style: st, layer: 2},
+    {id: 'wire-b', type: 'line', x1: round(cx + half, 2), y1: round(y, 2), x2: round(bx, 2), y2: round(y, 2), style: st, layer: 2});
+  const zig: Vec[] = [[cx - half, y]];
+  for (let q = 0; q < 8; q++) zig.push([cx - half + (q + 0.5) * (2 * half / 8), y + (q % 2 ? 16 : -16) * k]);
+  zig.push([cx + half, y]);
+  props.push({id: 'component', type: 'polyline', points: zig.map(q => [round(q[0], 2), round(q[1], 2)] as Vec), style: st, layer: 3});
+  for (const [name, x] of [['A', ax], ['B', bx]] as const) props.push({id: `point-${name}`, type: 'circle', x: round(x, 2), y: round(y, 2), r: 10 * k, style: {fill: 'cool'}, layer: 4},
+    {id: `point-${name}-label`, type: 'text', x: round(x, 2), y: round(y + 44 * k, 2), text: name, size: 34 * k, align: 'middle', weight: 700, style: {fill: 'cool'}, layer: 5});
+  // The charge, carried from A to B at a steady pace; the work done on it grows in step.
+  const t1 = T0 + 0.5, t2 = T0 + T - 0.5;
+  props.push({id: 'charge', type: 'circle', x: round(ax, 2), y: round(y - 40 * k, 2), r: 32 * k, keys: {x: [[t1, round(ax, 2)], [t2, round(bx, 2), 'linear']]}, style: {fill: 'good'}, layer: 6},
+    {id: 'charge-label', type: 'text', x: round(ax, 2), y: round(y - 40 * k, 2), text: `+${fmt(Q)} C`, size: 20 * k, align: 'middle', weight: 700, keys: {x: [[t1, round(ax, 2)], [t2, round(bx, 2), 'linear']]}, style: {fill: 'paper'}, layer: 7},
+    {id: 'work', type: 'readout', x: left + 10 * k, y: round(y + 130 * k, 2), size: 34 * k, text: 'work done W = {w} J', decimals: 2, measures: {w: {kind: 'keys', keys: [[t1, 0], [t2, Wk, 'linear']]}}, style: {fill: 'accent'}},
+    {id: 'v', type: 'text', x: left + 10 * k, y: round(y + 182 * k, 2), size: 34 * k, weight: 700, text: `V = W / Q = ${fmt(Wk)} J ÷ ${fmt(Q)} C = ${fmt(V)} V`, show: [t2, 1e9], fade: 0.3, style: {fill: 'cool'}});
+  const lines = ['Potential difference between A and B: the work done to move a unit charge from A to B', 'V = W / Q, in joules per coulomb: volts', `1 V: 1 J of work for each coulomb moved`];
+  if (panel) {
+    const px = 0.66 * W, pw = W - px - 40 * k;
+    let row = 0.14 * H;
+    if (s.title) { props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw}); row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k; }
+    lines.forEach((t, j) => { props.push({id: `line${j}`, type: 'text', x: px, y: row, text: t, size: 30 * k, width: pw, weight: j ? 400 : 700, show: [1 + 1.2 * j, 1e9], fade: 0.3}); row += wrapText(t, 30 * k, pw).length * 1.3 * 30 * k + 12 * k; });
+  } else if (s.title) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T0 + T + 1, theme: s.theme ?? 'dark', props, actors: [],
+    meta: {verb: 'circuit', facts: [`moving ${fmt(Q)} C from A to B across a potential difference of ${fmt(V)} V takes ${fmt(Wk)} J of work: V = W/Q`,
+      'one volt is the potential difference across which one joule of work moves one coulomb of charge'], anchors: {A: [round(ax, 2), round(y, 2)], B: [round(bx, 2), round(y, 2)]}}};
 }

@@ -749,3 +749,18 @@ test('circuit: the mains as a supply, and the supply\'s label inside a half-fram
   assert.ok(Math.abs((one.meta as any).solution[0].I - 220 / 32.35) < 1e-3, '220 V by default');
   assert.equal((one.props.find(p => p.id === 'battery-v0') as any).text, '220 V mains');
 });
+
+test('circuit: potential difference as work per unit charge, a voltmeter across the battery with the key open, the cell\'s energy', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const w = compile({verb: 'circuit', view: 'work', volts: 12, charge: 2} as any);
+  assert.deepEqual(w.errors, []);
+  // NCERT Example 11.2: moving 2 C across 12 V takes 24 J.
+  assert.match((w.scene!.meta as any).facts[0], /moving 2 C from A to B across a potential difference of 12 V takes 24 J of work/);
+  const open = compile({verb: 'circuit', cells: 2, items: [{id: 'lamp', kind: 'bulb', R: 10}], key: 'open', voltmeters: ['battery'], energy: true} as any).scene!;
+  assert.equal((open.props.find(p => p.id === 'vm-battery-read0') as any).text, '3 V');
+  assert.ok(open.props.some(p => p.type === 'text' && (p as any).text === 'V across battery = 3 V'));
+  assert.equal((open.props.find(p => p.id === 'energy-level') as any).keys, undefined, 'no drain with the key open');
+  const closed = compile({verb: 'circuit', cells: 2, items: [{id: 'lamp', kind: 'bulb', R: 10}], energy: true} as any).scene!;
+  assert.ok((closed.props.find(p => p.id === 'energy-level') as any).keys.w.length === 2, 'runs down while current flows');
+  assert.ok((closed.meta as any).anchors.lamp_left && (closed.meta as any).anchors.lamp_right);
+});
