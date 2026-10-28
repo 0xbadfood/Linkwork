@@ -646,3 +646,18 @@ test('scattering: the Tyndall effect, a blue sky, a red sunset and red signals, 
   assert.match(fog, /about 50% of the red light gets through against 3% of the blue/);
   assert.match(compile({verb: 'scattering', scene: 'rainbow'} as any).errors.join(), /scene is tyndall, sky, sunset or fog/);
 });
+
+test('ray_diagram: lenses in contact act as one lens of power P1 + P2; without a panel, power shows beside the lens', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const pair = compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: ['infinity'], with: {device: 'concave_lens', focal_length: 25}} as any);
+  assert.deepEqual(pair.errors, []);
+  // NCERT Class 10 (power of lenses in contact): +10 D and −4 D make +6 D, a convex lens of f = 100/6 cm.
+  assert.equal((pair.scene!.meta as any).power, 6);
+  assert.match((pair.scene!.meta as any).facts[0], /act as one convex lens of power P = P1 \+ P2 = \+6 D, focal length 16\.67 cm/);
+  const ids = pair.scene!.props.map(p => p.id);
+  for (const id of ['lens1', 'lens2', 'lens1-power', 'lens2-power', 'combined']) assert.ok(ids.includes(id), id);
+  assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 20, objects: ['infinity'], with: {device: 'concave_lens', focal_length: 20}} as any).errors.join(), /cancel/);
+  assert.match(compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 20, objects: ['infinity'], with: {device: 'concave_lens', focal_length: 20}} as any).errors.join(), /goes with a convex or concave lens/);
+  const alone = compile({verb: 'ray_diagram', device: 'concave_lens', focal_length: 25, objects: ['infinity'], power: true, panel: false} as any).scene!;
+  assert.equal((alone.props.find(p => p.id === 'lens-power') as any).text, 'P = −4 D (f = −25 cm)');
+});

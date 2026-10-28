@@ -52,6 +52,8 @@ export type RaySpec = Common & {
   exact?: boolean; aperture?: number;
   /** false: draw the rays but no image (a ray rule on its own); dashed lines then run back to F or C on the axis. */
   image?: boolean;
+  /** A second thin lens in contact with the first: the pair acts as one lens of power P = P1 + P2. */
+  with?: {device: 'convex_lens' | 'concave_lens'; focal_length: number};
 };
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -115,6 +117,17 @@ const FALLBACK: RayName[] = ['parallel', 'centre', 'focus', 'pole'];
 
 export function rayDiagramErrors(s: RaySpec): string[] {
   const e: string[] = [];
+  if (s.with !== undefined) {
+    const w = s.with as {device?: string; focal_length?: number};
+    if (!(s.device === 'convex_lens' || s.device === 'concave_lens')) return ['ray_diagram: with (a lens in contact) goes with a convex or concave lens'];
+    if (!w || !['convex_lens', 'concave_lens'].includes(w.device ?? '') || !(isNum(w.focal_length) && w.focal_length >= 1 && w.focal_length <= 200))
+      return ['ray_diagram: with is {device: convex_lens | concave_lens, focal_length: its size in cm, 1 to 200}'];
+    const P = lensPower(s.device, s.focal_length ?? 0) + lensPower(w.device as Device, w.focal_length!);
+    if (Math.abs(P) < 0.25) return ['ray_diagram: the two lenses cancel (their powers add to about zero): no image to draw; choose other focal lengths'];
+    if (100 / Math.abs(P) > 200) return [`ray_diagram: in contact the pair's focal length is ${fmt(100 / Math.abs(P))} cm, over 200: choose lenses whose powers add to more`];
+    const inner = rayDiagramErrors({...s, with: undefined, device: P > 0 ? 'convex_lens' : 'concave_lens', focal_length: 100 / Math.abs(P)});
+    return inner.map(x => x.replace('ray_diagram:', 'ray_diagram (the pair in contact):'));
+  }
   if (!DEVICES.includes(s.device)) return [`ray_diagram: device is one of ${DEVICES.join(', ')}`];
   const plane = s.device === 'plane_mirror', f = s.focal_length;
   if (plane && f !== undefined) e.push('ray_diagram: a plane mirror has no focal_length; leave it out');
@@ -158,7 +171,38 @@ export function rayDiagramErrors(s: RaySpec): string[] {
 /** stop: an exact ray that meets the axis there runs on a little past it (real); back: its dashed extension's end. */
 type Ray = {name: RayName; from: Vec; hit: Vec; dir: Vec; back?: Vec; stop?: Vec};
 
+const lensPower = (device: Device, f: number) => (device === 'concave_lens' ? -100 : 100) / f;   // dioptres, f in cm
+
+/** Two thin lenses in contact: drawn touching, the rays those of one lens of the combined power P = P1 + P2. */
+function lensesInContact(s: RaySpec): Scene {
+  const w = s.with!, P1 = lensPower(s.device, s.focal_length!), P2 = lensPower(w.device, w.focal_length), P = P1 + P2;
+  const scene = rayDiagram({...s, with: undefined, device: P > 0 ? 'convex_lens' : 'concave_lens', focal_length: 100 / Math.abs(P), power: false});
+  const k = (s.height ?? 1080) / 1080, lens = scene.props.find(p => p.id === 'lens') as {points: Vec[]} | undefined;
+  if (!lens) return scene;
+  const xs = lens.points.map(q => q[0]), ys = lens.points.map(q => q[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2, half = (Math.max(...ys) - Math.min(...ys)) / 2;
+  const width = Math.max(14 * k, (Math.max(...xs) - Math.min(...xs)) / 2);
+  const outline = (device: Device, x: number): Vec[] => {
+    const pts: Vec[] = [], thin = 3 * k;
+    for (let j = 0; j <= 30; j++) { const y = -half + (2 * half * j) / 30, b = device === 'convex_lens' ? thin + width * (1 - (y / half) ** 2) : thin + width * (y / half) ** 2; pts.push([round(x + b, 2), round(cy + y, 2)]); }
+    for (let j = 30; j >= 0; j--) { const y = -half + (2 * half * j) / 30, b = device === 'convex_lens' ? thin + width * (1 - (y / half) ** 2) : thin + width * (y / half) ** 2; pts.push([round(x - b, 2), round(cy + y, 2)]); }
+    return pts;
+  };
+  const gap = (s.device === 'convex_lens' ? width : 3 * k) + (w.device === 'convex_lens' ? width : 3 * k) + 2 * k;
+  const props = scene.props.filter(p => p.id !== 'lens' && p.id !== 'device');
+  const tag = (v: number) => `${v > 0 ? '+' : '−'}${fmt(Math.abs(v))} D`;
+  props.push({id: 'lens1', type: 'polyline', points: outline(s.device, cx - gap / 2), closed: true, style: {stroke: 'cool', width: 4 * k, fill: 'faint', opacity: 0.9}, layer: 3},
+    {id: 'lens2', type: 'polyline', points: outline(w.device, cx + gap / 2), closed: true, style: {stroke: 'good', width: 4 * k, fill: 'faint', opacity: 0.9}, layer: 3},
+    {id: 'lens1-power', type: 'text', x: round(cx - gap / 2 - 10 * k, 2), y: round(cy + half + 36 * k, 2), text: `P₁ = ${tag(P1)}`, size: 26 * k, align: 'end', weight: 700, style: {fill: 'cool', stroke: 'paper', width: 7 * k}, layer: 6},
+    {id: 'lens2-power', type: 'text', x: round(cx + gap / 2 + 10 * k, 2), y: round(cy + half + 36 * k, 2), text: `P₂ = ${tag(P2)}`, size: 26 * k, align: 'start', weight: 700, style: {fill: 'good', stroke: 'paper', width: 7 * k}, layer: 6},
+    {id: 'combined', type: 'text', x: round(cx, 2), y: round(cy - half - 30 * k, 2), text: `in contact: P = P₁ + P₂ = ${tag(P)}`, size: 28 * k, align: 'middle', weight: 700, style: {fill: 'accent', stroke: 'paper', width: 7 * k}, layer: 6});
+  const facts = [`two lenses in contact, of power ${tag(P1)} (${NAME[s.device]}, f = ${fmt(s.focal_length!)} cm) and ${tag(P2)} (${NAME[w.device]}, f = ${fmt(w.focal_length)} cm), act as one ${P > 0 ? 'convex' : 'concave'} lens of power P = P1 + P2 = ${tag(P)}, focal length ${fmt(100 / Math.abs(P))} cm`,
+    ...((scene.meta as {facts: string[]}).facts ?? []).slice(1)];
+  return {...scene, props, meta: {...scene.meta, facts, power: round(P, 6)}};
+}
+
 export function rayDiagram(s: RaySpec): Scene {
+  if (s.with) return lensesInContact(s);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const dev = s.device, mirror = isMirror(dev), plane = dev === 'plane_mirror';
   const finite = s.objects.filter(isNum) as number[];
@@ -275,6 +319,9 @@ export function rayDiagram(s: RaySpec): Scene {
     const edge = (y: number, side: 1 | -1) => side * (dev === 'convex_lens' ? thin + w * (1 - (y / aperture) ** 2) : thin + w * (y / aperture) ** 2);
     const outline = [...arc.map(y => P([edge(y, 1), y])), ...arc.slice().reverse().map(y => P([edge(y, -1), y]))];
     props.push({id: 'lens', type: 'polyline', points: outline, closed: true, style: {stroke: 'cool', width: 4 * k, fill: 'faint', opacity: 0.9}, layer: 3});
+    // Without the panel a lens's power goes beside it, so a side-by-side picture about the sign of power shows it.
+    if (s.power && s.panel === false) props.push({id: 'lens-power', type: 'text', x: P([0, -aperture])[0], y: round(P([0, -aperture])[1] + 40 * k, 2),
+      text: `P = ${signed(100 / cartesianF(s))} D (f = ${signed(cartesianF(s))} cm)`, size: 28 * k, align: 'middle', weight: 700, style: {fill: 'accent', stroke: 'paper', width: 7 * k}, layer: 6});
   }
   const marks: [string, number][] = plane ? [] : mirror ? [['P', 0], ['F', xF], ['C', xC]]
     : [['O', 0], ['F₁', -f], ['F₂', f], ['2F₁', -2 * f], ['2F₂', 2 * f]];
