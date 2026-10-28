@@ -712,3 +712,17 @@ test("circuit: solved by Ohm's law, as in the book's examples", async () => {
   assert.match(err({volts: 6, items: [{id: 'W', kind: 'wire', material: 'unobtainium'}]}), /material is one of/);
   assert.match(err({volts: 6, items: [{id: 'R', kind: 'resistor', R: 4}], voltmeters: ['Q']}), /no item "Q"/);
 });
+
+test('circuit: a wire close-up counts charge against time (I = Q/t), a key that closes, and current in mA and µA', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const wire = compile({verb: 'circuit', view: 'wire', current: 0.5, seconds_each: 4} as any);
+  assert.deepEqual(wire.errors, []);
+  assert.match((wire.scene!.meta as any).facts[0], /0\.5 A carries 2 C across the cross-section in 4 s/);
+  assert.deepEqual(check(wire.scene!, {every: 3}), [], 'charges stay inside the frame');
+  const closes = compile({verb: 'circuit', cells: 2, items: [{id: 'bulb', kind: 'bulb', R: 10}], key: 'closes', units: true, flow: true} as any).scene!;
+  const plug = closes.props.find(p => p.id === 'key-plug') as any;
+  assert.ok(plug.show[0] > 1, 'the key closes after the start');
+  assert.equal((closes.props.find(p => p.id === 'ammeter-zero') as any).text, 'I = 0 A');
+  assert.equal((closes.props.find(p => p.id === 'ammeter-read0') as any).text, 'I = 300 mA');
+  assert.match(compile({verb: 'circuit', view: 'wire', volts: 6} as any).errors.join(), /leave out items, cells and volts/);
+});
