@@ -469,3 +469,18 @@ test('annotate: a measuring line between two points, labelled at its middle; the
   assert.deepEqual([a.x2, a.y2], anchors.edge_top.map((v: number) => Math.round(v * 100) / 100));
   assert.match(compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: [30], annotate: [{at: 'P', to: 'nowhere'}]} as any).errors.join(), /annotate\[0\]\.to: no point named "nowhere"/);
 });
+
+test('optics: panel false fills the box for a side-by-side compound; media keep their names without numbers', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const pair = compile({compound: true, parts: [
+    {id: 'concave', box: [0, 0, 960, 1080], spec: {verb: 'ray_diagram', title: 'Concave', device: 'concave_mirror', focal_length: 10, objects: ['infinity'], illustrative: true, panel: false}},
+    {id: 'convex', box: [960, 0, 960, 1080], spec: {verb: 'ray_diagram', title: 'Convex', device: 'convex_mirror', focal_length: 10, objects: ['infinity'], illustrative: true, panel: false}}]} as any);
+  assert.deepEqual(pair.errors, []);
+  const alone = compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: [30], panel: false} as any).scene!;
+  assert.ok(!alone.props.some(p => /-line\d|^device$/.test(p.id)), 'no panel lines');
+  assert.ok(Math.max(...alone.props.filter(p => p.type === 'line').map(p => Math.max((p as any).x1, (p as any).x2))) > 0.9 * 1920, 'the drawing spans the width');
+  const r = compile({verb: 'refraction', from: 'air', to: 'glass', angles: [40], illustrative: true, panel: false} as any).scene!;
+  const texts = r.props.filter(p => p.type === 'text').map(p => (p as any).text);
+  assert.ok(texts.includes('air') && texts.includes('glass') && !texts.some(t => /\d/.test(t)));
+  assert.match(compile({verb: 'refraction', from: 'air', to: 'glass', angles: [40], panel: 'no'} as any).errors.join(), /panel is true or false/);
+});

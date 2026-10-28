@@ -44,6 +44,8 @@ export type RaySpec = Common & {
   distances?: boolean;
   /** Seconds each object position is shown (3 to 12, default 6). */
   seconds_each?: number;
+  /** false: no side panel; the drawing fills the frame, the title above it (a part of a side-by-side compound). */
+  panel?: boolean;
 };
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -138,6 +140,7 @@ export function rayDiagramErrors(s: RaySpec): string[] {
   if (s.angles && !plane) e.push('ray_diagram: angles is for a plane mirror (the normal and i = r)');
   if (s.distances && !plane) e.push('ray_diagram: distances is for a plane mirror (object and image equally far from it)');
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('ray_diagram: seconds_each is 3 to 12');
+  if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('ray_diagram: panel is true or false');
   return e;
 }
 
@@ -209,7 +212,8 @@ export function rayDiagram(s: RaySpec): Scene {
   const ys = [h, ...positions.flatMap(p => [isFinite(p.img.m) ? Math.abs(p.img.m * h) : 0, ...p.rays.map(r => Math.abs(r.hit[1]))])];
   // Marked angles need the reflected ray in view for a while above the point of incidence.
   const ymax = (plane && s.angles ? 1.55 : 1.22) * Math.max(...ys);
-  const left = 0.04 * W, right = 0.62 * W, top = 0.13 * H, bottom = 0.93 * H;
+  // Without the panel the drawing takes the whole width under its title (a part of a side-by-side compound).
+  const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.13 * H : (s.title ? 0.2 : 0.08) * H, bottom = 0.93 * H;
   // Heights may be stretched up to 2.5 times, as book figures are, so a small object still reads; straight rays stay
   // straight and still meet at the image. A plane mirror stays to scale: its angles are shown.
   const unit = Math.min((right - left) / (x1 - x0), (bottom - top) / (2 * ymax));
@@ -266,11 +270,12 @@ export function rayDiagram(s: RaySpec): Scene {
   const E = s.seconds_each ?? 6, T0 = 0.8, facts: string[] = [];
   const px = 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
-  if (s.title) {
+  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.09 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  if (s.title && panel) {
     props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw});
     row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k;
   }
-  props.push({id: 'device', type: 'text', x: px, y: row, text: plane ? 'Plane mirror' : `${NAME[dev][0].toUpperCase()}${NAME[dev].slice(1)}, f = ${fmt(f)} cm`,
+  if (panel) props.push({id: 'device', type: 'text', x: px, y: row, text: plane ? 'Plane mirror' : `${NAME[dev][0].toUpperCase()}${NAME[dev].slice(1)}, f = ${fmt(f)} cm`,
     size: 30 * k, style: {fill: 'muted'}, width: pw});
   row += 1.6 * 30 * k;
   const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
@@ -355,7 +360,7 @@ export function rayDiagram(s: RaySpec): Scene {
     }
     if (s.power && !mirror) lines.push([`P = 1/f = 1/(${signed(fc / 100, 3)} m) = ${signed(100 / fc)} D`, 'accent', s0 + 4.8]);
     let y = row;
-    lines.forEach(([text, fill, t], j) => {
+    if (panel) lines.forEach(([text, fill, t], j) => {
       props.push({id: `${tag}-line${j}`, type: 'text', x: px, y, text, size: 30 * k, width: pw, show: [t, show[1]], fade: 0.3, style: {fill}, weight: j < 3 ? 700 : 400});
       y += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 10 * k;
     });
@@ -401,6 +406,8 @@ export type RefractionSpec = Common & {
   /** Show the speed of light in each medium, v = c/n. */
   speeds?: boolean;
   seconds_each?: number;
+  /** false: no side panel; the drawing fills the frame, the title above it. */
+  panel?: boolean;
 };
 
 const C_LIGHT = 3e8;
@@ -418,6 +425,7 @@ export function refractionErrors(s: RefractionSpec): string[] {
     e.push('refraction: angles is a list of 1 to 5 angles of incidence, 0 to 85 degrees');
   if (s.slab !== undefined && !(isNum(s.slab) && s.slab >= 0.5 && s.slab <= 50)) e.push('refraction: slab is its thickness in cm, 0.5 to 50');
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('refraction: seconds_each is 3 to 12');
+  if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('refraction: panel is true or false');
   if (e.length) return e;
   if (s.slab !== undefined && indexOf(s.to) < indexOf(s.from)) e.push('refraction: a slab is of the optically denser medium: make `to` the one with the larger refractive index');
   return e;
@@ -426,26 +434,30 @@ export function refractionErrors(s: RefractionSpec): string[] {
 export function refraction(s: RefractionSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const n1 = indexOf(s.from), n2v = indexOf(s.to), slab = s.slab;
-  const left = 0.04 * W, right = 0.62 * W, top = 0.12 * H, bottom = 0.94 * H;
+  const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.18 : 0.06) * H, bottom = 0.94 * H;
   const y1 = slab ? 0.4 * H : 0.5 * H, thick = slab ? 0.26 * H : 0, y2 = y1 + thick;
   const hx = 0.36 * W;                                          // where the ray meets the (first) surface
   const name1 = mediumName(s.from), name2 = mediumName(s.to), denser = n2v > n1;
   const props: Prop[] = [
     {id: 'medium1', type: 'rect', x: left, y: top, w: right - left, h: y1 - top, style: {fill: 'paper', stroke: 'faint', width: 2 * k}},
     {id: 'medium2', type: 'rect', x: left, y: y1, w: right - left, h: (slab ? y2 : bottom) - y1, style: {fill: 'cool', opacity: 0.16, stroke: 'cool', width: 3 * k}},
-    {id: 'name1', type: 'text', x: left + 18 * k, y: top + 40 * k, text: `${name1} (n = ${fmt(n1, 4)})`, size: 28 * k, style: {fill: 'muted'}},
-    {id: 'name2', type: 'text', x: left + 18 * k, y: y1 + 42 * k, text: `${name2} (n = ${fmt(n2v, 4)})`, size: 28 * k, style: {fill: 'cool'}},
+    // The media's names and their indices are separate texts: a picture without numbers still says which is which.
+    {id: 'name1', type: 'text', x: left + 18 * k, y: top + 40 * k, text: name1, size: 28 * k, weight: 700, style: {fill: 'muted'}},
+    {id: 'name1-n', type: 'text', x: left + 18 * k, y: top + 76 * k, text: `n = ${fmt(n1, 4)}`, size: 26 * k, style: {fill: 'muted'}},
+    {id: 'name2', type: 'text', x: left + 18 * k, y: y1 + 42 * k, text: name2, size: 28 * k, weight: 700, style: {fill: 'cool'}},
+    {id: 'name2-n', type: 'text', x: left + 18 * k, y: y1 + 78 * k, text: `n = ${fmt(n2v, 4)}`, size: 26 * k, style: {fill: 'cool'}},
   ];
   if (slab) props.push({id: 'name3', type: 'text', x: left + 18 * k, y: y2 + 42 * k, text: name1, size: 28 * k, style: {fill: 'muted'}},
     {id: 'thickness', type: 'text', x: right - 18 * k, y: y1 + 42 * k, text: `${fmt(slab)} cm thick`, size: 26 * k, align: 'end', style: {fill: 'muted'}});
   const E = s.seconds_each ?? 6, T0 = 0.8, facts: string[] = [];
   const px = 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
-  if (s.title) {
+  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.08 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  if (s.title && panel) {
     props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw});
     row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k;
   }
-  props.push({id: 'rule', type: 'text', x: px, y: row, width: pw, size: 30 * k, style: {fill: 'muted'},
+  if (panel) props.push({id: 'rule', type: 'text', x: px, y: row, width: pw, size: 30 * k, style: {fill: 'muted'},
     text: `From ${name1} into ${name2}: ${denser ? 'into a denser medium, the ray bends towards the normal' : n2v < n1 ? 'into a rarer medium, the ray bends away from the normal' : 'the same index: no bending'}`});
   row += wrapText(`From ${name1} into ${name2}: into a denser medium, the ray bends towards the normal`, 30 * k, pw).length * 1.3 * 30 * k + 20 * k;
   const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
@@ -504,7 +516,7 @@ export function refraction(s: RefractionSpec): Scene {
       }
     }
     let y = row;
-    lines.forEach(([text, fill], j) => {
+    if (panel) lines.forEach(([text, fill], j) => {
       props.push({id: `${tag}-line${j}`, type: 'text', x: px, y, text, size: 30 * k, width: pw, weight: j ? 400 : 700, show: [s0 + 1.8 + 0.4 * j, show[1]], fade: 0.3, style: {fill}});
       y += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 10 * k;
     });
@@ -514,7 +526,7 @@ export function refraction(s: RefractionSpec): Scene {
   const tail: string[] = [`n of ${name2} relative to ${name1} = ${fmt(n2v, 4)} ÷ ${fmt(n1, 4)} = ${fmt(n21, 2)}`];
   if (s.speeds) tail.push(`Speed of light: ${fmt(C_LIGHT / n1 / 1e8, 2)} × 10⁸ m/s in ${name1}, ${fmt(C_LIGHT / n2v / 1e8, 2)} × 10⁸ m/s in ${name2}`);
   let y = 0.72 * H;
-  tail.forEach((text, j) => {
+  if (panel) tail.forEach((text, j) => {
     props.push({id: `tail${j}`, type: 'text', x: px, y, text, size: 30 * k, width: pw, weight: 700, show: [end - E + 4.4 + 0.4 * j, 1e9], fade: 0.3, style: {fill: 'cool'}});
     y += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 12 * k;
   });
