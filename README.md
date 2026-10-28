@@ -53,6 +53,9 @@ A verb turns a short spec into a full scene and checks the spec first.
   after another (or a parallel beam from infinity): the image comes from the mirror or lens formula (New Cartesian
   signs), the principal rays are drawn to meet exactly at it (dashed behind for a virtual image), and the image is
   described as the book's tables do; u, v, f, m with signs, the formula with numbers, a lens's power in dioptres.
+- `prism` (trial): light through a triangular prism, traced colour by colour with Cauchy refractive indices: one ray with
+  i, r, e, A and the deviation D; white light dispersed into VIBGYOR (spread drawn wider, and said so); Newton's second
+  prism recombining it; a raindrop with one internal reflection (red at 42.4°, violet at 40.7°).
 - `refraction` (trial): a ray entering another medium, or crossing a glass slab and coming out, bent by Snell's law with
   the book's refractive indices; i and r from the normal, sin i ÷ sin r for several angles, the speed of light in each
   medium, the slab's lateral shift, and total internal reflection past the critical angle.

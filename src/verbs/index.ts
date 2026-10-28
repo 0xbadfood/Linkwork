@@ -10,6 +10,7 @@ import {motionErrors, motionOnLine, scaleCompare, scaleErrors, type MotionSpec, 
 import {stage, stageErrors, type StageSpec} from './stage.ts';
 import {pathErrors, pathLength, type PathSpec} from './path.ts';
 import {addMarks, markable, marksErrors, type Mark} from './marks.ts';
+import {prism, prismErrors, type PrismSpec} from './prism.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -17,7 +18,7 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec;
+  | RaySpec | RefractionSpec | PrismSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -57,6 +58,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'a plane, concave or convex mirror or a convex or concave lens: an object at one distance after another (or a parallel beam), principal rays drawn to the image found by the mirror or lens formula, and the image described as the book does (where, real or virtual, inverted or erect, size); also each ray rule on its own (one ray, no image), a plane mirror\'s i = r and equal distances, a wide beam traced exactly off the sphere (spherical aberration: large against small aperture), and two mirrors or lenses side by side'} as Verb<RaySpec>,
   refraction: {errors: refractionErrors, compile: refraction,
     about: "a ray entering another medium (or crossing a glass slab and coming out): bent by Snell's law with the book's refractive indices, i and r from the normal, sin i ÷ sin r for each angle, the speed of light in each medium, the lateral shift through a slab, total internal reflection; and apparent depth: a coin, a pencil tip or a tank's bottom under water seen from above looks raised (its rays bend away from the normal and, traced back, meet nearer the surface)"} as Verb<RefractionSpec>,
+  prism: {errors: prismErrors, compile: prism,
+    about: 'light through a triangular glass prism, traced colour by colour: one ray with the angles of incidence, refraction and emergence, the prism angle A and the deviation D; white light split into its spectrum (VIBGYOR, dispersion); a second prism upside down joining the colours again (Newton); a raindrop refracting, reflecting once inside and refracting sunlight into the colours of a rainbow'} as Verb<PrismSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

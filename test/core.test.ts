@@ -412,7 +412,7 @@ test('refraction: Snell\'s law with the book\'s indices, the slab\'s shift, and 
   const tir = compile({verb: 'refraction', from: 'glass', to: 'air', angles: [50]} as any).scene!;
   assert.ok((tir.meta as any).facts.some((f: string) => f.includes('totally reflected') && f.includes('41.8°')));
   const errs = (s: object) => compile({verb: 'refraction', ...s} as any).errors.join(' | ');
-  assert.match(errs({from: 'air', to: 'unobtainium', angles: [30]}), /to is a refractive index or one of/);
+  assert.match(errs({from: 'air', to: 'unobtainium', angles: [30]}), /to "unobtainium" is a refractive index or one of/);
   assert.match(errs({from: 'air', to: 'glass', angles: [95]}), /0 to 85 degrees/);
   assert.match(errs({from: 'glass', to: 'air', angles: [30], slab: 4}), /slab is of the optically denser medium/);
 });
@@ -561,4 +561,41 @@ test('ray_diagram exact: one scale for every aperture, so a small one looks smal
   const wide = top(0.6), small = top(0.25);
   const half = (a: any) => a.edge_bottom[1] - a.edge_top[1];
   assert.ok(Math.abs(half(small) / half(wide) - 0.25 / 0.6) < 0.02, `${half(small)} vs ${half(wide)}`);
+});
+
+test('prism: a ray through a prism, dispersion, Newton\'s two prisms and a raindrop, each traced', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const one = compile({verb: 'prism', angle: 60, incidence: 40} as any);
+  assert.deepEqual(one.errors, []);
+  // crown glass at 589 nm: n = 1.5046 + 0.0042/0.589² = 1.5167; r1 = 25.1°, r2 = 34.9°, e = 60.3°, D = 40.3°.
+  assert.match((one.scene!.meta as any).facts[0], /refracted at 25\.1°, leaves at 60\.3° and is deviated by D = i \+ e − A = 40\.3°/);
+  const white = compile({verb: 'prism', light: 'white'} as any).scene!;
+  const a = (white.meta as any).anchors;
+  assert.ok(a.violet[1] > a.red[1], 'violet deviated more: lower on the screen');
+  assert.ok(white.props.some(p => p.id === 'spread-note'), 'says the spread is drawn wider');
+  const two = compile({verb: 'prism', setup: 'two_prisms'} as any);
+  assert.deepEqual(two.errors, []);
+  const drop = compile({verb: 'prism', setup: 'raindrop', light: 'white'} as any).scene!;
+  const f = (drop.meta as any).facts.join(' ');
+  const angle = (name: string) => Number(f.match(new RegExp(`${name} light leaves at about ([\\d.]+)°|and ${name} at about ([\\d.]+)°`))?.slice(1).find(Boolean));
+  assert.ok(Math.abs(angle('red') - 42.4) < 0.3 && Math.abs(angle('violet') - 40.7) < 0.4, f);
+  const err = (x: object) => compile({verb: 'prism', ...x} as any).errors.join(' | ');
+  assert.match(err({incidence: 10}), /totally reflected inside at the second face/);
+  assert.match(err({setup: 'raindrop', angle: 60}), /a raindrop has no angle/);
+  assert.match(err({setup: 'two_prisms', light: 'ray'}), /two_prisms shows white light/);
+});
+
+test('refraction: wavefronts, several media compared, and labels that fit a half-frame', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const w = compile({verb: 'refraction', from: 'air', to: 'water', angles: [40], wavefronts: true} as any).scene!;
+  assert.ok(w.props.filter(p => p.id.startsWith('front')).length >= 6);
+  assert.ok((w.meta as any).facts.some((t: string) => /wavefronts are 0\.75 times as far apart in water/.test(t)));
+  const m = compile({verb: 'refraction', from: 'air', to: ['water', 'kerosene', 'turpentine', 'glass', 'plastic'], angles: [50]} as any);
+  assert.deepEqual(m.errors, []);
+  const facts = (m.scene!.meta as any).facts.join(' ');
+  assert.match(facts, /turpentine \(n = 1\.47\)/); assert.match(facts, /plastic \(n = 1\.49, a typical value: the book gives none\)/);
+  const half = compile({verb: 'refraction', from: 'water', to: 'air', object_depth: 10, object: 'tank bottom', panel: false, width: 960} as any).scene!;
+  const label = half.props.find(p => p.id === 'image-label') as any;
+  assert.ok(label.align === 'end' ? label.x - label.text.length * 28 * 0.58 >= 0 : label.x + label.text.length * 28 * 0.58 <= 960, 'inside the half-frame');
+  assert.match(compile({verb: 'refraction', from: 'air', to: ['water'], angles: [40]} as any).errors.join(), /compares 2 to 6 media/);
 });

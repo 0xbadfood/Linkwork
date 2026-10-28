@@ -444,11 +444,19 @@ function head(id: string, a: Vec, b: Vec, show: [number, number], k: number): Pr
 export const MEDIA: Record<string, number> = {air: 1.0003, ice: 1.31, water: 1.33, alcohol: 1.36, kerosene: 1.44,
   'fused quartz': 1.46, 'turpentine oil': 1.47, benzene: 1.5, 'crown glass': 1.52, glass: 1.5, 'canada balsam': 1.53,
   'rock salt': 1.54, 'carbon disulphide': 1.63, 'dense flint glass': 1.65, ruby: 1.71, sapphire: 1.77, diamond: 2.42};
+/** Other names a narration uses: the book's turpentine is its turpentine oil; plastic is not in the book's table, so
+ * it takes a typical value (acrylic) and its facts say so. */
+const ALIASES: Record<string, string> = {turpentine: 'turpentine oil', vacuum: 'air'};
+const TYPICAL: Record<string, number> = {plastic: 1.49, perspex: 1.49, acrylic: 1.49};
 
 export type RefractionSpec = Common & {
   verb: 'refraction';
   /** The medium the light starts in and the one it enters: a name from the book's table or a refractive index. */
-  from: string | number; to: string | number;
+  from: string | number;
+  /** One medium, or 2 to 6 to compare: the same ray entering each, every refracted ray drawn from one point. */
+  to: string | number | (string | number)[];
+  /** Successive wavefronts across a beam: closer together in the slower medium, turning at the surface. */
+  wavefronts?: boolean;
   /** Angles of incidence in degrees (0 to 85), shown one after another: sin i ÷ sin r is listed for each. */
   angles?: number[];
   /** Apparent depth: a point object (a coin) this many cm below the surface, in `from` (the denser medium, water),
@@ -465,16 +473,23 @@ export type RefractionSpec = Common & {
 };
 
 const C_LIGHT = 3e8;
-const indexOf = (m: string | number) => (typeof m === 'number' ? m : MEDIA[m.toLowerCase().trim()]);
-const mediumName = (m: string | number) => (typeof m === 'number' ? `n = ${fmt(m, 4)}` : m.toLowerCase().trim());
+const canon = (m: string) => { const k = m.toLowerCase().trim(); return ALIASES[k] ?? k; };
+const known = (m: unknown) => typeof m === 'string' && (canon(m) in MEDIA || canon(m) in TYPICAL);
+const indexOf = (m: string | number | (string | number)[]): number => (Array.isArray(m) ? indexOf(m[0]) : typeof m === 'number' ? m : MEDIA[canon(m)] ?? TYPICAL[canon(m)]);
+const mediumName = (m: string | number | (string | number)[]): string => (Array.isArray(m) ? mediumName(m[0]) : typeof m === 'number' ? `n = ${fmt(m, 4)}` : m.toLowerCase().trim());
 
 export function refractionErrors(s: RefractionSpec): string[] {
   const e: string[] = [];
-  for (const key of ['from', 'to'] as const) {
-    const m = s[key];
+  const media = Array.isArray(s.to) ? s.to : [s.to];
+  if (Array.isArray(s.to) && (s.to.length < 2 || s.to.length > 6)) e.push('refraction: to as a list compares 2 to 6 media');
+  for (const [key, m] of [['from', s.from], ...media.map(x => ['to', x])] as [string, unknown][]) {
     if (typeof m === 'number') { if (!(isNum(m) && m >= 1 && m <= 3)) e.push(`refraction: ${key} as a refractive index is 1 to 3`); }
-    else if (typeof m !== 'string' || !(m.toLowerCase().trim() in MEDIA)) e.push(`refraction: ${key} is a refractive index or one of ${Object.keys(MEDIA).join(', ')}`);
+    else if (!known(m)) e.push(`refraction: ${key} ${JSON.stringify(m)} is a refractive index or one of ${[...Object.keys(MEDIA), ...Object.keys(ALIASES), ...Object.keys(TYPICAL)].join(', ')}`);
   }
+  if (Array.isArray(s.to) && (s.slab !== undefined || s.object_depth !== undefined || s.wavefronts)) e.push('refraction: comparing media (to as a list) goes with angles only: one ray, no slab, depth or wavefronts');
+  if (Array.isArray(s.to) && Array.isArray(s.angles) && s.angles.length !== 1) e.push('refraction: comparing media takes one angle of incidence');
+  if (s.wavefronts !== undefined && typeof s.wavefronts !== 'boolean') e.push('refraction: wavefronts is true or false');
+  if (s.wavefronts && (s.slab !== undefined || s.object_depth !== undefined)) e.push('refraction: wavefronts go with a single surface (no slab or object_depth)');
   if (s.object_depth !== undefined) {
     if (!(isNum(s.object_depth) && s.object_depth > 0 && s.object_depth <= 500)) e.push('refraction: object_depth is the depth below the surface in cm (up to 500)');
     if (s.slab !== undefined) e.push('refraction: object_depth and slab do not go together');
@@ -496,6 +511,7 @@ export function refractionErrors(s: RefractionSpec): string[] {
 
 export function refraction(s: RefractionSpec): Scene {
   if (s.object_depth !== undefined) return apparentDepth(s);
+  if (Array.isArray(s.to)) return compareMedia(s);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const n1 = indexOf(s.from), n2v = indexOf(s.to), slab = s.slab;
   const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.23 : 0.13) * H, bottom = 0.94 * H;
@@ -530,6 +546,32 @@ export function refraction(s: RefractionSpec): Scene {
     {id: 'normal-label', type: 'text', x: hx + 12 * k, y: y1 - normalLen + 6 * k, text: 'normal', size: 24 * k, style: {fill: 'muted'}, layer: 1});
   const anchors: Record<string, Vec> = {incidence: [hx, y1], normal: [hx, y1 - normalLen]};
   const angles = s.angles!;
+  if (s.wavefronts) {
+    // Wavefronts across a beam (the first angle's): a front is all the points light reaches at one moment. In the
+    // first medium the fronts are square to the incident ray; past the surface each part travels on at the second
+    // medium's speed (n1/n2 as far in the same time), square to the refracted ray, so the fronts crowd together and
+    // turn: the side that enters first slows first.
+    const ai = angles[0], sr = n1 * Math.sin(rad(ai)) / n2v;
+    if (sr < 1) {
+      const d1: Vec = [Math.sin(rad(ai)), Math.cos(rad(ai))], d2: Vec = [n1 * Math.sin(rad(ai)) / n2v, Math.sqrt(1 - sr * sr)];
+      const across: Vec = [d1[1], -d1[0]], halfWidth = 0.09 * W * k / k, L = 0.75 * (y1 - top);
+      const origin: Vec = [hx - d1[0] * L / d1[1], y1 - L];                     // where the beam's middle starts
+      const lowest = slab ? y2 : bottom - 8 * k, gap = 46 * k, fronts = 14;
+      const edge = (u: number, phase: number): Vec | null => {
+        const q: Vec = [origin[0] + across[0] * u, origin[1] + across[1] * u];
+        const tB = (y1 - q[1]) / d1[1];                                          // where this part of the beam meets the surface
+        const p: Vec = phase <= tB ? [q[0] + d1[0] * phase, q[1] + d1[1] * phase]
+          : [q[0] + d1[0] * tB + d2[0] * (phase - tB) * n1 / n2v, y1 + d2[1] * (phase - tB) * n1 / n2v];
+        return p[1] < top + 4 * k || p[1] > lowest || p[0] < left || p[0] > right ? null : p;
+      };
+      for (let j = 1; j <= fronts; j++) {
+        const phase = j * gap, pts: Vec[] = [];
+        for (let q = 0; q <= 24; q++) { const p = edge(-halfWidth + (2 * halfWidth * q) / 24, phase); if (p) pts.push([round(p[0], 2), round(p[1], 2)]); }
+        if (pts.length > 2) props.push({id: `front${j}`, type: 'polyline', points: pts, show: [0.6 + 0.35 * j, 1e9], fade: 0.25, style: {stroke: 'cool', width: 3.5 * k, opacity: 0.85}, layer: 2});
+      }
+      facts.push(`the wavefronts are ${fmt(n1 / n2v, 2)} times as far apart in ${name2} as in ${name1}: light travels slower there, so the part of each front that enters first slows first and the front turns`);
+    }
+  }
   angles.forEach((ai, i) => {
     const s0 = T0 + i * E, last = i === angles.length - 1, show: [number, number] = [s0, last ? 1e9 : s0 + E], tag = `a${i}`;
     const si = Math.sin(rad(ai)), sr = n1 * si / n2v, tir = sr > 1;
@@ -618,7 +660,7 @@ function apparentDepth(s: RefractionSpec): Scene {
     {id: 'name2', type: 'text', x: left + 18 * k, y: surface + 42 * k, text: inName, size: 28 * k, weight: 700, style: {fill: 'cool'}},
     {id: 'name2-n', type: 'text', x: left + 18 * k, y: surface + 78 * k, text: `n = ${fmt(nIn, 4)}`, size: 26 * k, style: {fill: 'cool'}},
     {id: 'object', type: 'circle', x: obj[0], y: round(obj[1], 2), r: 14 * k, style: {fill: 'accent'}, layer: 5},
-    {id: 'object-label', type: 'text', x: obj[0] + 26 * k, y: round(obj[1], 2), text: name, size: 28 * k, weight: 700, style: {fill: 'accent', stroke: 'paper', width: 8 * k}, layer: 6},
+    {id: 'object-label', ...fitLabel(name, obj[0], right, k, left), y: round(obj[1], 2), size: 28 * k, weight: 700, style: {fill: 'accent', stroke: 'paper', width: 8 * k}, layer: 6},
   ];
   if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
   const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
@@ -637,7 +679,8 @@ function apparentDepth(s: RefractionSpec): Scene {
   }));
   const seen = surface + apparent * scale;
   props.push({id: 'image', type: 'circle', x: obj[0], y: round(seen, 2), r: 12 * k, show: [4.4, 1e9], fade: 0.3, style: {fill: 'cool', opacity: 0.7}, layer: 5},
-    {id: 'image-label', type: 'text', x: obj[0] + 26 * k, y: round(seen, 2), text: `the ${name} seems to be here`, size: 28 * k, weight: 700, show: [4.6, 1e9], fade: 0.3, style: {fill: 'cool', stroke: 'paper', width: 8 * k}, layer: 6});
+    // Read leftwards when it would run past the drawing's right edge (a half of a side-by-side compound).
+    {id: 'image-label', ...fitLabel(`the ${name} seems to be here`, obj[0], right, k, left, 'seems to be here'), y: round(seen, 2), size: 28 * k, weight: 700, show: [4.6, 1e9], fade: 0.3, style: {fill: 'cool', stroke: 'paper', width: 8 * k}, layer: 6});
   if (panel) {
     const px = 0.66 * W, pw = W - px - 40 * k;
     let row = 0.14 * H;
@@ -656,4 +699,63 @@ function apparentDepth(s: RefractionSpec): Scene {
     `rays leaving the ${inName} bend away from the normal; traced back they meet between ${fmt(Math.min(...meets), 1)} and ${fmt(Math.max(...meets), 1)} cm below the surface`];
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: 7.5, theme: s.theme ?? 'dark', props, actors: [],
     meta: {verb: 'refraction', facts, anchors, apparent_depth: round(apparent, 6)}};
+}
+
+/** A label beside a point: to its right, or to its left when it would run past `right`. */
+function fitLabel(text: string, x: number, right: number, k: number, left = 0, short?: string): {type: 'text'; x: number; text: string; align: 'start' | 'end'} {
+  const width = (t: string) => t.length * 28 * k * 0.58;
+  for (const t of [text, short ?? text]) {
+    if (x + 26 * k + width(t) <= right) return {type: 'text', x: x + 26 * k, text: t, align: 'start'};
+    if (x - 26 * k - width(t) >= left) return {type: 'text', x: x - 26 * k, text: t, align: 'end'};
+  }
+  return {type: 'text', x: x + 26 * k, text: short ?? text, align: 'start'};
+}
+
+/** The same ray entering several media from one point: each refracted ray drawn and named, so how much it bends is
+ * seen to depend on the medium (the larger the refractive index, the nearer the normal). */
+const asin1 = (v: number) => deg(Math.asin(Math.min(1, v)));
+
+function compareMedia(s: RefractionSpec): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
+  const media = s.to as (string | number)[], n1 = indexOf(s.from), ai = (s.angles ?? [45])[0];
+  const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.23 : 0.13) * H, bottom = 0.94 * H;
+  const y1 = (top + bottom) / 2, hx = left + 0.4 * (right - left), L = Math.min(y1 - top - 10 * k, (hx - left - 10 * k) / Math.max(Math.sin(rad(ai)), 0.2) * Math.cos(rad(ai)));
+  const tones = ['accent', 'good', 'cool', 'bad', 'ink', 'muted'];
+  const props: Prop[] = [
+    {id: 'medium1', type: 'rect', x: left, y: top, w: right - left, h: y1 - top, style: {fill: 'paper', stroke: 'faint', width: 2 * k}},
+    {id: 'medium2', type: 'rect', x: left, y: y1, w: right - left, h: bottom - y1, style: {fill: 'cool', opacity: 0.12, stroke: 'cool', width: 3 * k}},
+    {id: 'name1', type: 'text', x: left + 18 * k, y: top + 40 * k, text: mediumName(s.from), size: 28 * k, weight: 700, style: {fill: 'muted'}},
+    {id: 'name2', type: 'text', x: left + 18 * k, y: bottom - 24 * k, text: 'each medium in turn', size: 26 * k, style: {fill: 'cool'}},
+    {id: 'normal', type: 'line', x1: hx, y1: top + 10 * k, x2: hx, y2: bottom - 10 * k, style: {stroke: 'muted', width: 2.5 * k, dash: [10 * k, 8 * k]}, layer: 1},
+  ];
+  const d1: Vec = [Math.sin(rad(ai)), Math.cos(rad(ai))], start: Vec = [hx - d1[0] * L / d1[1], y1 - L];
+  props.push({id: 'incident', type: 'line', x1: round(start[0], 2), y1: round(start[1], 2), x2: hx, y2: y1, draw: 0, keys: {draw: [[0.4, 0], [1.4, 1, 'linear']]}, style: {stroke: 'ink', width: 5 * k}, layer: 3},
+    head('incident-head', start, [hx, y1], [1.4, 1e9], k));
+  const facts: string[] = [], rows: [string, string][] = [];
+  // The rays end close together (their angles differ by a few degrees): their names stand in a column beside them,
+  // each in its ray's colour, like a key.
+  const rMax = Math.max(...media.map(m => asin1(n1 * Math.sin(rad(ai)) / indexOf(m))));
+  const columnX = Math.min(hx + Math.tan(rad(rMax)) * (bottom - y1 - 50 * k) + 50 * k, right - 200 * k);
+  media.forEach((m, j) => {
+    const n2 = indexOf(m), sr = n1 * Math.sin(rad(ai)) / n2, name = mediumName(m), t = 1.6 + 0.8 * j;
+    if (sr >= 1) { rows.push([`${name}: totally reflected`, tones[j % tones.length]]); return; }
+    const r = deg(Math.asin(sr)), d2: Vec = [Math.sin(rad(r)), Math.cos(rad(r))], len = (bottom - y1 - 50 * k) / d2[1];
+    const end: Vec = [hx + d2[0] * len, y1 + d2[1] * len];
+    props.push({id: `ray-${j}`, type: 'line', x1: hx, y1: y1, x2: round(end[0], 2), y2: round(end[1], 2), draw: 0, keys: {draw: [[t, 0], [t + 0.8, 1, 'linear']]}, style: {stroke: tones[j % tones.length], width: 4.5 * k}, layer: 3},
+      {id: `ray-${j}-name`, type: 'text', x: round(columnX, 2), y: round(y1 + 0.3 * (bottom - y1) + 36 * k * j, 2), text: name, size: 26 * k, weight: 700, show: [t + 0.8, 1e9], fade: 0.3, style: {fill: tones[j % tones.length], stroke: 'paper', width: 7 * k}, layer: 6});
+    rows.push([`${name}: n = ${fmt(n2, 4)}, r = ${fmt(r, 1)}°`, tones[j % tones.length]]);
+    facts.push(`entering ${name} (n = ${fmt(n2, 4)}${canon(String(m)) in TYPICAL ? ', a typical value: the book gives none' : ''}) at ${fmt(ai, 1)}° from ${mediumName(s.from)}, the ray is refracted at ${fmt(r, 1)}°`);
+  });
+  facts.push('the larger the refractive index of the medium, the more the ray bends towards the normal');
+  if (panel) {
+    const px = 0.66 * W, pw = W - px - 40 * k;
+    let row = 0.14 * H;
+    if (s.title) { props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw}); row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k; }
+    props.push({id: 'rule', type: 'text', x: px, y: row, text: `The same ray from ${mediumName(s.from)} at i = ${fmt(ai, 1)}°`, size: 30 * k, weight: 700, width: pw, style: {fill: 'muted'}});
+    row += 1.6 * 30 * k;
+    rows.forEach(([text, fill], j) => { props.push({id: `row${j}`, type: 'text', x: px, y: row, text, size: 30 * k, width: pw, show: [2.4 + 0.8 * j, 1e9], fade: 0.3, style: {fill}}); row += 1.5 * 30 * k; });
+    props.push({id: 'tail', type: 'text', x: px, y: row + 20 * k, text: 'The larger n, the more it bends towards the normal', size: 30 * k, weight: 700, width: pw, show: [2.4 + 0.8 * rows.length, 1e9], fade: 0.3, style: {fill: 'cool'}});
+  } else if (s.title) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: 3.5 + 0.8 * media.length, theme: s.theme ?? 'dark', props, actors: [],
+    meta: {verb: 'refraction', facts, anchors: {incidence: [hx, y1]}}};
 }
