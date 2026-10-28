@@ -442,7 +442,7 @@ test('annotate: labels and points at a verb\'s named points or in its own units,
     annotate: [{text: 'start', at: [0, 2], point: true}]} as any);
   assert.deepEqual(g.errors, []);
   const err = (s: object) => compile(s as any).errors.join(' | ');
-  assert.match(err({...base, annotate: [{text: 'x', at: 'Q'}]}), /no point named "Q"; named points: P, F, C, object, image, incidence/);
+  assert.match(err({...base, annotate: [{text: 'x', at: 'Q'}]}), /annotate\[0\]\.at: no point named "Q"; named points: P, F, C, edge_top, edge_bottom, object, image, incidence/);
   assert.match(err({...base, annotate: [{at: 'C'}]}), /give text, point: true, or both/);
   assert.match(err({...base, annotate: [{text: 'x', at: 'C', colour: 'pink'}]}), /colour is one of/);
   assert.match(err({verb: 'pendulum', length: 1, annotate: [{text: 'x', at: [1, 1]}]}), /takes named points only/);
@@ -455,4 +455,17 @@ test('annotate: labels and points at a verb\'s named points or in its own units,
   assert.match(all.ray_diagram.fields.annotate, /lenses: O, F1, F2, 2F1, 2F2/);
   assert.match(all.graph.fields.annotate, /\[x, y\] in the drawing's own x and y/);
   assert.equal(all.pendulum.fields.annotate, undefined, 'a verb with nowhere to put a mark offers none');
+});
+
+test('annotate: a measuring line between two points, labelled at its middle; the planner\'s own words survive illustrative', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {scene, errors} = compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: ['infinity'], illustrative: true,
+    annotate: [{text: 'R = 2f', at: [-20, -3], to: [0, -3]}, {text: 'aperture', at: 'edge_top', to: 'edge_bottom'}]} as any);
+  assert.deepEqual(errors, []);
+  const ids = scene!.props.map(p => p.id);
+  for (const id of ['note0-a', 'note0-b', 'note0-bar-a', 'note0-bar-b', 'note0-label', 'note1-label']) assert.ok(ids.includes(id), id);
+  assert.equal((scene!.props.find(p => p.id === 'note0-label') as any).text, 'R = 2f', 'kept although it holds a digit');
+  const anchors = (scene!.meta as any).anchors, a = scene!.props.find(p => p.id === 'note1-a') as any;
+  assert.deepEqual([a.x2, a.y2], anchors.edge_top.map((v: number) => Math.round(v * 100) / 100));
+  assert.match(compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: [30], annotate: [{at: 'P', to: 'nowhere'}]} as any).errors.join(), /annotate\[0\]\.to: no point named "nowhere"/);
 });

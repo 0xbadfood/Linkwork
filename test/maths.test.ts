@@ -146,3 +146,19 @@ test('Riemann strips alternate two colours, so each piece under the curve reads 
   const shown = frame(c.scene!, (rects.show as number[])[0] + 0.5).props.find(p => p.id === 'rects0') as unknown as {items: {style: {fill: string}}[]};
   assert.deepEqual(shown.items.map(r => r.style.fill), ['cool', 'good', 'cool', 'good']);
 });
+
+test('cards: every example and shortest compiles; a long example names the verb\'s shortest use', async () => {
+  const {cards, compile} = await import('../src/verbs/index.ts');
+  // A film's beat sheet judges whether a verb fits a short beat from its card: a long example with no shortest kept
+  // ray_diagram out of every short beat (Class 10 Light C2, 2026-10-28).
+  for (const [name, card] of Object.entries(cards(['trusted', 'trial', 'candidate']))) {
+    const ex = compile(card.example as any);
+    assert.deepEqual(ex.errors, [], `${name} example`);
+    if (card.shortest) {
+      const sh = compile(card.shortest as any);
+      assert.deepEqual(sh.errors, [], `${name} shortest`);
+      assert.ok(sh.scene!.duration <= ex.scene!.duration, `${name}: shortest is no longer than the example`);
+      assert.ok(sh.scene!.duration <= 15, `${name}: shortest runs ${sh.scene!.duration} s`);
+    } else assert.ok(ex.scene!.duration <= 15, `${name}: its example runs ${ex.scene!.duration.toFixed(1)} s; give the card a shortest spec`);
+  }
+});

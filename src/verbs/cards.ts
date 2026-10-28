@@ -19,6 +19,10 @@ export type Card = {
   fields: Record<string, string>;
   /** A spec that compiles and passes every check. */
   example: Record<string, unknown>;
+  /** The verb's shortest ordinary use, when the example runs long (over 15 s) or shows several steps: a film's beat
+   * sheet judges whether the verb can fit a short beat by this, not by the example (2026-10-28: ray_diagram's
+   * four-position example read as 25 s and kept it out of every short beat until the plan ran out of tries). */
+  shortest?: Record<string, unknown>;
   /** candidate → trial (studios only) → trusted (anywhere). */
   status: 'candidate' | 'trial' | 'trusted';
   /** The named points a mark (annotate) can sit at, when they depend on the spec; else read from its example. */
@@ -139,6 +143,7 @@ export const CARDS: Record<string, Card> = {
     not_when: 'integration techniques, or areas between two curves (not yet)',
     fields: {expr: 'f(x)', from: 'lower limit', to: 'upper limit', ...window, riemann: 'optional rectangle counts, e.g. [4, 8, 16, 32]', rule: 'left | right | mid'},
     example: {verb: 'area_under', title: 'Area under y = x²', expr: 'x^2', from: 0, to: 2, x: [-0.5, 2.5], y: [-0.5, 5], riemann: [4, 8, 16, 32], rule: 'mid'},
+    shortest: {verb: 'area_under', expr: 'x^2', from: 0, to: 2, x: [-0.5, 2.5], y: [-0.5, 5]},
     status: 'trusted',
   },
   vector_add: {
@@ -168,6 +173,8 @@ export const CARDS: Record<string, Card> = {
     example: {verb: 'graph', title: 'Distance is the area under v–t', x: {name: 't', unit: 's', range: [0, 6]}, y: {name: 'v', unit: 'm/s', range: [0, 22], step: 4},
       series: [{label: 'uniform acceleration', expr: '2 + 3t'}], trace: {series: 0, from: 0, to: 5},
       shade: {series: 0, from: 0, to: 5, label: 'distance travelled', unit: 'm'}, tangent: {series: 0, x: 3}},
+    shortest: {verb: 'graph', x: {name: 't', unit: 's', range: [0, 6]}, y: {name: 'v', unit: 'm/s', range: [0, 22], step: 4},
+      series: [{label: 'uniform acceleration', expr: '2 + 3t'}]},
     status: 'trial',
   },
   motion_on_line: {
@@ -250,13 +257,15 @@ export const CARDS: Record<string, Card> = {
     not_when: 'light bending at a surface between two media or through a glass slab (use refraction), a prism, dispersion or the eye (not yet), a mirror turning a beam with no object (not yet), or a graph',
     fields: {device: 'plane_mirror | concave_mirror | convex_mirror | convex_lens | concave_lens',
       focal_length: 'the size of f in cm (no sign; the device gives it); not for a plane mirror',
-      objects: 'object distances from the mirror or lens in cm (no sign), 1 to 6, shown one after another; "infinity" for a parallel beam (not for a plane mirror); within 6 f, and not just beside F (an object exactly at F is fine: image at infinity)',
+      objects: 'object distances from the mirror or lens in cm (no sign), 1 to 6, shown one after another (each takes seconds_each: one or two for a short beat); "infinity" for a parallel beam (not for a plane mirror); within 6 f, and not just beside F (an object exactly at F is fine: image at infinity)',
       object_height: 'optional, cm; default f/3', rays: 'optional 2 or 3 of parallel, focus, centre (through C for a mirror, the optical centre for a lens), pole (mirrors); a plane mirror always draws two slanting rays, and parallel adds one along the normal that comes straight back',
       formula: 'true: u, v, f, m with signs and the formula with numbers (use when the narration states them)', power: 'a lens: true shows P = 1/f in dioptres',
       angles: 'a plane mirror: true marks the normal and the angles i and r (named even when illustrative)',
       distances: 'a plane mirror: true marks the object and the image as equally far from the mirror (equal tick marks; the distances in cm unless illustrative)', seconds_each: 'seconds per object position, 3 to 12 (default 6)', title: 'short title'},
-    anchors: 'mirrors: P, F, C; lenses: O, F1, F2, 2F1, 2F2; object, image and incidence (where the first ray meets the mirror or lens) for the first position, object2, image2, incidence2 ... for later ones',
-    example: {verb: 'ray_diagram', title: 'Images by a concave mirror', device: 'concave_mirror', focal_length: 10, objects: [30, 20, 15, 5], formula: true},
+    anchors: 'mirrors: P, F, C; lenses: O, F1, F2, 2F1, 2F2; edge_top and edge_bottom (the ends of the mirror or lens: its aperture); object, image and incidence (where the first ray meets the mirror or lens) for the first position, object2, image2, incidence2 ... for later ones',
+    // One position: planners judge a verb's usual length from its example (four positions read as 25 s and kept it out of short beats).
+    example: {verb: 'ray_diagram', title: 'Focal length of a concave mirror', device: 'concave_mirror', focal_length: 10, objects: [30],
+      annotate: [{text: 'f', at: [-10, -1.5], to: [0, -1.5]}]},
     status: 'trial',
   },
   refraction: {
@@ -271,7 +280,7 @@ export const CARDS: Record<string, Card> = {
       slab: 'optional: a slab of `to` this many cm thick, with `from` on both sides', speeds: 'true: the speed of light in each medium (v = c/n)',
       seconds_each: '3 to 12 (default 6)', title: 'short title'},
     anchors: 'incidence (where the ray meets the surface), normal (the top of the normal), exit (with a slab: where the ray leaves it)',
-    example: {verb: 'refraction', title: 'Light entering glass', from: 'air', to: 'glass', angles: [30, 45, 60], speeds: true},
+    example: {verb: 'refraction', title: 'Light entering glass', from: 'air', to: 'glass', angles: [40], speeds: true},
     status: 'trial',
   },
 

@@ -256,6 +256,7 @@ export function rayDiagram(s: RaySpec): Scene {
   // Named points for marks: the axis's points, and each position's object and image tops (object, image; object2 ...).
   const anchors: Record<string, Vec> = {};
   for (const [label, x] of marks) if (x >= bx0 && x <= bx1) anchors[label.replace('₁', '1').replace('₂', '2')] = P([x, 0]);
+  anchors.edge_top = P([surface(aperture), aperture]); anchors.edge_bottom = P([surface(-aperture), -aperture]);   // the aperture's ends
   positions.forEach((p, i) => {
     const n = i ? String(i + 1) : '';
     if (isFinite(p.d)) anchors[`object${n}`] = P([-p.d, h]);
@@ -283,7 +284,10 @@ export function rayDiagram(s: RaySpec): Scene {
     }
     p.rays.forEach((r, j) => {
       const id = `${tag}-ray${j}`, from = isNaN(r.from[0]) ? [bx0, r.hit[1]] as Vec : r.from;
-      const out = exit(r.hit, r.dir);
+      // A parallel beam meeting at F stops a little past it, as in the book, rather than crossing the whole picture.
+      const meet = !isFinite(p.d) && img.real ? Math.hypot(img.v - r.hit[0], r.hit[1]) / Math.hypot(r.dir[0], r.dir[1]) * 1.45 : Infinity;
+      const edge = exit(r.hit, r.dir), far = Math.hypot(edge[0] - r.hit[0], edge[1] - r.hit[1]) / Math.hypot(r.dir[0], r.dir[1]);
+      const out: Vec = meet < far ? [r.hit[0] + r.dir[0] * meet, r.hit[1] + r.dir[1] * meet] : edge;
       props.push({id: `${id}-in`, type: 'line', ...xy(P(from), P(r.hit)), ...draw(s0 + 0.5 + 0.25 * j, s0 + 1.7 + 0.25 * j), show, fade: 0.3, style: {stroke: 'ink', width: 4 * k}, layer: 2},
         {id: `${id}-out`, type: 'line', ...xy(P(r.hit), P(out)), ...draw(s0 + 1.9 + 0.25 * j, s0 + 3.1 + 0.25 * j), show, fade: 0.3, style: {stroke: 'ink', width: 4 * k}, layer: 2},
         head(`${id}-hin`, P(from), P(r.hit), [s0 + 1.7 + 0.25 * j, show[1]], k));

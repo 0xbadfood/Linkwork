@@ -76,7 +76,7 @@ function withMarks(name: string, card: Card): Card {
   const m = MARKABLE.get(name);
   if (!m) return card;
   const where = [card.anchors ? `a named point (${card.anchors})` : m.anchors.length ? `a named point (${m.anchors.join(', ')})` : '', m.units ? `[x, y] in ${m.units}` : ''].filter(Boolean).join(' or ');
-  return {...card, fields: {...card.fields, annotate: `optional labels and points of your own, up to 8: {text?, at: ${where}, point?: true for a dot, t?: second it appears, colour?: accent | ink | good | bad | cool | muted}; leave out when the verb's own labels say enough`}};
+  return {...card, fields: {...card.fields, annotate: `optional labels, points and measuring lines of your own, up to 8: {text?, at: ${where}, to?: a second point the same way (a measuring line from at to it, text at its middle: a distance such as f, R or an aperture), point?: true for a dot, t?: second it appears, colour?: accent | ink | good | bad | cool | muted}; leave out when the verb's own labels say enough`}};
 }
 
 const STOP = new Set(['about', 'their', 'there', 'which', 'where', 'with', 'from', 'that', 'this', 'when', 'what', 'into',
@@ -127,7 +127,8 @@ const NAMES = /(?<![\w.])\d?[A-Z][₀-₉0-9]*(?![\w.])/g;
 /** The scene with its numbers hidden: no readouts, no axis numbers, no text with a figure in it (but the title), dials
  * and watches without their digits; no facts for the narration to quote. */
 export function illustrate(scene: Scene): Scene {
-  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && /\d/.test(p.text.replace(NAMES, ''))))
+  // annotate's labels (note…) are the planner's own words, such as R = 2f: they stay.
+  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && !p.id.startsWith('note') && /\d/.test(p.text.replace(NAMES, ''))))
     .map(p => (p.type === 'axes' ? {...p, numbers: false}
       : p.type === 'object' && ['speedometer', 'stopwatch'].includes(p.name) ? {...p, params: {...p.params, digits: 'none'}} : p));
   return {...scene, props, meta: {...scene.meta, facts: [], illustrative: true}};
