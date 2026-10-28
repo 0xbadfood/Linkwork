@@ -12,6 +12,7 @@ import {pathErrors, pathLength, type PathSpec} from './path.ts';
 import {addMarks, markable, marksErrors, type Mark} from './marks.ts';
 import {prism, prismErrors, type PrismSpec} from './prism.ts';
 import {eye, eyeErrors, type EyeSpec} from './eye.ts';
+import {atmosphere, atmosphereErrors, type AtmosphereSpec} from './atmosphere.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -19,7 +20,7 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec | PrismSpec | EyeSpec;
+  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -63,6 +64,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'light through a triangular glass prism, traced colour by colour: one ray with the angles of incidence, refraction and emergence, the prism angle A and the deviation D; white light split into its spectrum (VIBGYOR, dispersion); a second prism upside down joining the colours again (Newton); a raindrop refracting, reflecting once inside and refracting sunlight into the colours of a rainbow'} as Verb<PrismSpec>,
   eye: {errors: eyeErrors, compile: eye,
     about: "the eye as a lens and a screen: the eye lens changing its power to focus near and far objects on the retina (accommodation, 25 cm to infinity); myopia (a distant object's image in front of the retina) and hypermetropia or presbyopia (a near object's image behind it), and the concave or convex lens, of computed power, that corrects each"} as Verb<EyeSpec>,
+  atmosphere: {errors: atmosphereErrors, compile: atmosphere,
+    about: "atmospheric refraction: starlight bending through layers of air of rising refractive index, so a star is seen higher than it is and twinkles (a planet does not); and sunlight bending round the Earth's curve, so the Sun is seen above the horizon about 2 minutes before it rises and after it sets"} as Verb<AtmosphereSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

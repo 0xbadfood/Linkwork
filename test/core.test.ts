@@ -617,3 +617,18 @@ test('eye: accommodation, myopia and hypermetropia with their corrective lenses'
   assert.match(err({correct: true}), /a normal eye needs no correction/);
   assert.match(err({far_point: 80}), /far_point .* is for myopia/);
 });
+
+test('atmosphere: a star seen higher than it is, and the Sun seen above the horizon before it rises', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const star = compile({verb: 'atmosphere', scene: 'star', twinkle: true, planet: true} as any).scene!;
+  const a = (star.meta as any).anchors;
+  // Seen along the light's last direction: nearer overhead than the star (smaller angle from the vertical at the eye).
+  const fromVertical = (p: number[]) => Math.atan2(Math.abs(p[0] - a.eye[0]), a.eye[1] - p[1]);
+  assert.ok(fromVertical(a.apparent) < fromVertical(a.star), 'seen higher');
+  assert.ok(star.props.some(p => p.id === 'twinkle') && star.props.some(p => p.id === 'planet'));
+  const sun = compile({verb: 'atmosphere', scene: 'sunrise'} as any).scene!, b = (sun.meta as any).anchors;
+  assert.ok(b.sun[1] > b.eye[1], 'the Sun is below the observer\'s horizon') ;
+  assert.ok(b.apparent[1] < b.eye[1], 'it is seen above it');
+  assert.deepEqual(compile({verb: 'atmosphere', scene: 'sunrise'} as any).errors, []);
+  assert.match(compile({verb: 'atmosphere', scene: 'sunrise', twinkle: true} as any).errors.join(), /twinkle and planet go with scene star/);
+});

@@ -317,7 +317,19 @@ export const CARDS: Record<string, Card> = {
     anchors: 'retina, lens, spectacle (with correct), image (image2 ... for later objects)',
     example: {verb: 'eye', title: 'Myopia and its correction', condition: 'myopia', far_point: 80, objects: ['infinity'], correct: true},
     status: 'trial',
+  },  atmosphere: {
+    subjects: ['physics'],
+    concepts: ['atmospheric refraction', 'twinkling of stars', 'apparent position of a star', 'planets do not twinkle', 'advance sunrise', 'delayed sunset',
+      'refractive index of air', 'flattening of the sun at sunrise'],
+    kinds: ['ray_diagram', 'process'], motions: ['draw_on', 'labels'],
+    use_when: "light bending gradually through air whose refractive index rises towards the ground: a star seen higher than it is, twinkling as the air shifts (a planet beside it steady); the Sun seen above the horizon while still below it, about 2 minutes before sunrise and after sunset; the ray's path is traced, the bending drawn stronger than real (said on screen)",
+    not_when: 'light crossing one sharp surface (use refraction), the colours of the sky or the Sun (use scattering)',
+    fields: {scene: 'star | sunrise', twinkle: 'star: true makes it flicker', planet: 'star: true adds a planet that does not twinkle', panel: 'false: no side panel', seconds: '4 to 20 (default 9)', title: 'short title'},
+    anchors: 'star, apparent, planet, eye (star); sun, apparent, eye, horizon (sunrise)',
+    example: {verb: 'atmosphere', title: 'Why stars twinkle', scene: 'star', twinkle: true},
+    status: 'trial',
   },
+
 
 
 
