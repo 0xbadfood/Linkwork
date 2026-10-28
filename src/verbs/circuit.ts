@@ -39,7 +39,9 @@ export type CircuitSpec = Common & {
   /** Label every branch's current. */
   currents?: boolean;
   /** Charges moving along the wires, faster where the current is larger. */
-  flow?: boolean;
+  /** Moving charges: true or 'conventional' (+ to −), 'electrons' (blue, − to +), or 'both' (electrons moving one way,
+   * fixed arrows of conventional current pointing the other). */
+  flow?: boolean | 'conventional' | 'electrons' | 'both';
   /** Show the power each component takes (P = VI) and the heat in the time given (s). */
   power?: boolean;
   seconds_each?: number;
@@ -113,6 +115,7 @@ export function circuitErrors(s: CircuitSpec): string[] {
   });
   for (const v of s.voltmeters ?? []) if (!ids.has(v)) e.push(`circuit: voltmeters: no item ${JSON.stringify(v)}; ids are ${[...ids].join(', ')}`);
   if (s.voltmeters !== undefined && s.voltmeters.length > 4) e.push('circuit: voltmeters is up to 4 ids');
+  if (s.flow !== undefined && ![true, false, 'conventional', 'electrons', 'both'].includes(s.flow as never)) e.push('circuit: flow is true (conventional current), electrons, or both');
   if (s.key !== undefined && !['open', 'closed', 'closes'].includes(s.key)) e.push('circuit: key is open, closed, or closes (open at first, then closed: the current starts)');
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('circuit: seconds_each is 3 to 12');
   return e;
@@ -266,7 +269,8 @@ export function circuit(s: CircuitSpec): Scene {
   for (const x of s.items) if (!isGroup(x) && x.kind === 'wire') facts.push(`the ${x.material ?? 'nichrome'} wire, ${fmt(x.length ?? 1)} m long with a cross-section of ${fmt(x.area ?? 1)} mm², has R = ρl/A = ${fmt(resistance(x), 3)} Ω (ρ = ${RESISTIVITY[(x.material ?? 'nichrome').toLowerCase()].toExponential(2)} Ω m)`);
   for (const g of s.items.filter(isGroup)) facts.push(`in parallel group ${g.id}, 1/R = ${g.parallel.map(b => `1/${fmt(branchR(b), 3)}`).join(' + ')}, so R = ${fmt(groupR(g), 3)} Ω, less than the smallest branch`);
   // Moving charges: around the main loop, and round each parallel branch, faster where the current is larger.
-  if (s.flow && closed) {
+  const mode = s.flow === true ? 'conventional' : s.flow || 'none', electrons = mode === 'electrons' || mode === 'both';
+  if (mode !== 'none' && closed) {
     const loop: Vec[] = [[X0, bTop], [X0, Y0], [X1, Y0], [X1, Y1], [X0, Y1], [X0, bBot]];
     const lengthOf = (pts: Vec[]) => pts.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]), 0);
     const along = (pts: Vec[], d: number): Vec => { for (let i = 1; i < pts.length; i++) { const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (d <= L) return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * d / L, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * d / L]; d -= L; } return pts.at(-1)!; };
@@ -276,12 +280,22 @@ export function circuit(s: CircuitSpec): Scene {
       for (let d = 0; d < count; d++) {
         const keysX: Key[] = [], keysY: Key[] = [];
         for (let t = 0; t <= dur; t += 0.1) { const q = along(pts, (d * L / count + speed * t) % L); keysX.push([round(t, 2), round(q[0], 2)]); keysY.push([round(t, 2), round(q[1], 2)]); }
-        props.push({id: `${tag}-charge${d}`, type: 'circle', x: keysX[0][1], y: keysY[0][1], r: 6 * k, keys: {x: keysX, y: keysY}, show: [Math.max(T0, closeT), 1e9], style: {fill: 'good'}, layer: 5});
+        props.push({id: `${tag}-charge${d}`, type: 'circle', x: keysX[0][1], y: keysY[0][1], r: 6 * k, keys: {x: keysX, y: keysY}, show: [Math.max(T0, closeT), 1e9], style: {fill: electrons ? 'cool' : 'good'}, layer: 5});
       }
     };
-    dots(loop, sol.I, 'main', 14);
-    branchPaths.forEach(({pts, branch: [gid, q]}) => { if (q > 0) dots(pts, sol.groups[gid].branches[q], `${gid}b${q}`, 4); });
-    text('flow-note', 'moving dots: conventional current, from + to −', left + 10 * k, bottom + 4 * k, 'muted', 22, 'start');
+    // Electrons go the other way round: the same paths reversed.
+    const flip = (pts: Vec[]) => (electrons ? [...pts].reverse() : pts);
+    dots(flip(loop), sol.I, 'main', 14);
+    branchPaths.forEach(({pts, branch: [gid, q]}) => { if (q > 0) dots(flip(pts), sol.groups[gid].branches[q], `${gid}b${q}`, 4); });
+    if (mode === 'both') {
+      // Conventional current as fixed arrows (+ round to −), against the moving electrons.
+      const mids: [Vec, Vec][] = [[[X0 + 0.36 * (X1 - X0), Y0], [1, 0]], [[X1, (Y0 + Y1) / 2], [0, 1]], [[X0 + 0.16 * (X1 - X0), Y1], [-1, 0]]];
+      mids.forEach(([m, d], j) => props.push({id: `conv-arrow${j}`, type: 'arrow', x1: round(m[0] - d[0] * 40 * k + (d[1] ? 30 * k : 0), 2), y1: round(m[1] - d[1] * 40 * k - (d[0] ? 28 * k : 0), 2),
+        x2: round(m[0] + d[0] * 40 * k + (d[1] ? 30 * k : 0), 2), y2: round(m[1] + d[1] * 40 * k - (d[0] ? 28 * k : 0), 2), head: 18 * k, show: [Math.max(T0, closeT), 1e9], style: {stroke: 'accent', width: 5 * k}, layer: 6}));
+      text('conv-label', 'conventional current: + to −', X0 + 0.36 * (X1 - X0), Y0 - 64 * k, 'accent', 24, 'middle', [Math.max(T0, closeT), 1e9]);
+    }
+    text('flow-note', mode === 'conventional' ? 'moving dots: conventional current, from + to −' : mode === 'electrons' ? 'moving dots: electrons, from − to +'
+      : 'blue dots: electrons, − to +; orange arrows: conventional current, + to −', left + 10 * k, bottom + 4 * k, electrons ? 'cool' : 'muted', 22, 'start');
   }
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T0 + sols.length * E + 1, theme: s.theme ?? 'dark', props, actors: [],
     meta: {verb: 'circuit', facts, anchors, solution: sols.map(x => ({V: x.V, R: round(x.R, 6), I: round(x.I, 6)}))}};

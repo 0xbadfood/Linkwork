@@ -726,3 +726,14 @@ test('circuit: a wire close-up counts charge against time (I = Q/t), a key that 
   assert.equal((closes.props.find(p => p.id === 'ammeter-read0') as any).text, 'I = 300 mA');
   assert.match(compile({verb: 'circuit', view: 'wire', volts: 6} as any).errors.join(), /leave out items, cells and volts/);
 });
+
+test('circuit: electrons move from − to +, against conventional current', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const spec = {verb: 'circuit', cells: 2, items: [{id: 'bulb', kind: 'bulb', R: 10}]};
+  const pos = (flow: unknown) => { const sc = compile({...spec, flow} as any).scene!, d = sc.props.find(p => p.id === 'main-charge0') as any; return [d.keys.x[1][1] - d.keys.x[0][1], d.keys.y[1][1] - d.keys.y[0][1]]; };
+  const conv = pos(true), elec = pos('electrons');
+  assert.ok(conv[0] * elec[0] + conv[1] * elec[1] < 0, 'opposite directions');
+  const both = compile({...spec, flow: 'both'} as any).scene!;
+  assert.ok(both.props.some(p => p.id === 'conv-arrow0') && (both.props.find(p => p.id === 'main-charge0') as any).style.fill === 'cool');
+  assert.match(compile({...spec, flow: 'sideways'} as any).errors.join(), /flow is true \(conventional current\), electrons, or both/);
+});

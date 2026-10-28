@@ -355,7 +355,7 @@ export const CARDS: Record<string, Card> = {
       key: "closed (default) | open | closes (open at first, then plugged: the current, glow and moving charges start; the ammeter goes from 0)", ammeter: 'false hides the main ammeter',
       view: "wire: instead of a circuit, a close-up of a wire with a marked cross-section; charge crossing it is counted against a clock and I = Q/t is worked out (current as the rate of flow of charge; 1 A = 1 C/s); give current, not items or a battery",
       current: 'view wire: the current in A (default 1)', units: 'true: the main current also in mA and µA (1 A = 1000 mA = 10⁶ µA)', voltmeters: 'ids of components or groups to put a voltmeter across (up to 4)',
-      currents: 'true labels each parallel branch current', flow: 'true: moving charges, faster where the current is larger', power: 'true: each component\'s power in W',
+      currents: 'true labels each parallel branch current', flow: "true: moving charges (conventional current, + to −), faster where the current is larger; electrons: blue electrons moving − to +; both: electrons moving one way and conventional-current arrows pointing the other (they are opposite)", power: 'true: each component\'s power in W',
       seconds_each: 'per battery in a list, 3 to 12 (default 6)', panel: 'false: no side panel', title: 'short title'},
     anchors: 'battery, key, ammeter, each component and group by its id, voltmeter_<id>',
     example: {verb: 'circuit', title: 'A lamp and a resistor in series', volts: 6, items: [{id: 'lamp', kind: 'bulb', R: 20}, {id: 'R', kind: 'resistor', R: 4}], voltmeters: ['lamp', 'R'], flow: true},
