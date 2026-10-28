@@ -654,9 +654,9 @@ export function refraction(s: RefractionSpec): Scene {
         head(`${tag}-hout`, hit, exitP, [s0 + 2.9, show[1]], k));
       const ratio = ai === 0 ? NaN : si / Math.sin(rad(ar));
       lines = [[`i = ${fmt(ai, 1)}°, r = ${fmt(ar, 1)}°`, 'ink'],
-        [ai === 0 ? 'Along the normal: the ray goes straight on' : `sin i ÷ sin r = ${fmt(si, 3)} ÷ ${fmt(Math.sin(rad(ar)), 3)} = ${fmt(ratio, 2)}`, 'good']];
+        [ai === 0 ? 'Along the normal: the ray goes straight on' : `sin i ÷ sin r = ${fmt(si, Math.abs(ratio - 1) < 0.01 ? 5 : 3)} ÷ ${fmt(Math.sin(rad(ar)), Math.abs(ratio - 1) < 0.01 ? 5 : 3)} = ${fmt(ratio, Math.abs(ratio - 1) < 0.01 ? 4 : 2)}`, 'good']];
       facts.push(ai === 0 ? 'a ray along the normal goes straight through without bending'
-        : `angle of incidence ${fmt(ai, 1)}°, angle of refraction ${fmt(ar, 1)}°, sin i / sin r = ${fmt(ratio, 2)}`);
+        : `angle of incidence ${fmt(ai, 1)}°, angle of refraction ${fmt(ar, 1)}°, sin i / sin r = ${fmt(ratio, Math.abs(ratio - 1) < 0.01 ? 4 : 2)}`);
       if (slab) {
         // Out through the far face, parallel to the incident ray; the incident ray's line runs on, dashed, to show the shift.
         const L2 = Math.min((bottom - y2 - 10 * k) / Math.max(inDir[1], 1e-9), si > 1e-9 ? (right - exitP[0] - 10 * k) / si : Infinity);
