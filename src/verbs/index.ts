@@ -14,6 +14,7 @@ import {prism, prismErrors, type PrismSpec} from './prism.ts';
 import {eye, eyeErrors, type EyeSpec} from './eye.ts';
 import {atmosphere, atmosphereErrors, type AtmosphereSpec} from './atmosphere.ts';
 import {scattering, scatteringErrors, type ScatteringSpec} from './scattering.ts';
+import {circuit, circuitErrors, type CircuitSpec} from './circuit.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -21,7 +22,7 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec;
+  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -69,6 +70,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "atmospheric refraction: starlight bending through layers of air of rising refractive index, so a star is seen higher than it is and twinkles (a planet does not); and sunlight bending round the Earth's curve, so the Sun is seen above the horizon about 2 minutes before it rises and after it sets"} as Verb<AtmosphereSpec>,
   scattering: {errors: scatteringErrors, compile: scattering,
     about: "the scattering of light: a beam's path showing in a colloid but not clear water (Tyndall effect); air molecules scattering blue about 6 times more than red (1/λ⁴), so the sky is blue; the Sun white overhead and red at sunrise and sunset after a long path through air (colours computed); red signal lights carrying farthest through fog"} as Verb<ScatteringSpec>,
+  circuit: {errors: circuitErrors, compile: circuit,
+    about: "an electric circuit with the book's symbols, solved by Ohm's law: a battery of cells, plug key and ammeter; resistors, bulbs, nichrome wires (R = ρl/A) and rheostats in series and in parallel groups; voltmeters across items, every branch current, power and bulbs glowing by it; charges moving faster where the current is larger; a list of cell counts shown in turn (Activity 11.1)"} as Verb<CircuitSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

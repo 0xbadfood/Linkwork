@@ -691,3 +691,24 @@ test('refraction: a named medium {name, n}, and a bare index is named once', asy
   assert.equal(bare.filter(t => t === 'n = 1').length, 1, 'not twice');
   assert.match(compile({verb: 'refraction', from: {name: 'cornea'}, to: 'air', angles: [40]} as any).errors.join(), /\{name, n\}/);
 });
+
+test("circuit: solved by Ohm's law, as in the book's examples", async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const sol = (spec: object) => (compile({verb: 'circuit', ...spec} as any).scene!.meta as any).solution;
+  // Example 11.7: a 20 Ω lamp and a 4 Ω conductor on 6 V: 24 Ω, 0.25 A.
+  assert.deepEqual(sol({volts: 6, items: [{id: 'lamp', kind: 'bulb', R: 20}, {id: 'R', kind: 'resistor', R: 4}]}), [{V: 6, R: 24, I: 0.25}]);
+  // Example 11.8: 5, 10 and 30 Ω in parallel on 12 V: 3 Ω, 4 A (2.4 + 1.2 + 0.4).
+  const par = compile({verb: 'circuit', volts: 12, items: [{id: 'P', parallel: [[{id: 'R1', kind: 'resistor', R: 5}], [{id: 'R2', kind: 'resistor', R: 10}], [{id: 'R3', kind: 'resistor', R: 30}]]}]} as any).scene!;
+  assert.deepEqual((par.meta as any).solution, [{V: 12, R: 3, I: 4}]);
+  assert.match((par.meta as any).facts[0], /R1: 5 Ω, 2\.4 A, 12 V; R2: 10 Ω, 1\.2 A, 12 V; R3: 30 Ω, 0\.4 A, 12 V/);
+  // Example 11.9: (10 ∥ 40) + (30 ∥ 20 ∥ 60) on 12 V: 8 + 10 = 18 Ω, 0.667 A.
+  assert.equal(sol({volts: 12, items: [{id: 'A', parallel: [[{id: 'R1', kind: 'resistor', R: 10}], [{id: 'R2', kind: 'resistor', R: 40}]]},
+    {id: 'B', parallel: [[{id: 'R3', kind: 'resistor', R: 30}], [{id: 'R4', kind: 'resistor', R: 20}], [{id: 'R5', kind: 'resistor', R: 60}]]}]})[0].R, 18);
+  // R = ρl/A: 1 m of nichrome, 0.5 mm²: 1e-4 × 1 / 0.5e-6 = 200 Ω; four cells shown in turn.
+  assert.deepEqual(sol({cells: [1, 2, 3, 4], items: [{id: 'XY', kind: 'wire', material: 'nichrome', length: 1, area: 0.5}]}).map((x: any) => [x.V, x.R]), [[1.5, 200], [3, 200], [4.5, 200], [6, 200]]);
+  assert.deepEqual(sol({volts: 6, key: 'open', items: [{id: 'R', kind: 'resistor', R: 4}]})[0].I, 0);
+  const err = (x: object) => compile({verb: 'circuit', ...x} as any).errors.join(' | ');
+  assert.match(err({items: [{id: 'R', kind: 'resistor', R: 4}]}), /give the battery/);
+  assert.match(err({volts: 6, items: [{id: 'W', kind: 'wire', material: 'unobtainium'}]}), /material is one of/);
+  assert.match(err({volts: 6, items: [{id: 'R', kind: 'resistor', R: 4}], voltmeters: ['Q']}), /no item "Q"/);
+});

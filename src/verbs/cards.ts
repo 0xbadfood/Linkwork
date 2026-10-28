@@ -342,7 +342,24 @@ export const CARDS: Record<string, Card> = {
     anchors: 'clear, colloid (tyndall); sun, eye (sky); sun_noon, sun_sunset, eye (sunset)',
     example: {verb: 'scattering', title: 'Why the sky is blue', scene: 'sky'},
     status: 'trial',
+  },  circuit: {
+    subjects: ['physics'],
+    concepts: ['electric circuit', 'electric current', 'circuit diagram', 'ammeter', 'voltmeter', 'potential difference', "Ohm's law", 'resistance', 'resistors in series',
+      'resistors in parallel', 'equivalent resistance', 'rheostat', 'variable resistance', 'resistivity', 'factors affecting resistance', 'heating effect of electric current',
+      'electric power', 'plug key', 'cell', 'battery', 'electric bulb'],
+    kinds: ['circuit'], motions: ['flow', 'value_change', 'labels'],
+    use_when: "an electric circuit with the book's symbols, solved exactly by Ohm's law: a battery of cells (a list of cell counts shown in turn, Activity 11.1), a plug key open or closed, an ammeter in series, voltmeters across chosen components or groups; resistors, bulbs, nichrome or copper wires (R = ρl/A from the book's Table 11.2: longer or thinner wire, larger R) and rheostats, in series and in parallel groups (Figs. 11.6 to 11.12); every branch current, each component's V and power, bulbs glowing by power; charges moving faster where the current is larger",
+    not_when: 'a V–I graph (use graph), magnetic effects of current (not yet), domestic wiring (not yet)',
+    fields: {cells: 'cells of 1.5 V in the battery, or a list of counts shown one after another', volts: 'or the battery in volts (not with cells)',
+      items: "1 to 5 series items: a component {id, kind: resistor | bulb | rheostat with R in Ω, or wire with material (nichrome, copper, ...), length (m), area (mm²)} or a parallel group {id, parallel: [[components of branch 1], [branch 2], ...]} (2 to 4 branches of 1 or 2 components)",
+      key: 'closed (default) | open', ammeter: 'false hides the main ammeter', voltmeters: 'ids of components or groups to put a voltmeter across (up to 4)',
+      currents: 'true labels each parallel branch current', flow: 'true: moving charges, faster where the current is larger', power: 'true: each component\'s power in W',
+      seconds_each: 'per battery in a list, 3 to 12 (default 6)', panel: 'false: no side panel', title: 'short title'},
+    anchors: 'battery, key, ammeter, each component and group by its id, voltmeter_<id>',
+    example: {verb: 'circuit', title: 'A lamp and a resistor in series', volts: 6, items: [{id: 'lamp', kind: 'bulb', R: 20}, {id: 'R', kind: 'resistor', R: 4}], voltmeters: ['lamp', 'R'], flow: true},
+    status: 'trial',
   },
+
 
 
 
