@@ -509,3 +509,35 @@ test('annotate: a label that would overlap another moves until both read', async
   const [a, b] = ['note0-label', 'note1-label'].map(id => s.props.find(p => p.id === id) as any);
   assert.ok(Math.abs(a.y - b.y) >= 36, `labels ${a.y} and ${b.y} apart`);
 });
+
+test('ray_diagram: one ray alone shows a ray rule, with image: false', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const one = (device: string, ray: string) => compile({verb: 'ray_diagram', device, focal_length: 10, objects: [25], rays: [ray], image: false} as any);
+  const parallel = one('convex_mirror', 'parallel');
+  assert.deepEqual(parallel.errors, []);
+  assert.ok(!parallel.scene!.props.some(p => p.id === 'p0-image'), 'no image');
+  // A parallel ray off a convex mirror seems to come from F: its dashed line runs back to F on the axis.
+  const back = parallel.scene!.props.find(p => p.id === 'p0-ray0-back') as any, F = (parallel.scene!.meta as any).anchors.F;
+  // (within a few pixels: the ray leaves the curved surface, a little off the plane through P)
+  assert.ok(Math.abs(back.x2 - F[0]) < 4 && Math.abs(back.y2 - F[1]) < 0.5, 'back to F');
+  // Aimed at C behind a convex mirror: the aim is drawn on, dashed, to C.
+  const centre = one('convex_mirror', 'centre').scene!, aim = centre.props.find(p => p.id === 'p0-ray0-aim') as any, C = (centre.meta as any).anchors.C;
+  assert.ok(Math.abs(aim.x2 - C[0]) < 4 && Math.abs(aim.y2 - C[1]) < 0.5, 'aim to C');
+  // Through F, a concave mirror sends it back parallel: no dashed line at all.
+  assert.ok(!one('concave_mirror', 'focus').scene!.props.some(p => /-back$/.test(p.id)));
+  assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: [25], rays: []} as any).errors.join(), /rays is 1 to 3/);
+});
+
+test('refraction: apparent depth, a coin in water seen from air', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {scene, errors} = compile({verb: 'refraction', from: 'water', to: 'air', object_depth: 12, object: 'coin'} as any);
+  assert.deepEqual(errors, []);
+  assert.ok(Math.abs((scene!.meta as any).apparent_depth - 12 * 1.0003 / 1.33) < 1e-5);
+  assert.match((scene!.meta as any).facts[0], /seems about 9 cm deep/);
+  const anchors = (scene!.meta as any).anchors;
+  assert.ok(anchors.image[1] < anchors.object[1], 'seen nearer the surface');
+  const err = (x: object) => compile({verb: 'refraction', ...x} as any).errors.join(' | ');
+  assert.match(err({from: 'air', to: 'water', object_depth: 10}), /object is in the denser medium/);
+  assert.match(err({from: 'water', to: 'air', object_depth: 10, slab: 3}), /do not go together/);
+  assert.match(err({from: 'diamond', to: 'air', object_depth: 10, angles: [30]}), /past the critical angle/);
+});

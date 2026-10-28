@@ -31,7 +31,7 @@ export type RaySpec = Common & {
   objects: (number | 'infinity')[];
   /** The object's height in cm; default a third of f (a plane mirror: a third of the farthest distance). */
   object_height?: number;
-  /** Which principal rays to draw (2 or 3): parallel to the axis, through (or towards) F, through C or the optical
+  /** Which principal rays to draw (1 to 3; one alone shows a single ray rule): parallel to the axis, through (or towards) F, through C or the optical
    * centre, to the pole (mirrors). A ray that can't be drawn for a position is swapped for another. */
   rays?: RayName[];
   /** Show u, v, f and m with their signs, and the mirror or lens formula with the numbers in it. */
@@ -50,6 +50,8 @@ export type RaySpec = Common & {
    * approximation, over a wide aperture (0.2 to 0.9 of R, default 0.6): edge rays cross the axis nearer the mirror
    * than central ones (spherical aberration). Leave out for the book's ideal ray diagrams. */
   exact?: boolean; aperture?: number;
+  /** false: draw the rays but no image (a ray rule on its own); dashed lines then run back to F or C on the axis. */
+  image?: boolean;
 };
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -134,7 +136,7 @@ export function rayDiagramErrors(s: RaySpec): string[] {
       e.push(`${at} = ${fmt(d)} cm is too near F: the image would be ${fmt(Math.abs(img.v))} cm away and ${fmt(Math.abs(img.m))} times as tall, off the picture; keep the object at least ${fmt(0.2 * f!)} cm from F, or put it at F exactly (${fmt(f!)} cm: image at infinity)`);
   });
   if (s.rays !== undefined) {
-    if (!Array.isArray(s.rays) || s.rays.length < 2 || s.rays.length > 3 || new Set(s.rays).size !== s.rays.length) e.push('ray_diagram: rays is 2 or 3 different ray names');
+    if (!Array.isArray(s.rays) || s.rays.length < 1 || s.rays.length > 3 || new Set(s.rays).size !== s.rays.length) e.push('ray_diagram: rays is 1 to 3 different ray names');
     else for (const r of s.rays) {
       if (!RAYS.includes(r)) e.push(`ray_diagram: rays: ${JSON.stringify(r)} is not a ray; use ${RAYS.join(', ')}`);
       else if (r === 'pole' && !isMirror(s.device)) e.push('ray_diagram: rays: a lens has no pole; use centre (the ray through the optical centre)');
@@ -146,6 +148,7 @@ export function rayDiagramErrors(s: RaySpec): string[] {
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('ray_diagram: seconds_each is 3 to 12');
   if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('ray_diagram: panel is true or false');
   if (s.exact !== undefined && typeof s.exact !== 'boolean') e.push('ray_diagram: exact is true or false');
+  if (s.image !== undefined && typeof s.image !== 'boolean') e.push('ray_diagram: image is true or false');
   if (s.exact && !(s.device === 'concave_mirror' || s.device === 'convex_mirror')) e.push('ray_diagram: exact is for a concave or convex mirror');
   if (s.exact && !s.objects.every(o => o === 'infinity')) e.push('ray_diagram: exact traces a parallel beam: objects ["infinity"]');
   if (s.aperture !== undefined && !(s.exact && isNum(s.aperture) && s.aperture >= 0.2 && s.aperture <= 0.9)) e.push('ray_diagram: aperture (with exact) is 0.2 to 0.9 of R');
@@ -321,7 +324,16 @@ export function rayDiagram(s: RaySpec): Scene {
         head(`${id}-hin`, P(from), P(r.hit), [s0 + 1.7 + 0.25 * j, show[1]], k));
       // A ray along the normal comes straight back over itself: one arrowhead each way would cross, so it gets none back.
       if (!(plane && r.name === 'parallel')) props.push(head(`${id}-hout`, P(r.hit), P(out), [s0 + 3.1 + 0.25 * j, show[1]], k));
-      if (r.back) props.push({id: `${id}-back`, type: 'line', ...xy(P(r.hit), P(r.back)), ...draw(s0 + 3.3, s0 + 3.9), show, fade: 0.3,
+      // Without an image, a ray rule's dashed lines run to where they meet the axis (F or C), as the book draws them.
+      const axisAt = (pt: Vec, d: Vec): Vec | undefined => (Math.abs(d[1]) > 1e-9 ? [pt[0] - pt[1] * d[0] / d[1], 0] : undefined);
+      const back = s.image === false && r.back && !s.exact ? axisAt(r.hit, r.dir) : r.back;   // parallel out: no dashed line
+      // A ray aimed at F or C behind a convex mirror or a concave lens: its aim drawn on, dashed, past the surface.
+      if ((dev === 'convex_mirror' || dev === 'concave_lens') && (r.name === 'focus' || r.name === 'centre') && isFinite(p.d) && !(dev === 'concave_lens' && r.name === 'centre')) {
+        const aim = axisAt(r.from, [r.hit[0] - r.from[0], r.hit[1] - r.from[1]]);
+        if (aim && aim[0] > r.hit[0]) props.push({id: `${id}-aim`, type: 'line', ...xy(P(r.hit), P(aim)), ...draw(s0 + 1.7 + 0.25 * j, s0 + 2.2 + 0.25 * j), show, fade: 0.3,
+          style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k]}, layer: 1});
+      }
+      if (back) props.push({id: `${id}-back`, type: 'line', ...xy(P(r.hit), P(back)), ...draw(s0 + 3.3, s0 + 3.9), show, fade: 0.3,
         style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k]}, layer: 1});
     });
     if (plane && s.angles && p.rays[1]) {
@@ -357,7 +369,7 @@ export function rayDiagram(s: RaySpec): Scene {
         {id: `${tag}-dist-i-label`, type: 'text', x: (Xm + Xi) / 2, y: Y + 40 * k, text: `${fmt(p.d)} cm`, size: 28 * k, align: 'middle', show: [s0 + 4.8, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6});
     }
     const shownImage: [number, number] = [s0 + 3.3, show[1]];
-    if (!img.atInfinity && isFinite(img.v) && !s.exact) {      // exact rays have no single image point
+    if (!img.atInfinity && isFinite(img.v) && !s.exact && s.image !== false) {      // exact rays meet at no single point
       const height = isFinite(p.d) ? img.m * h : 0, [X, Y] = P([img.v, 0]), [, Yt] = P([img.v, height]);
       if (Math.abs(height) * unitY > 6 * k) props.push({id: `${tag}-image`, type: 'arrow', x1: X, y1: Y, x2: X, y2: Yt, head: 22 * k, show: shownImage, fade: 0.3,
         style: {stroke: img.real ? 'good' : 'cool', width: 7 * k, ...(img.real ? {} : {dash: [14 * k, 8 * k]})}, layer: 5});
@@ -369,6 +381,7 @@ export function rayDiagram(s: RaySpec): Scene {
     const where = img.atInfinity ? 'at infinity' : zone(dev, f, Math.abs(img.v), 'image', real);
     const lines: [string, string, number][] = [[`Object: ${zone(dev, f, p.d, 'object')}`, 'accent', s0 + 0.2],
       [`Image: ${where}`, real ? 'good' : 'cool', s0 + 3.4], [`${nature[0].toUpperCase()}${nature.slice(1)}; ${size}`, real ? 'good' : 'cool', s0 + 3.6]];
+    if (s.image === false) lines.splice(1, 2);                // a ray rule: no image to describe
     if (s.exact) {
       // Where the edge and the central rays cross the axis, measured from P (dashed back behind a convex mirror).
       const crossings = p.rays.map(r => Math.abs((r.stop ?? r.back)![0]));
@@ -433,7 +446,11 @@ export type RefractionSpec = Common & {
   /** The medium the light starts in and the one it enters: a name from the book's table or a refractive index. */
   from: string | number; to: string | number;
   /** Angles of incidence in degrees (0 to 85), shown one after another: sin i ÷ sin r is listed for each. */
-  angles: number[];
+  angles?: number[];
+  /** Apparent depth: a point object (a coin) this many cm below the surface, in `from` (the denser medium, water),
+   * seen from `to` above it (air): rays leave the surface bending away from the normal, and their dashed lines back
+   * meet nearer the surface, where the object seems to be. angles: the rays' angles in `from` (default 8 and 16). */
+  object_depth?: number; object?: string;
   /** A parallel-sided slab of `to`, this many cm thick, with `from` on both sides: the emergent ray and the lateral shift. */
   slab?: number;
   /** Show the speed of light in each medium, v = c/n. */
@@ -454,17 +471,27 @@ export function refractionErrors(s: RefractionSpec): string[] {
     if (typeof m === 'number') { if (!(isNum(m) && m >= 1 && m <= 3)) e.push(`refraction: ${key} as a refractive index is 1 to 3`); }
     else if (typeof m !== 'string' || !(m.toLowerCase().trim() in MEDIA)) e.push(`refraction: ${key} is a refractive index or one of ${Object.keys(MEDIA).join(', ')}`);
   }
-  if (!Array.isArray(s.angles) || s.angles.length < 1 || s.angles.length > 5 || !s.angles.every(a => isNum(a) && a >= 0 && a <= 85))
+  if (s.object_depth !== undefined) {
+    if (!(isNum(s.object_depth) && s.object_depth > 0 && s.object_depth <= 500)) e.push('refraction: object_depth is the depth below the surface in cm (up to 500)');
+    if (s.slab !== undefined) e.push('refraction: object_depth and slab do not go together');
+    if (s.object !== undefined && (typeof s.object !== 'string' || s.object.length > 20)) e.push('refraction: object is a short name (20 characters), such as coin');
+    if (s.angles !== undefined && (!Array.isArray(s.angles) || s.angles.length < 1 || s.angles.length > 3 || !s.angles.every(a => isNum(a) && a > 0 && a <= 40)))
+      e.push('refraction: with object_depth, angles is 1 to 3 small angles (1 to 40 degrees) of the rays from the object');
+  } else if (!Array.isArray(s.angles) || s.angles.length < 1 || s.angles.length > 5 || !s.angles.every(a => isNum(a) && a >= 0 && a <= 85))
     e.push('refraction: angles is a list of 1 to 5 angles of incidence, 0 to 85 degrees');
   if (s.slab !== undefined && !(isNum(s.slab) && s.slab >= 0.5 && s.slab <= 50)) e.push('refraction: slab is its thickness in cm, 0.5 to 50');
   if (s.seconds_each !== undefined && !(isNum(s.seconds_each) && s.seconds_each >= 3 && s.seconds_each <= 12)) e.push('refraction: seconds_each is 3 to 12');
   if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('refraction: panel is true or false');
   if (e.length) return e;
   if (s.slab !== undefined && indexOf(s.to) < indexOf(s.from)) e.push('refraction: a slab is of the optically denser medium: make `to` the one with the larger refractive index');
+  if (s.object_depth !== undefined && !(indexOf(s.from) > indexOf(s.to))) e.push('refraction: with object_depth the object is in the denser medium: from (water, glass) has the larger refractive index, to (air) the smaller');
+  if (s.object_depth !== undefined && (s.angles ?? [16]).some(a => indexOf(s.from) * Math.sin(rad(a)) / indexOf(s.to) >= 1))
+    e.push('refraction: a ray from the object is past the critical angle and would not leave: use smaller angles');
   return e;
 }
 
 export function refraction(s: RefractionSpec): Scene {
+  if (s.object_depth !== undefined) return apparentDepth(s);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const n1 = indexOf(s.from), n2v = indexOf(s.to), slab = s.slab;
   const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.18 : 0.06) * H, bottom = 0.94 * H;
@@ -498,8 +525,9 @@ export function refraction(s: RefractionSpec): Scene {
   props.push({id: 'normal', type: 'line', x1: hx, y1: y1 - normalLen, x2: hx, y2: (slab ? y2 : y1 + normalLen), style: {stroke: 'muted', width: 2.5 * k, dash: [10 * k, 8 * k]}, layer: 1},
     {id: 'normal-label', type: 'text', x: hx + 12 * k, y: y1 - normalLen + 6 * k, text: 'normal', size: 24 * k, style: {fill: 'muted'}, layer: 1});
   const anchors: Record<string, Vec> = {incidence: [hx, y1], normal: [hx, y1 - normalLen]};
-  s.angles.forEach((ai, i) => {
-    const s0 = T0 + i * E, last = i === s.angles.length - 1, show: [number, number] = [s0, last ? 1e9 : s0 + E], tag = `a${i}`;
+  const angles = s.angles!;
+  angles.forEach((ai, i) => {
+    const s0 = T0 + i * E, last = i === angles.length - 1, show: [number, number] = [s0, last ? 1e9 : s0 + E], tag = `a${i}`;
     const si = Math.sin(rad(ai)), sr = n1 * si / n2v, tir = sr > 1;
     const ar = tir ? NaN : deg(Math.asin(sr));
     const inDir: Vec = [si, Math.cos(rad(ai))];
@@ -554,7 +582,7 @@ export function refraction(s: RefractionSpec): Scene {
       y += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 10 * k;
     });
   });
-  const end = T0 + s.angles.length * E;
+  const end = T0 + angles.length * E;
   const n21 = n2v / n1;
   const tail: string[] = [`n of ${name2} relative to ${name1} = ${fmt(n2v, 4)} ÷ ${fmt(n1, 4)} = ${fmt(n21, 2)}`];
   if (s.speeds) tail.push(`Speed of light: ${fmt(C_LIGHT / n1 / 1e8, 2)} × 10⁸ m/s in ${name1}, ${fmt(C_LIGHT / n2v / 1e8, 2)} × 10⁸ m/s in ${name2}`);
@@ -567,4 +595,61 @@ export function refraction(s: RefractionSpec): Scene {
   if (s.speeds) facts.push(`light travels at about ${fmt(C_LIGHT / n1 / 1e8, 2)} × 10^8 m/s in ${name1} and ${fmt(C_LIGHT / n2v / 1e8, 2)} × 10^8 m/s in ${name2}`);
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: end + 1.5, theme: s.theme ?? 'dark', props, actors: [],
     meta: {verb: 'refraction', facts, anchors, n21: round(n21, 6)}};
+}
+
+/** Apparent depth: an object in the denser medium seen from above. Each ray from it bends away from the normal as it
+ * leaves; drawn back, the rays meet nearer the surface, at about depth × n(to) ÷ n(from) for rays near the normal. */
+function apparentDepth(s: RefractionSpec): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
+  const nIn = indexOf(s.from), nOut = indexOf(s.to), d = s.object_depth!, name = s.object ?? 'object';
+  const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.18 : 0.06) * H, bottom = 0.94 * H;
+  const surface = top + 0.36 * (bottom - top), scale = 0.72 * (bottom - surface) / d, hx = (left + right) / 2;
+  const obj: Vec = [hx, surface + d * scale], apparent = d * nOut / nIn;
+  const inName = mediumName(s.from), outName = mediumName(s.to);
+  const props: Prop[] = [
+    {id: 'medium1', type: 'rect', x: left, y: top, w: right - left, h: surface - top, style: {fill: 'paper', stroke: 'faint', width: 2 * k}},
+    {id: 'medium2', type: 'rect', x: left, y: surface, w: right - left, h: bottom - surface, style: {fill: 'cool', opacity: 0.16, stroke: 'cool', width: 3 * k}},
+    {id: 'name1', type: 'text', x: left + 18 * k, y: top + 40 * k, text: outName, size: 28 * k, weight: 700, style: {fill: 'muted'}},
+    {id: 'name1-n', type: 'text', x: left + 18 * k, y: top + 76 * k, text: `n = ${fmt(nOut, 4)}`, size: 26 * k, style: {fill: 'muted'}},
+    {id: 'name2', type: 'text', x: left + 18 * k, y: surface + 42 * k, text: inName, size: 28 * k, weight: 700, style: {fill: 'cool'}},
+    {id: 'name2-n', type: 'text', x: left + 18 * k, y: surface + 78 * k, text: `n = ${fmt(nIn, 4)}`, size: 26 * k, style: {fill: 'cool'}},
+    {id: 'object', type: 'circle', x: obj[0], y: round(obj[1], 2), r: 14 * k, style: {fill: 'accent'}, layer: 5},
+    {id: 'object-label', type: 'text', x: obj[0] + 26 * k, y: round(obj[1], 2), text: name, size: 28 * k, weight: 700, style: {fill: 'accent', stroke: 'paper', width: 8 * k}, layer: 6},
+  ];
+  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.08 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
+  const meets: number[] = [];
+  (s.angles ?? [8, 16]).forEach((a, i) => [1, -1].forEach(side => {
+    const hit: Vec = [obj[0] + side * d * scale * Math.tan(rad(a)), surface], r = Math.asin(nIn * Math.sin(rad(a)) / nOut);
+    const L = (surface - top - 8 * k) / Math.cos(r), out: Vec = [hit[0] + side * L * Math.sin(r), surface - L * Math.cos(r)];
+    const meet = surface + Math.abs(hit[0] - obj[0]) / Math.tan(r);      // the ray drawn back meets the vertical here
+    meets.push((meet - surface) / scale);
+    const id = `ray${i}${side > 0 ? 'r' : 'l'}`, t = 0.6 + 0.4 * i;
+    props.push({id: `${id}-in`, type: 'line', ...xy([obj[0], round(obj[1], 2)], [round(hit[0], 2), hit[1]]), ...draw(t, t + 1.2), style: {stroke: 'accent', width: 4.5 * k}, layer: 3},
+      {id: `${id}-out`, type: 'line', ...xy([round(hit[0], 2), hit[1]], [round(out[0], 2), round(out[1], 2)]), ...draw(t + 1.3, t + 2.4), style: {stroke: 'good', width: 4.5 * k}, layer: 3},
+      head(`${id}-hin`, obj, hit, [t + 1.2, 1e9], k), head(`${id}-hout`, hit, out, [t + 2.4, 1e9], k),
+      {id: `${id}-back`, type: 'line', ...xy([round(hit[0], 2), hit[1]], [obj[0], round(meet, 2)]), ...draw(3.6, 4.4), style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k]}, layer: 2},
+      {id: `${id}-normal`, type: 'line', x1: round(hit[0], 2), y1: surface - 0.12 * H, x2: round(hit[0], 2), y2: surface + 0.1 * H, show: [t + 1.2, 1e9], style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 8 * k]}, layer: 1});
+  }));
+  const seen = surface + apparent * scale;
+  props.push({id: 'image', type: 'circle', x: obj[0], y: round(seen, 2), r: 12 * k, show: [4.4, 1e9], fade: 0.3, style: {fill: 'cool', opacity: 0.7}, layer: 5},
+    {id: 'image-label', type: 'text', x: obj[0] + 26 * k, y: round(seen, 2), text: `the ${name} seems to be here`, size: 28 * k, weight: 700, show: [4.6, 1e9], fade: 0.3, style: {fill: 'cool', stroke: 'paper', width: 8 * k}, layer: 6});
+  if (panel) {
+    const px = 0.66 * W, pw = W - px - 40 * k;
+    let row = 0.14 * H;
+    const lines: [string, string, number, number][] = [];
+    if (s.title) lines.push([s.title, 'ink', 0, 44]);
+    lines.push([`Rays from the ${name} bend away from the normal as they leave the ${inName}`, 'good', 3.0, 30],
+      [`Traced back, they meet above the ${name}: it seems nearer the surface than it is`, 'cool', 4.6, 30],
+      [`Real depth ${fmt(d)} cm; it seems about ${fmt(apparent, 1)} cm deep (${fmt(d)} × ${fmt(nOut, 4)} ÷ ${fmt(nIn, 4)})`, 'ink', 5.2, 30]);
+    lines.forEach(([text, fill, t, size], j) => {
+      props.push({id: j || !s.title ? `line${j}` : 'title', type: 'text', x: px, y: row, text, size: size * k, width: pw, weight: size > 30 || j < 3 ? 700 : 400, show: [t, 1e9], fade: 0.3, style: {fill}});
+      row += wrapText(text, size * k, pw).length * 1.3 * size * k + 14 * k;
+    });
+  }
+  const anchors: Record<string, Vec> = {object: [obj[0], round(obj[1], 2)], image: [obj[0], round(seen, 2)], surface: [obj[0], surface]};
+  const facts = [`a ${name} ${fmt(d)} cm deep in ${inName} (n = ${fmt(nIn, 4)}) seen from ${outName} (n = ${fmt(nOut, 4)}) seems about ${fmt(apparent, 1)} cm deep: real depth × ${fmt(nOut, 4)} ÷ ${fmt(nIn, 4)}`,
+    `rays leaving the ${inName} bend away from the normal; traced back they meet between ${fmt(Math.min(...meets), 1)} and ${fmt(Math.max(...meets), 1)} cm below the surface`];
+  return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: 7.5, theme: s.theme ?? 'dark', props, actors: [],
+    meta: {verb: 'refraction', facts, anchors, apparent_depth: round(apparent, 6)}};
 }
