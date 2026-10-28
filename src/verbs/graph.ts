@@ -14,6 +14,7 @@ export type Series = {label: string; at?: number} & (
   | {expr: string}
   | {points: Vec[]; join?: 'line' | 'smooth' | 'none'; names?: string[]});
 export type GraphSpec = {
+  /** Up to 4 curves; empty (or left out): the axes alone, before a curve is drawn (2026-10-29). */
   verb: 'graph'; title?: string; x: Axis; y: Axis; series: Series[];
   /** clock: the x axis is time in seconds and the tracer moves in step with it (from `at`, taking to - from seconds,
    * at an even pace), so it can follow a mover in another part of a compound. */
@@ -98,7 +99,11 @@ export function graphErrors(s: GraphSpec): string[] {
   if (e.length) return e;
   const v = s.x.name.trim();
   const oneLetter = /^[A-Za-z]$/.test(v) && v !== 'e';
-  if (!Array.isArray(s.series) || !s.series.length || s.series.length > 4) return [...e, 'graph: series is a list of 1 to 4 curves'];
+  // No series is the axes alone: the narration names the quantities before it states how they relate (the resistance
+  // film's planner had to draw a made-up curve, which contradicted the physics, when only axes were wanted).
+  if ((s as {series?: Series[]}).series === undefined) s = {...s, series: []};
+  if (!Array.isArray(s.series) || s.series.length > 4) return [...e, 'graph: series is a list of up to 4 curves (none: the axes alone)'];
+  if (!s.series.length && (s.trace || s.shade || s.tangent || s.marks?.length)) return [...e, 'graph: trace, shade, tangent and marks need a series to sit on'];
   const [a, b] = s.x.range, [c, d] = s.y.range;
   const inside = (x: number, y: number) => x >= a - 1e-9 && x <= b + 1e-9 && y >= c - 1e-9 && y <= d + 1e-9;
   s.series.forEach((ser, i) => {
@@ -174,6 +179,7 @@ export function graphErrors(s: GraphSpec): string[] {
 }
 
 export function graph(s: GraphSpec): Scene {
+  if ((s as {series?: Series[]}).series === undefined) s = {...s, series: []};       // the axes alone
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const v = s.x.name.trim(), [a, b] = s.x.range, [c, d] = s.y.range;
   // The plane leaves room on its right for the x axis's name before the panel.

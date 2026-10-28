@@ -162,3 +162,11 @@ test('cards: every example and shortest compiles; a long example names the verb\
     } else assert.ok(ex.scene!.duration <= 15, `${name}: its example runs ${ex.scene!.duration.toFixed(1)} s; give the card a shortest spec`);
   }
 });
+
+test('graph: the axes alone, before a curve (no series)', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const r = compile({verb: 'graph', x: {name: 'A', unit: '', range: [0, 4]}, y: {name: 'R', unit: '', range: [0, 4]}} as any);
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.scene!.props.some(p => p.type === 'axes'));
+  assert.match(compile({verb: 'graph', x: {name: 'A', unit: '', range: [0, 4]}, y: {name: 'R', unit: '', range: [0, 4]}, trace: {series: 0, from: 0, to: 2}} as any).errors.join(), /need a series to sit on/);
+});
