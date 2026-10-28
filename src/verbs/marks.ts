@@ -73,7 +73,15 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     placed.push([x0, y - h / 2, x0 + w, y + h / 2]);
     return y;
   };
+  // A mark's text is words for the viewer. A point's id (focus_edge) on screen reads as code: it goes back to the
+  // planner. The name of a point the verb already labels (P, F, C) is not drawn twice: only its dot, if asked for.
+  const labelled = new Set(((meta as {labelled?: string[]})?.labelled ?? []).map(n => n.toLowerCase()));
   marks.forEach((m, i) => {
+    if (m.text && /_/.test(m.text) && anchors.includes(m.text.trim())) errors.push(`${verb}: annotate[${i}].text ${JSON.stringify(m.text)} is a point's name: write the words to show, such as ${JSON.stringify(m.text.replace(/_/g, ' '))}`);
+    if (m.text && typeof m.at === 'string' && !m.to && labelled.has(m.text.trim().replace(/[₁₂]/g, c => (c === '₁' ? '1' : '2')).toLowerCase()) && m.text.trim().toLowerCase().replace(/[₁₂]/g, c => (c === '₁' ? '1' : '2')) === m.at.toLowerCase()) {
+      if (!m.point) return;
+      m = {...m, text: undefined};
+    }
     const at = resolve(m.at, i, 'at');
     if (!at) return;
     const to = m.to === undefined ? undefined : resolve(m.to, i, 'to');

@@ -449,7 +449,8 @@ test('annotate: labels and points at a verb\'s named points or in its own units,
   // Without numbers a point's name stays (2F₂ is not a number), and so do the place words that use one.
   const lens = compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: [15], illustrative: true, annotate: [{text: '2F2', at: '2F2', point: true}]} as any).scene!;
   const texts = lens.props.filter(p => p.type === 'text').map(p => (p as any).text);
-  for (const t of ['2F₂', '2F2', 'Object: between F₁ and 2F₁', 'Image: beyond 2F₂']) assert.ok(texts.includes(t), t);
+  for (const t of ['2F₂', 'Object: between F₁ and 2F₁', 'Image: beyond 2F₂']) assert.ok(texts.includes(t), t);
+  assert.ok(!texts.includes('2F2'), 'the verb already names 2F₂: not again');
   assert.ok(!texts.some(t => /cm/.test(t)));
   const all = cards(['trusted', 'trial']);
   assert.match(all.ray_diagram.fields.annotate, /lenses: O, F1, F2, 2F1, 2F2/);
@@ -540,4 +541,16 @@ test('refraction: apparent depth, a coin in water seen from air', async () => {
   assert.match(err({from: 'air', to: 'water', object_depth: 10}), /object is in the denser medium/);
   assert.match(err({from: 'water', to: 'air', object_depth: 10, slab: 3}), /do not go together/);
   assert.match(err({from: 'diamond', to: 'air', object_depth: 10, angles: [30]}), /past the critical angle/);
+});
+
+test('annotate: no point named twice, no point ids as words; a part without its panel keeps its title clear of a film header', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const base = {verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: ['infinity'], exact: true};
+  const s = compile({...base, annotate: [{text: 'C', at: 'C', point: true}, {text: 'F', at: 'F'}, {text: 'centre', at: 'C'}]} as any).scene!;
+  assert.ok(s.props.some(p => p.id === 'note0-point') && !s.props.some(p => p.id === 'note0-label'), 'C: the dot, not a second C');
+  assert.ok(!s.props.some(p => p.id.startsWith('note1')), 'F alone: nothing to add');
+  assert.equal((s.props.find(p => p.id === 'note2-label') as any).text, 'centre');
+  assert.match(compile({...base, annotate: [{text: 'focus_edge', at: 'focus_edge'}]} as any).errors.join(), /is a point's name: write the words to show, such as "focus edge"/);
+  const part = compile({...base, title: 'Large aperture', panel: false} as any).scene!;
+  assert.ok((part.props.find(p => p.id === 'title') as any).y >= 0.15 * 1080, 'below the header strip');
 });

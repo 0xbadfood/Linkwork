@@ -239,7 +239,7 @@ export function rayDiagram(s: RaySpec): Scene {
   // Marked angles need the reflected ray in view for a while above the point of incidence.
   const ymax = (plane && s.angles ? 1.55 : 1.22) * Math.max(...ys);
   // Without the panel the drawing takes the whole width under its title (a part of a side-by-side compound).
-  const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.13 * H : (s.title ? 0.2 : 0.08) * H, bottom = 0.93 * H;
+  const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.13 * H : (s.title ? 0.24 : 0.13) * H, bottom = 0.93 * H;
   // Heights may be stretched up to 2.5 times, as book figures are, so a small object still reads; straight rays stay
   // straight and still meet at the image. A plane mirror stays to scale: its angles are shown.
   const unit = Math.min((right - left) / (x1 - x0), (bottom - top) / (2 * ymax));
@@ -296,7 +296,8 @@ export function rayDiagram(s: RaySpec): Scene {
   const E = s.seconds_each ?? 6, T0 = 0.8, facts: string[] = [];
   const px = 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
-  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.09 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  // Below a film's header strip (its top 11%), like the panel's own title.
+  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
   if (s.title && panel) {
     props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw});
     row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k;
@@ -418,7 +419,7 @@ export function rayDiagram(s: RaySpec): Scene {
   if (!plane) facts.unshift(`${NAME[dev]} of focal length ${fmt(f)} cm (f = ${signed(fc)} cm in the New Cartesian sign convention)${mirror ? `; radius of curvature ${fmt(R)} cm` : ''}`);
   if (s.power && !mirror) facts.push(`power P = 1/f = ${signed(100 / fc)} dioptre`);
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T0 + positions.length * E + 1.5, theme: s.theme ?? 'dark', props, actors: [],
-    meta: {verb: 'ray_diagram', facts, anchors, units: {ox, oy, sx: unit, sy: unitY, name: `cm: x along the axis (the ${mirror ? 'mirror' : 'lens'} at 0, the object's side negative), y above it`},
+    meta: {verb: 'ray_diagram', facts, anchors, labelled: marks.filter(([, x]) => x >= bx0 && x <= bx1).map(([l]) => l.replace('₁', '1').replace('₂', '2')), units: {ox, oy, sx: unit, sy: unitY, name: `cm: x along the axis (the ${mirror ? 'mirror' : 'lens'} at 0, the object's side negative), y above it`},
       images: positions.map(p => ({d: p.d, v: p.img.v, m: p.img.m, real: p.img.real}))}};
 }
 
@@ -494,7 +495,7 @@ export function refraction(s: RefractionSpec): Scene {
   if (s.object_depth !== undefined) return apparentDepth(s);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const n1 = indexOf(s.from), n2v = indexOf(s.to), slab = s.slab;
-  const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.18 : 0.06) * H, bottom = 0.94 * H;
+  const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.23 : 0.13) * H, bottom = 0.94 * H;
   const y1 = slab ? 0.4 * H : 0.5 * H, thick = slab ? 0.26 * H : 0, y2 = y1 + thick;
   const hx = 0.36 * W;                                          // where the ray meets the (first) surface
   const name1 = mediumName(s.from), name2 = mediumName(s.to), denser = n2v > n1;
@@ -512,7 +513,7 @@ export function refraction(s: RefractionSpec): Scene {
   const E = s.seconds_each ?? 6, T0 = 0.8, facts: string[] = [];
   const px = 0.66 * W, pw = W - px - 40 * k;
   let row = 0.14 * H;
-  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.08 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
   if (s.title && panel) {
     props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw});
     row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k;
@@ -602,7 +603,7 @@ export function refraction(s: RefractionSpec): Scene {
 function apparentDepth(s: RefractionSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
   const nIn = indexOf(s.from), nOut = indexOf(s.to), d = s.object_depth!, name = s.object ?? 'object';
-  const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.18 : 0.06) * H, bottom = 0.94 * H;
+  const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.23 : 0.13) * H, bottom = 0.94 * H;
   const surface = top + 0.36 * (bottom - top), scale = 0.72 * (bottom - surface) / d, hx = (left + right) / 2;
   const obj: Vec = [hx, surface + d * scale], apparent = d * nOut / nIn;
   const inName = mediumName(s.from), outName = mediumName(s.to);
@@ -616,7 +617,7 @@ function apparentDepth(s: RefractionSpec): Scene {
     {id: 'object', type: 'circle', x: obj[0], y: round(obj[1], 2), r: 14 * k, style: {fill: 'accent'}, layer: 5},
     {id: 'object-label', type: 'text', x: obj[0] + 26 * k, y: round(obj[1], 2), text: name, size: 28 * k, weight: 700, style: {fill: 'accent', stroke: 'paper', width: 8 * k}, layer: 6},
   ];
-  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.08 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  if (s.title && !panel) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
   const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
   const meets: number[] = [];
   (s.angles ?? [8, 16]).forEach((a, i) => [1, -1].forEach(side => {

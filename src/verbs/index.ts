@@ -76,7 +76,7 @@ function withMarks(name: string, card: Card): Card {
   const m = MARKABLE.get(name);
   if (!m) return card;
   const where = [card.anchors ? `a named point (${card.anchors})` : m.anchors.length ? `a named point (${m.anchors.join(', ')})` : '', m.units ? `[x, y] in ${m.units}` : ''].filter(Boolean).join(' or ');
-  return {...card, fields: {...card.fields, annotate: `optional labels, points and measuring lines of your own, up to 8: {text?, at: ${where}, to?: a second point the same way (a measuring line from at to it, text at its middle: a distance such as f, R or an aperture), point?: true for a dot, t?: second it appears, colour?: accent | ink | good | bad | cool | muted}; leave out when the verb's own labels say enough`}};
+  return {...card, fields: {...card.fields, annotate: `optional labels, points and measuring lines of your own, up to 8 (text is words for the viewer, never a point's id; points the verb already names, such as P, F, C, are not labelled again): {text?, at: ${where}, to?: a second point the same way (a measuring line from at to it, text at its middle: a distance such as f, R or an aperture), point?: true for a dot, t?: second it appears, colour?: accent | ink | good | bad | cool | muted}; leave out when the verb's own labels say enough`}};
 }
 
 const STOP = new Set(['about', 'their', 'there', 'which', 'where', 'with', 'from', 'that', 'this', 'when', 'what', 'into',
