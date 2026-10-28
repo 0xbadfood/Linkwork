@@ -207,7 +207,8 @@ export function rayDiagram(s: RaySpec): Scene {
   x0 -= 0.12 * span; x1 += 0.12 * span;
   if (mirror) x1 = Math.max(x1, 0.18 * span);
   const ys = [h, ...positions.flatMap(p => [isFinite(p.img.m) ? Math.abs(p.img.m * h) : 0, ...p.rays.map(r => Math.abs(r.hit[1]))])];
-  const ymax = 1.22 * Math.max(...ys);
+  // Marked angles need the reflected ray in view for a while above the point of incidence.
+  const ymax = (plane && s.angles ? 1.55 : 1.22) * Math.max(...ys);
   const left = 0.04 * W, right = 0.62 * W, top = 0.13 * H, bottom = 0.93 * H;
   // Heights may be stretched up to 2.5 times, as book figures are, so a small object still reads; straight rays stay
   // straight and still meet at the image. A plane mirror stays to scale: its angles are shown.
