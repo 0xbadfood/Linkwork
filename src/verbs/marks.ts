@@ -63,10 +63,16 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
   };
   // Labels placed so far (x0, y0, x1, y1): a label that would overlap one is moved up, then down, until it is clear,
   // so two marks at nearby points (edge and central rays crossing the axis close together) both read.
-  const placed: [number, number, number, number][] = [];
+  // The verb's own texts count as placed too: a planner's label moved clear of them as well (2026-10-29: 'Red bends
+  // least' landed on the screen's colour names, 'Light bends in air' on the star's label).
+  const placed: [number, number, number, number][] = scene.props.filter(p => p.type === 'text' && !p.id.startsWith('note')).map(p => {
+    const t = p as unknown as {x: number; y: number; text: string; size?: number; align?: string; width?: number};
+    const size = t.size ?? 32, w = Math.min(t.width ?? Infinity, String(t.text).length * size * 0.56), x0 = t.align === 'end' ? t.x - w : t.align === 'middle' ? t.x - w / 2 : t.x;
+    return [x0, t.y - size * 0.6, x0 + w, t.y + size * 0.6] as [number, number, number, number];
+  });
   const clear = (x: number, y: number, text: string, align: 'start' | 'middle' | 'end'): number => {
     const w = text.length * 30 * k * 0.58, h = 36 * k, x0 = align === 'start' ? x : align === 'end' ? x - w : x - w / 2;
-    for (const dy of [0, -40, 40, -80, 80, -120, 120].map(v => v * k)) {
+    for (const dy of [0, -40, 40, -80, 80, -120, 120].map(v => v * k).filter(dy => y + dy >= 0.14 * scene.height)) {   // never into a film's header
       const box: [number, number, number, number] = [x0, y + dy - h / 2, x0 + w, y + dy + h / 2];
       if (!placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { placed.push(box); return y + dy; }
     }
@@ -112,7 +118,7 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
       const right = x > 0.85 * scene.width;   // near the right edge the label reads leftwards
       // Kept inside the frame: a label near an edge reads inwards, and never above the top or below the bottom.
       const lx = right ? x - 14 * k : Math.min(x + 14 * k, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
-      props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(30 * k, clear(lx, y - 16 * k, m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
+      props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(0.14 * scene.height, clear(lx, Math.max(0.14 * scene.height, y - 16 * k), m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
         align: right ? 'end' : 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     }
   });

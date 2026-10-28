@@ -320,7 +320,8 @@ export function stage(s: StageSpec): Scene {
   const ground = s.ground ?? 'floor';
   if (ground !== 'none') props.push({id: 'ground', type: 'line', x1: 0, y1: box[3], x2: Wpx, y2: box[3],
     style: {stroke: ground === 'grass' ? 'good' : 'muted', width: 4 * k}});
-  if (s.title) props.push({id: 'title', type: 'text', x: box[0], y: 0.08 * Hpx, text: s.title, size: 44 * k, weight: 700, width: Wpx * 0.6});
+  // Below a film's header strip (its top 11%; at 8% the title ran into it, 2026-10-29).
+  if (s.title) props.push({id: 'title', type: 'text', x: box[0], y: 0.155 * Hpx, text: s.title, size: 44 * k, weight: 700, width: Wpx * 0.6});
   const events = s.events ?? [];
   /** A speedometer's reading: the speed of the mover it follows, from that mover's computed path. */
   const speedKeys = (id: string, scale: number): Key[] => {
