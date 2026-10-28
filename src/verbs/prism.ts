@@ -16,7 +16,13 @@ type Common = {title?: string; width?: number; height?: number; fps?: number; th
 export type PrismSpec = Common & {
   verb: 'prism';
   /** prism: one triangular prism; two_prisms: a second, upside down, after it (Newton); raindrop: a drop of water. */
-  setup?: 'prism' | 'two_prisms' | 'raindrop';
+  /** newton_test: Newton's first test: a slit passes one colour of the spectrum into a second, similar prism, which
+   * bends it further but splits it no more. */
+  setup?: 'prism' | 'two_prisms' | 'raindrop' | 'newton_test';
+  /** newton_test: the colour the slit lets through (default green). */
+  colour?: string;
+  /** White light: show each end colour's refractive index and its speed in the glass (v = c/n): violet slows most. */
+  speeds?: boolean;
   /** ray: one ray of one colour, with every angle marked; white: white light, split into its colours. */
   light?: 'ray' | 'white';
   /** The prism's angle A in degrees (30 to 75, default 60). */
@@ -24,7 +30,7 @@ export type PrismSpec = Common & {
   /** The angle of incidence at the first face, in degrees (default 40; a raindrop: where the ray meets the drop). */
   incidence?: number;
   /** The prism's glass: crown glass or flint glass (default flint for white light, whose colours spread more). */
-  glass?: 'crown glass' | 'flint glass';
+  glass?: 'crown glass' | 'flint glass' | 'glass';
   panel?: boolean;
   seconds?: number;
   /** White light: how many times wider the colours' spread is drawn than it really is (1 to 8, default 4; the
@@ -107,11 +113,14 @@ export function trace(shapes: Shape[], start: Vec, dir: Vec, nm: number, reflect
 export function prismErrors(s: PrismSpec): string[] {
   const e: string[] = [];
   const setup = s.setup ?? 'prism';
-  if (!['prism', 'two_prisms', 'raindrop'].includes(setup)) e.push('prism: setup is prism, two_prisms or raindrop');
+  if (!['prism', 'two_prisms', 'raindrop', 'newton_test'].includes(setup)) e.push('prism: setup is prism, two_prisms, raindrop or newton_test');
+  if (s.colour !== undefined && !(setup === 'newton_test' && COLOURS.some(([n]) => n === s.colour))) e.push(`prism: colour (for newton_test) is one of ${COLOURS.map(([n]) => n).join(', ')}`);
+  if (setup === 'newton_test' && s.light === 'ray') e.push('prism: newton_test starts from white light: leave light out');
+  if (s.speeds !== undefined && typeof s.speeds !== 'boolean') e.push('prism: speeds is true or false');
   if (s.light !== undefined && !['ray', 'white'].includes(s.light)) e.push('prism: light is ray (one colour, angles marked) or white (split into colours)');
   if (s.angle !== undefined && !(isNum(s.angle) && s.angle >= 30 && s.angle <= 75)) e.push('prism: angle (the prism angle A) is 30 to 75 degrees');
   if (s.incidence !== undefined && !(isNum(s.incidence) && s.incidence >= 0 && s.incidence <= 80)) e.push('prism: incidence is 0 to 80 degrees');
-  if (s.glass !== undefined && !['crown glass', 'flint glass'].includes(s.glass)) e.push('prism: glass is crown glass or flint glass');
+  if (s.glass !== undefined && !['crown glass', 'flint glass', 'glass'].includes(s.glass)) e.push('prism: glass is crown glass or flint glass (glass alone means crown glass)');
   if (s.spread !== undefined && !(isNum(s.spread) && s.spread >= 1 && s.spread <= 8)) e.push('prism: spread is 1 to 8 (how much wider the colours are drawn)');
   if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('prism: panel is true or false');
   if (s.seconds !== undefined && !(isNum(s.seconds) && s.seconds >= 4 && s.seconds <= 20)) e.push('prism: seconds is 4 to 20');
@@ -119,7 +128,7 @@ export function prismErrors(s: PrismSpec): string[] {
   if (setup === 'two_prisms' && s.light === 'ray') e.push('prism: two_prisms shows white light split and joined again: light white');
   if (e.length || setup === 'raindrop') return e;
   // The ray must get out of the far face: past the critical angle it would not.
-  const A = s.angle ?? 60, n = nOf(s.glass ?? (s.light === 'white' ? 'flint glass' : 'crown glass'), 410), i = s.incidence ?? 40;
+  const A = s.angle ?? 60, n = nOf(s.glass === 'glass' ? 'crown glass' : s.glass ?? (s.light === 'white' ? 'flint glass' : 'crown glass'), 410), i = s.incidence ?? (s.light === 'white' ? 55 : 40);
   const r1 = deg(Math.asin(Math.sin(rad(i)) / n)), r2 = A - r1;
   if (n * Math.sin(rad(r2)) >= 1) e.push(`prism: at incidence ${i}° the light is totally reflected inside at the second face (it meets it at ${fmt(r2)}°); use a larger incidence or a smaller angle`);
   return e;
@@ -128,7 +137,8 @@ export function prismErrors(s: PrismSpec): string[] {
 export function prism(s: PrismSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
   const setup = s.setup ?? 'prism', white = (s.light ?? (setup === 'prism' ? 'ray' : 'white')) === 'white';
-  const glass = s.glass ?? (white ? 'flint glass' : 'crown glass'), A = s.angle ?? 60, i = s.incidence ?? (setup === 'raindrop' ? 0 : white ? 55 : 40);   // white: near the least deviation
+  if (setup === 'newton_test') return newtonTest(s);
+  const glass = s.glass === 'glass' ? 'crown glass' : s.glass ?? (white ? 'flint glass' : 'crown glass'), A = s.angle ?? 60, i = s.incidence ?? (setup === 'raindrop' ? 0 : white ? 55 : 40);   // white: near the least deviation
   const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.24 : 0.13) * H, bottom = 0.93 * H;
   // Drawing in y-up units of px from the frame's lower left; P converts to the frame.
   const P = (q: Vec): Vec => [round(q[0], 2), round(H - q[1], 2)];
@@ -244,6 +254,14 @@ export function prism(s: PrismSpec): Scene {
         anchors.violet = P(ends[0]); anchors.red = P(ends[6]);
         const nV = nOf(glass, 410), nR = nOf(glass, 660);
         lines = [`White light enters a ${glass} prism`, 'Each colour bends by a different angle: violet the most, red the least', 'The band of colours on the screen is the spectrum: VIBGYOR'];
+        if (s.speeds) {
+          // Why: the glass's refractive index is larger for violet, so violet slows more (v = c/n) and bends more.
+          const speedLines = [`violet: n = ${fmt(nV, 3)}, v = ${fmt(3 / nV, 3)} × 10⁸ m/s`, `red: n = ${fmt(nR, 3)}, v = ${fmt(3 / nR, 3)} × 10⁸ m/s`];
+          if (panel) lines.push('In glass violet slows the most:', ...speedLines);
+          else speedLines.forEach((t, j) => props.push({id: `speed-${j}`, type: 'text', x: left + 6 * k, y: bottom - 70 * k + 30 * k * j, text: t, size: 26 * k, weight: 700, show: [3.8, 1e9], fade: 0.3,
+            style: {fill: j ? '#ff6a5a' : '#a98bff', stroke: 'paper', width: 7 * k}, layer: 7}));
+          facts.push(`violet slows the most in the glass: ${fmt(3 / nV, 3)} × 10^8 m/s against ${fmt(3 / nR, 3)} × 10^8 m/s for red (v = c/n), so it bends the most`);
+        }
         facts.push(`in ${glass} the refractive index is ${fmt(nV, 3)} for violet light and ${fmt(nR, 3)} for red, so violet bends the most and red the least`,
           'white light is split into seven colours, violet, indigo, blue, green, yellow, orange and red (VIBGYOR): this is dispersion, and the band of colours is the spectrum');
       } else {
@@ -300,4 +318,59 @@ export function prism(s: PrismSpec): Scene {
   } else if (s.title) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: Math.max(T, 6), theme: s.theme ?? 'dark', props, actors: [],
     meta: {verb: 'prism', facts, anchors}};
+}
+
+/** Newton's first test: white light through a prism; a slit lets one colour through to a second, similar prism; that
+ * colour bends again but stays one colour. */
+function newtonTest(s: PrismSpec): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
+  const glass = s.glass === 'glass' || s.glass === 'crown glass' ? 'crown glass' : 'flint glass', A = s.angle ?? 60, i = s.incidence ?? 55;
+  const pick = COLOURS.find(([n]) => n === (s.colour ?? 'green'))!;
+  const left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.12 * H : (s.title ? 0.24 : 0.13) * H, bottom = 0.93 * H;
+  const P = (q: Vec): Vec => [round(q[0], 2), round(H - q[1], 2)], w = right - left, side = Math.min(0.26 * w, 0.42 * (bottom - top));
+  const cy = H - (top + bottom) / 2 + 0.08 * (bottom - top);
+  const tri = (x: number): Vec[] => { const half = side * Math.sin(rad(A / 2)), h = side * Math.cos(rad(A / 2)), y0 = cy - h / 2; return [[x - half, y0], [x, y0 + h], [x + half, y0]]; };
+  const first: Shape = {kind: 'polygon', points: tri(left + 0.2 * w), medium: glass};
+  const [b, a] = first.points;
+  const face: Vec = unit([a[0] - b[0], a[1] - b[1]]), inward: Vec = [face[1], -face[0]];
+  const hit: Vec = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], c = Math.cos(rad(i)), sn = Math.sin(rad(i));
+  const dir: Vec = unit([inward[0] * c - inward[1] * sn, inward[0] * sn + inward[1] * c]), start: Vec = [hit[0] - dir[0] * 0.5 * side, hit[1] - dir[1] * 0.5 * side];
+  const props: Prop[] = [], spread = s.spread ?? 4, draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
+  const glassStyle = {stroke: 'cool', width: 4 * k, fill: 'cool', opacity: 0.18};
+  props.push({id: 'prism1', type: 'polyline', points: first.points.map(P), closed: true, style: glassStyle, layer: 1},
+    {id: 'incident', type: 'line', x1: P(start)[0], y1: P(start)[1], x2: P(hit)[0], y2: P(hit)[1], ...draw(0.4, 1.2), style: {stroke: 'ink', width: 6 * k}, layer: 4});
+  // Each colour out of the first prism to the slit screen, drawn `spread` times farther from yellow (as elsewhere).
+  const paths = COLOURS.map(([, nm]) => trace([first], start, dir, nm));
+  const ref = paths[4], screenX = ref.points.at(-1)![0] + 0.55 * side;
+  const at = (p: {points: Vec[]; out: Vec}) => { const q = p.points.at(-1)!; return [screenX, q[1] + p.out[1] * (screenX - q[0]) / p.out[0]] as Vec; };
+  const yRef = at(ref)[1], ends = paths.map(p => [screenX, yRef + spread * (at(p)[1] - yRef)] as Vec);
+  paths.forEach((p, j) => props.push({id: `ray-${COLOURS[j][0]}`, type: 'polyline', points: [...p.points.slice(1), ends[j]].map(P), ...draw(1.2, 2.6),
+    style: {stroke: wavelengthColour(COLOURS[j][1]), width: 4 * k}, layer: 4}));
+  const j = COLOURS.indexOf(pick), slit = ends[j], ys = ends.map(e => e[1]);
+  props.push({id: 'screen-top', type: 'line', x1: P([screenX, Math.max(...ys) + 0.2 * side])[0], y1: P([screenX, Math.max(...ys) + 0.2 * side])[1], x2: P([screenX, slit[1] + 6 * k])[0], y2: P([screenX, slit[1] + 6 * k])[1], style: {stroke: 'muted', width: 8 * k}, layer: 5},
+    {id: 'screen-bottom', type: 'line', x1: P([screenX, slit[1] - 6 * k])[0], y1: P([screenX, slit[1] - 6 * k])[1], x2: P([screenX, Math.min(...ys) - 0.2 * side])[0], y2: P([screenX, Math.min(...ys) - 0.2 * side])[1], style: {stroke: 'muted', width: 8 * k}, layer: 5});
+  // Through the slit the chosen colour goes on, with its real direction, into a second prism set the same way up.
+  const outDir = paths[j].out, m1: Vec = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const target: Vec = [slit[0] + outDir[0] * 0.55 * side, slit[1] + outDir[1] * 0.55 * side], shift: Vec = [target[0] - m1[0], target[1] - m1[1]];
+  const second: Shape = {kind: 'polygon', points: first.points.map(q => [q[0] + shift[0], q[1] + shift[1]] as Vec), medium: glass};
+  const onward = trace([second], slit, outDir, pick[1]), lastPt = onward.points.at(-1)!;
+  const tail: Vec = [lastPt[0] + onward.out[0] * 0.6 * side, lastPt[1] + onward.out[1] * 0.6 * side];
+  props.push({id: 'prism2', type: 'polyline', points: second.points.map(P), closed: true, style: glassStyle, layer: 1},
+    {id: 'one-colour', type: 'polyline', points: [...onward.points, tail].map(P), ...draw(2.8, 4.2), style: {stroke: wavelengthColour(pick[1]), width: 5 * k}, layer: 4});
+  const label = (id: string, text: string, q: Vec, t: number, fill: string, align: 'start' | 'middle' | 'end' = 'middle') =>
+    props.push({id, type: 'text', x: P(q)[0], y: P(q)[1], text, size: 26 * k, weight: 700, align, show: [t, 1e9], fade: 0.3, style: {fill, stroke: 'paper', width: 7 * k}, layer: 7});
+  label('slit-label', `the slit lets only ${pick[0]} through`, [screenX, Math.min(...ys) - 0.2 * side - 30 * k], 2.6, 'muted');
+  label('result', `still only ${pick[0]}: no new colours`, [tail[0], tail[1] - 40 * k], 4.2, wavelengthColour(pick[1]), 'end');
+  const lines = ['A prism splits white light into its colours', `A slit lets one colour (${pick[0]}) through to a second, similar prism`, 'It bends again but splits no further: the colours of sunlight are its own'];
+  if (panel) {
+    const px = 0.66 * W, pw = W - px - 40 * k;
+    let row = 0.14 * H;
+    if (s.title) { props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw}); row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k; }
+    lines.forEach((text, n) => { props.push({id: `line${n}`, type: 'text', x: px, y: row, text, size: 30 * k, width: pw, weight: n ? 400 : 700, show: [1 + 1.4 * n, 1e9], fade: 0.3}); row += wrapText(text, 30 * k, pw).length * 1.3 * 30 * k + 12 * k; });
+  } else if (s.title) props.push({id: 'title', type: 'text', x: left, y: 0.16 * H, text: s.title, size: 44 * k, weight: 700, width: 0.92 * W});
+  if (spread > 1) props.push({id: 'spread-note', type: 'text', x: left + 6 * k, y: bottom - 6 * k, text: `colours drawn ${spread}× more spread out than they really are`, size: 22 * k, style: {fill: 'muted'}, layer: 6});
+  return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: Math.max(s.seconds ?? 8, 6), theme: s.theme ?? 'dark', props, actors: [],
+    meta: {verb: 'prism', facts: [`Newton sent one colour (${pick[0]}) of the spectrum through a second, similar prism: it was bent again but split into no further colours, so the colours are not made by the glass; they are in sunlight`,
+      ...(spread > 1 ? [`the colours' spread is drawn ${spread} times wider than it really is, so it can be seen`] : [])],
+      anchors: {slit: P(slit), second: P(m1.map((v, n) => v + shift[n]) as Vec), out: P(tail)}}};
 }

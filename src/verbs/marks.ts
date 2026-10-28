@@ -110,8 +110,9 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     if (m.point) props.push({id: `note${i}-point`, type: 'circle', x, y, r: 9 * k, show, fade: 0.3, style: {fill}, layer: 8});
     if (m.text) {
       const right = x > 0.85 * scene.width;   // near the right edge the label reads leftwards
-      const lx = right ? x - 14 * k : x + 14 * k;
-      props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(clear(lx, y - 16 * k, m.text, right ? 'end' : 'start'), 2), text: m.text, size: 30 * k, weight: 700,
+      // Kept inside the frame: a label near an edge reads inwards, and never above the top or below the bottom.
+      const lx = right ? x - 14 * k : Math.min(x + 14 * k, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
+      props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(30 * k, clear(lx, y - 16 * k, m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
         align: right ? 'end' : 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     }
   });

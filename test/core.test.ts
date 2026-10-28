@@ -668,3 +668,16 @@ test('refraction: vacuum is exactly 1, so air relative to vacuum is 1.0003', asy
   assert.match(facts, /refractive index of air relative to vacuum: 1\.0003 \(absolute indices 1 and 1\.0003\)/);
   assert.equal((compile({verb: 'refraction', from: 'vacuum', to: 'air', angles: [30]} as any).scene!.meta as any).n21, 1.0003);
 });
+
+test("prism: Newton's first test passes one colour into a second prism, and white light can show each colour's speed", async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const t = compile({verb: 'prism', setup: 'newton_test', colour: 'green'} as any);
+  assert.deepEqual(t.errors, []);
+  assert.match((t.scene!.meta as any).facts[0], /one colour \(green\) .* split into no further colours/);
+  assert.ok(t.scene!.props.some(p => p.id === 'prism2') && t.scene!.props.some(p => p.id === 'one-colour'));
+  const sp = compile({verb: 'prism', light: 'white', glass: 'glass', speeds: true} as any).scene!;
+  // crown glass: n(410 nm) = 1.5046 + 0.0042/0.41² = 1.530, v = 3/1.530 = 1.961 (×10⁸ m/s)
+  assert.ok((sp.meta as any).facts.some((f: string) => /violet slows the most in the glass: 1\.961 × 10\^8 m\/s against 1\.981/.test(f)));
+  assert.match(compile({verb: 'prism', setup: 'newton_test', colour: 'pink'} as any).errors.join(), /colour \(for newton_test\) is one of/);
+  assert.deepEqual(compile({verb: 'prism', glass: 'glass'} as any).errors, [], 'glass alone is crown glass, and the check does not throw');
+});
