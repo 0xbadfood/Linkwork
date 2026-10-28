@@ -238,7 +238,38 @@ export const CARDS: Record<string, Card> = {
       items: [{id: 'cannon', object: 'cannon', x: 2, size: 2, a: 40}, {id: 'ball', object: 'ball', x: 2, size: 0.5}],
       events: [{t: 0.5, item: 'ball', kind: 'launch', from: 'cannon', speed: 18}], readouts: [{item: 'ball', show: ['x', 'height']}]},
     status: 'trial',
+  },  ray_diagram: {
+    subjects: ['physics'],
+    concepts: ['reflection of light', 'plane mirror', 'spherical mirrors', 'concave mirror', 'convex mirror', 'image formation by spherical mirrors',
+      'ray diagrams', 'principal focus', 'focal length', 'centre of curvature', 'pole', 'mirror formula', 'magnification', 'New Cartesian sign convention',
+      'spherical lenses', 'convex lens', 'concave lens', 'image formation by lenses', 'lens formula', 'power of a lens', 'real and virtual images'],
+    kinds: ['ray_diagram'], motions: ['draw_on', 'stages', 'labels'],
+    use_when: "light meeting a mirror or a thin lens: the image of an object at one distance after another (the book's table: beyond C, at C, between C and F, at F, between F and P; for a lens 2F₁, F₁, O), a parallel beam meeting at F or seeming to come from it (an object at infinity), a plane mirror's virtual image as far behind as the object is in front with i = r, the mirror or lens formula and magnification with signs, a lens's power; the image is computed, so where it is and what it is like are exact",
+    not_when: 'light bending at a surface between two media or through a glass slab (use refraction), a prism, dispersion or the eye (not yet), a mirror turning a beam with no object (not yet), or a graph',
+    fields: {device: 'plane_mirror | concave_mirror | convex_mirror | convex_lens | concave_lens',
+      focal_length: 'the size of f in cm (no sign; the device gives it); not for a plane mirror',
+      objects: 'object distances from the mirror or lens in cm (no sign), 1 to 6, shown one after another; "infinity" for a parallel beam (not for a plane mirror); within 6 f, and not just beside F (an object exactly at F is fine: image at infinity)',
+      object_height: 'optional, cm; default f/3', rays: 'optional 2 or 3 of parallel, focus, centre (through C for a mirror, the optical centre for a lens), pole (mirrors)',
+      formula: 'true: u, v, f, m with signs and the formula with numbers (use when the narration states them)', power: 'a lens: true shows P = 1/f in dioptres',
+      angles: 'a plane mirror: true marks the normal and i = r', seconds_each: 'seconds per object position, 3 to 12 (default 6)', title: 'short title'},
+    example: {verb: 'ray_diagram', title: 'Images by a concave mirror', device: 'concave_mirror', focal_length: 10, objects: [30, 20, 15, 5], formula: true},
+    status: 'trial',
   },
+  refraction: {
+    subjects: ['physics'],
+    concepts: ['refraction of light', 'laws of refraction', "Snell's law", 'refractive index', 'angle of incidence', 'angle of refraction', 'normal',
+      'refraction through a glass slab', 'lateral displacement', 'optically denser medium', 'optically rarer medium', 'speed of light in a medium', 'total internal reflection', 'critical angle'],
+    kinds: ['ray_diagram'], motions: ['draw_on', 'stages', 'labels'],
+    use_when: 'a ray going from one medium into another (air into water or glass, glass into air): bending towards or away from the normal, angles of incidence and refraction, sin i ÷ sin r staying the same for several angles (the second law), the refractive index and the speed of light in each medium; a rectangular glass slab with the emergent ray parallel to the incident ray and the lateral shift',
+    not_when: 'mirrors or lenses forming an image (use ray_diagram), a prism or dispersion (not yet)',
+    fields: {from: "the starting medium: a name (air, water, glass, crown glass, kerosene, diamond, ice, alcohol, benzene, ...; the book's Table 9.3) or a refractive index",
+      to: 'the medium entered, the same way', angles: 'angles of incidence in degrees (0 to 85), 1 to 5, shown in turn',
+      slab: 'optional: a slab of `to` this many cm thick, with `from` on both sides', speeds: 'true: the speed of light in each medium (v = c/n)',
+      seconds_each: '3 to 12 (default 6)', title: 'short title'},
+    example: {verb: 'refraction', title: 'Light entering glass', from: 'air', to: 'glass', angles: [30, 45, 60], speeds: true},
+    status: 'trial',
+  },
+
 };
 
 export function cardErrors(name: string, card: Card | undefined): string[] {

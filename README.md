@@ -49,6 +49,14 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `scale_compare` (trial): an object's length against distances, drawn to scale: it shrinks to its true size beside each
   distance and L/D is shown (when can a train or a bus be treated as a point?).
 
+- `ray_diagram` (trial): a plane, concave or convex mirror or a convex or concave lens, with an object at one distance
+  after another (or a parallel beam from infinity): the image comes from the mirror or lens formula (New Cartesian
+  signs), the principal rays are drawn to meet exactly at it (dashed behind for a virtual image), and the image is
+  described as the book's tables do; u, v, f, m with signs, the formula with numbers, a lens's power in dioptres.
+- `refraction` (trial): a ray entering another medium, or crossing a glass slab and coming out, bent by Snell's law with
+  the book's refractive indices; i and r from the normal, sin i ÷ sin r for several angles, the speed of light in each
+  medium, the slab's lateral shift, and total internal reflection past the critical angle.
+
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.
 

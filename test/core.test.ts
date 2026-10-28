@@ -354,3 +354,65 @@ test('a ball dropped and one flicked off a table at the same moment land togethe
     events: [{t: 0, item: 'b', kind: 'launch', speed: 2, angle: 270}]} as never);
   assert.match(down.errors.join(' '), /give speed 0, not a downward angle/);
 });
+
+test('ray_diagram: images by the mirror and lens formulas, worded as the book does', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {imageOf} = await import('../src/verbs/optics.ts');
+  // NCERT Class 10 Example 9.2: a 4 cm tall object 25 cm from a concave mirror of f 15 cm: v = −37.5 cm, m = −1.5.
+  const a = imageOf('concave_mirror', 15, 25);
+  assert.ok(Math.abs(a.v + 37.5) < 1e-9 && Math.abs(a.m + 1.5) < 1e-9 && a.real);
+  // Example 9.1: a convex mirror of R 3.00 m, a bus 5.00 m away: v = +1.15 m, m = +0.23.
+  const b = imageOf('convex_mirror', 150, 500);
+  assert.ok(Math.abs(b.v - 115.38) < 0.01 && Math.abs(b.m - 0.23) < 0.005 && !b.real);
+  // Example 9.4: a 2 cm object 15 cm from a convex lens of f 10 cm: v = +30 cm, m = −2.
+  const c = imageOf('convex_lens', 10, 15);
+  assert.ok(Math.abs(c.v - 30) < 1e-9 && Math.abs(c.m + 2) < 1e-9 && c.real);
+  // Example 9.3: a concave lens of f 15 cm forming an image 10 cm away: object 30 cm away, m = +1/3.
+  const d = imageOf('concave_lens', 15, 30);
+  assert.ok(Math.abs(d.v + 10) < 1e-9 && Math.abs(d.m - 1 / 3) < 1e-9 && !d.real);
+  assert.ok(imageOf('concave_mirror', 10, 10).atInfinity && imageOf('convex_lens', 10, 10).atInfinity);
+  const {scene, errors} = compile({verb: 'ray_diagram', device: 'concave_mirror', focal_length: 10, objects: ['infinity', 30, 20, 15, 10, 5]} as any);
+  assert.deepEqual(errors, []);
+  const facts = (scene!.meta as any).facts.join('\n');
+  for (const said of ['(at F), real and inverted, highly diminished, point-sized', '(beyond C): image 15 cm in front of the mirror (between F and C), real and inverted, diminished',
+    '(at C), real and inverted, same size', '(between F and C): image 30 cm in front of the mirror (beyond C), real and inverted, enlarged',
+    '(at F): image at infinity', '(between F and P): image 10 cm behind the mirror, virtual and erect, enlarged']) assert.ok(facts.includes(said), said);
+  // The rays meet at the image: every reflected ray of a real image passes through its top.
+  assert.deepEqual(check(scene!, {every: 3}), []);
+  const lens = compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 10, objects: [15], power: true} as any).scene!;
+  assert.ok((lens.meta as any).facts.some((f: string) => f.includes('+10 dioptre')));
+});
+
+test('ray_diagram: errors name the field and the fix', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const errs = (s: object) => compile({verb: 'ray_diagram', ...s} as any).errors.join(' | ');
+  assert.match(errs({device: 'periscope', objects: [10]}), /device is one of/);
+  assert.match(errs({device: 'convex_lens', objects: [10]}), /focal_length is the size of f/);
+  assert.match(errs({device: 'plane_mirror', focal_length: 10, objects: [10]}), /no focal_length/);
+  assert.match(errs({device: 'plane_mirror', objects: ['infinity']}), /needs a distance/);
+  assert.match(errs({device: 'concave_mirror', focal_length: 10, objects: [11]}), /too near F.*put it at F exactly/);
+  assert.match(errs({device: 'concave_mirror', focal_length: 10, objects: [70]}), /more than 6 f/);
+  assert.match(errs({device: 'convex_lens', focal_length: 10, objects: [20], rays: ['pole', 'parallel']}), /a lens has no pole/);
+  assert.match(errs({device: 'convex_lens', focal_length: 10, objects: [20], angles: true}), /angles is for a plane mirror/);
+  assert.match(errs({device: 'concave_mirror', focal_length: 10, objects: [20], power: true}), /power is for a lens/);
+});
+
+test('refraction: Snell\'s law with the book\'s indices, the slab\'s shift, and total internal reflection', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {scene, errors} = compile({verb: 'refraction', from: 'air', to: 'water', angles: [30, 60], speeds: true} as any);
+  assert.deepEqual(errors, []);
+  const facts = (scene!.meta as any).facts.join('\n');
+  // sin r = 1.0003 sin 30° / 1.33 → r = 22.08°; n of water relative to air = 1.33 / 1.0003.
+  assert.ok(facts.includes('angle of refraction 22.1°'), facts);
+  assert.ok(Math.abs((scene!.meta as any).n21 - 1.33 / 1.0003) < 1e-6);
+  assert.ok(facts.includes('2.26 × 10^8 m/s in water'));
+  const slab = compile({verb: 'refraction', from: 'air', to: 'glass', angles: [40], slab: 5} as any).scene!;
+  const r = Math.asin(1.0003 * Math.sin(40 * Math.PI / 180) / 1.5), shift = 5 * Math.sin(40 * Math.PI / 180 - r) / Math.cos(r);
+  assert.ok((slab.meta as any).facts.some((f: string) => f.includes(`shifted sideways by ${Number(shift.toFixed(2))} cm`)));
+  const tir = compile({verb: 'refraction', from: 'glass', to: 'air', angles: [50]} as any).scene!;
+  assert.ok((tir.meta as any).facts.some((f: string) => f.includes('totally reflected') && f.includes('41.8°')));
+  const errs = (s: object) => compile({verb: 'refraction', ...s} as any).errors.join(' | ');
+  assert.match(errs({from: 'air', to: 'unobtainium', angles: [30]}), /to is a refractive index or one of/);
+  assert.match(errs({from: 'air', to: 'glass', angles: [95]}), /0 to 85 degrees/);
+  assert.match(errs({from: 'glass', to: 'air', angles: [30], slab: 4}), /slab is of the optically denser medium/);
+});

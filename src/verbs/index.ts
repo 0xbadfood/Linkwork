@@ -9,12 +9,14 @@ import {graph, graphErrors, type GraphSpec} from './graph.ts';
 import {motionErrors, motionOnLine, scaleCompare, scaleErrors, type MotionSpec, type ScaleSpec} from './motion.ts';
 import {stage, stageErrors, type StageSpec} from './stage.ts';
 import {pathErrors, pathLength, type PathSpec} from './path.ts';
+import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
   type AreaSpec, type DomainSpec, type ExtremaSpec, type SecantSpec, type VectorSpec} from './calculus.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
-  | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec;
+  | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
+  | RaySpec | RefractionSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -50,6 +52,10 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'distance along a route against displacement, seen from above: a walker on a winding trail or a round trip; path covered and the straight start-to-here arrow measured as it goes, then average speed beside the size of average velocity'} as Verb<PathSpec>,
   stage: {errors: stageErrors, compile: stage,
     about: 'a small mechanics world laid out in metres (ground, tables, wedges, walls, a cannon) where things move by computed physics: a mover at constant speed, a ball launched as a projectile, a block sliding or a ball rolling down a wedge, two things colliding; ranges, times and speeds are computed and shown'} as Verb<StageSpec>,
+  ray_diagram: {errors: rayDiagramErrors, compile: rayDiagram,
+    about: 'a plane, concave or convex mirror or a convex or concave lens: an object at one distance after another (or a parallel beam), principal rays drawn to the image found by the mirror or lens formula, and the image described as the book does (where, real or virtual, inverted or erect, size)'} as Verb<RaySpec>,
+  refraction: {errors: refractionErrors, compile: refraction,
+    about: "a ray entering another medium (or crossing a glass slab and coming out): bent by Snell's law with the book's refractive indices, i and r from the normal, sin i ÷ sin r for each angle, the lateral shift through a slab"} as Verb<RefractionSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

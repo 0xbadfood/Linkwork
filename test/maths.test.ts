@@ -63,7 +63,7 @@ test('secant to tangent: the slope of PQ approaches f′(a)', () => {
 test('the maths examples compile and pass every check', async () => {
   const {readFileSync} = await import('node:fs');
   const {check} = await import('../src/index.ts');
-  for (const f of ['domain-sqrt', 'domain-reciprocal', 'extrema-cubic', 'secant', 'area', 'vectors', 'graph-vt', 'graph-boyle', 'graph-ionisation', 'graph-heating']) {
+  for (const f of ['domain-sqrt', 'domain-reciprocal', 'extrema-cubic', 'secant', 'area', 'vectors', 'graph-vt', 'graph-boyle', 'graph-ionisation', 'graph-heating', 'ray-concave', 'ray-convex-lens', 'ray-plane', 'ray-convex-mirror', 'ray-concave-lens', 'refraction-glass', 'refraction-slab', 'refraction-tir']) {
     const {scene, errors} = compile(JSON.parse(readFileSync(`examples/${f}.json`, 'utf8')));
     assert.deepEqual(errors, [], f);
     assert.deepEqual(check(scene!, {every: 3}), [], f);
