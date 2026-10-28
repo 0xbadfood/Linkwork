@@ -632,3 +632,17 @@ test('atmosphere: a star seen higher than it is, and the Sun seen above the hori
   assert.deepEqual(compile({verb: 'atmosphere', scene: 'sunrise'} as any).errors, []);
   assert.match(compile({verb: 'atmosphere', scene: 'sunrise', twinkle: true} as any).errors.join(), /twinkle and planet go with scene star/);
 });
+
+test('scattering: the Tyndall effect, a blue sky, a red sunset and red signals, with colours from the 1/λ⁴ law', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const {transmitted, versusRed} = await import('../src/verbs/scattering.ts');
+  assert.ok(Math.abs(versusRed(450) - (700 / 450) ** 4) < 1e-12 && versusRed(450) > 5.8 && versusRed(450) < 5.9);
+  const hex = (c: string) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const [nr, ng, nb] = hex(transmitted(0.098)), [sr, sg, sb] = hex(transmitted(0.098 * 38));
+  assert.ok(nb > 200 && ng > 220, `noon near white: ${transmitted(0.098)}`);
+  assert.ok(sr === 255 && sg < 120 && sb < 30, `sunset red: ${transmitted(0.098 * 38)}`); void nr; void sg;
+  for (const scene of ['tyndall', 'sky', 'sunset', 'fog']) assert.deepEqual(compile({verb: 'scattering', scene} as any).errors, [], scene);
+  const fog = (compile({verb: 'scattering', scene: 'fog'} as any).scene!.meta as any).facts.join(' ');
+  assert.match(fog, /about 50% of the red light gets through against 3% of the blue/);
+  assert.match(compile({verb: 'scattering', scene: 'rainbow'} as any).errors.join(), /scene is tyndall, sky, sunset or fog/);
+});

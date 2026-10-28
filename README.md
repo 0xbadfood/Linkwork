@@ -58,6 +58,8 @@ A verb turns a short spec into a full scene and checks the spec first.
   outside the eye compressed and the focus's miss drawn 10× wider, as the book's figures do, and said so.
 - `atmosphere` (trial): atmospheric refraction traced through air of rising refractive index: a star seen higher than
   it is, twinkling (a planet steady); the Sun seen above the horizon about 2 minutes before it rises.
+- `scattering` (trial): the Tyndall effect, a blue sky (1/λ⁴), a white noon Sun and a red sunset (colours computed from
+  the air crossed), and red lamps carrying farthest through fog.
 - `prism` (trial): light through a triangular prism, traced colour by colour with Cauchy refractive indices: one ray with
   i, r, e, A and the deviation D; white light dispersed into VIBGYOR (spread drawn wider, and said so); Newton's second
   prism recombining it; a raindrop with one internal reflection (red at 42.4°, violet at 40.7°).

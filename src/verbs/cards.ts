@@ -328,7 +328,19 @@ export const CARDS: Record<string, Card> = {
     anchors: 'star, apparent, planet, eye (star); sun, apparent, eye, horizon (sunrise)',
     example: {verb: 'atmosphere', title: 'Why stars twinkle', scene: 'star', twinkle: true},
     status: 'trial',
+  },  scattering: {
+    subjects: ['physics', 'chemistry'],
+    concepts: ['scattering of light', 'Tyndall effect', 'colloid', 'why is the sky blue', 'colour of the sky', 'colour of the sun at sunrise and sunset', 'reddening of the sun',
+      'danger signal lights are red', 'size of scattering particles'],
+    kinds: ['process', 'comparison'], motions: ['draw_on', 'labels'],
+    use_when: "light scattered by particles: a beam's path seen in a colloid (milky water, smoke, dust, a forest canopy) but not in clear water (the Tyndall effect); air molecules scattering blue about 6 times more than red (1/λ⁴), so the sky looks blue; the Sun white overhead and red at sunrise and sunset after crossing about 38 times as much air; red and blue lamps through fog, red carrying farthest (danger signals); colours computed from the scattering law",
+    not_when: 'light bending at a surface or through the air (use refraction or atmosphere), a prism or rainbow (use prism)',
+    fields: {scene: 'tyndall | sky | sunset | fog', panel: 'false: no side panel', seconds: '4 to 20 (default 9)', title: 'short title'},
+    anchors: 'clear, colloid (tyndall); sun, eye (sky); sun_noon, sun_sunset, eye (sunset)',
+    example: {verb: 'scattering', title: 'Why the sky is blue', scene: 'sky'},
+    status: 'trial',
   },
+
 
 
 
