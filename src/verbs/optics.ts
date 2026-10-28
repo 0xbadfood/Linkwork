@@ -499,12 +499,14 @@ const TYPICAL: Record<string, number> = {plastic: 1.49, perspex: 1.49, acrylic: 
  * relative to vacuum is 1). */
 const EXACT: Record<string, number> = {vacuum: 1};
 
+/** A medium: a name from the book's table, a refractive index, or one of the eye's or any named medium with its index. */
+type Medium = string | number | {name: string; n: number};
 export type RefractionSpec = Common & {
   verb: 'refraction';
   /** The medium the light starts in and the one it enters: a name from the book's table or a refractive index. */
-  from: string | number;
+  from: Medium;
   /** One medium, or 2 to 6 to compare: the same ray entering each, every refracted ray drawn from one point. */
-  to: string | number | (string | number)[];
+  to: Medium | Medium[];
   /** Successive wavefronts across a beam: closer together in the slower medium, turning at the surface. */
   wavefronts?: boolean;
   /** Angles of incidence in degrees (0 to 85), shown one after another: sin i ÷ sin r is listed for each. */
@@ -524,9 +526,12 @@ export type RefractionSpec = Common & {
 
 const C_LIGHT = 3e8;
 const canon = (m: string) => { const k = m.toLowerCase().trim(); return ALIASES[k] ?? k; };
-const known = (m: unknown) => typeof m === 'string' && (canon(m) in MEDIA || canon(m) in TYPICAL || canon(m) in EXACT);
-const indexOf = (m: string | number | (string | number)[]): number => (Array.isArray(m) ? indexOf(m[0]) : typeof m === 'number' ? m : MEDIA[canon(m)] ?? EXACT[canon(m)] ?? TYPICAL[canon(m)]);
-const mediumName = (m: string | number | (string | number)[]): string => (Array.isArray(m) ? mediumName(m[0]) : typeof m === 'number' ? `n = ${fmt(m, 4)}` : m.toLowerCase().trim());
+const named = (m: unknown): m is {name: string; n: number} => typeof m === 'object' && m !== null && !Array.isArray(m);
+const known = (m: unknown) => (typeof m === 'string' && (canon(m) in MEDIA || canon(m) in TYPICAL || canon(m) in EXACT))
+  || (named(m) && typeof m.name === 'string' && m.name.trim().length > 0 && m.name.length <= 24 && isNum(m.n) && m.n >= 1 && m.n <= 3);
+const indexOf = (m: Medium | Medium[]): number => (Array.isArray(m) ? indexOf(m[0]) : named(m) ? m.n : typeof m === 'number' ? m : MEDIA[canon(m)] ?? EXACT[canon(m)] ?? TYPICAL[canon(m)]);
+// A bare number has no name: it is called a medium, and its index is shown once (C1 of The Human Eye showed "n = 1" twice).
+const mediumName = (m: Medium | Medium[]): string => (Array.isArray(m) ? mediumName(m[0]) : named(m) ? m.name.trim() : typeof m === 'number' ? 'a medium' : m.toLowerCase().trim());
 
 export function refractionErrors(s: RefractionSpec): string[] {
   const e: string[] = [];
@@ -534,7 +539,7 @@ export function refractionErrors(s: RefractionSpec): string[] {
   if (Array.isArray(s.to) && (s.to.length < 2 || s.to.length > 6)) e.push('refraction: to as a list compares 2 to 6 media');
   for (const [key, m] of [['from', s.from], ...media.map(x => ['to', x])] as [string, unknown][]) {
     if (typeof m === 'number') { if (!(isNum(m) && m >= 1 && m <= 3)) e.push(`refraction: ${key} as a refractive index is 1 to 3`); }
-    else if (!known(m)) e.push(`refraction: ${key} ${JSON.stringify(m)} is a refractive index or one of ${[...Object.keys(MEDIA), ...Object.keys(EXACT), ...Object.keys(ALIASES), ...Object.keys(TYPICAL)].join(', ')}`);
+    else if (!known(m)) e.push(`refraction: ${key} ${JSON.stringify(m)} is a refractive index, {name, n} (a named medium such as the cornea, n 1 to 3), or one of ${[...Object.keys(MEDIA), ...Object.keys(EXACT), ...Object.keys(ALIASES), ...Object.keys(TYPICAL)].join(', ')}`);
   }
   if (Array.isArray(s.to) && (s.slab !== undefined || s.object_depth !== undefined || s.wavefronts)) e.push('refraction: comparing media (to as a list) goes with angles only: one ray, no slab, depth or wavefronts');
   if (Array.isArray(s.to) && Array.isArray(s.angles) && s.angles.length !== 1) e.push('refraction: comparing media takes one angle of incidence');

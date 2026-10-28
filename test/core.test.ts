@@ -412,7 +412,7 @@ test('refraction: Snell\'s law with the book\'s indices, the slab\'s shift, and 
   const tir = compile({verb: 'refraction', from: 'glass', to: 'air', angles: [50]} as any).scene!;
   assert.ok((tir.meta as any).facts.some((f: string) => f.includes('totally reflected') && f.includes('41.8°')));
   const errs = (s: object) => compile({verb: 'refraction', ...s} as any).errors.join(' | ');
-  assert.match(errs({from: 'air', to: 'unobtainium', angles: [30]}), /to "unobtainium" is a refractive index or one of/);
+  assert.match(errs({from: 'air', to: 'unobtainium', angles: [30]}), /to "unobtainium" is a refractive index, \{name, n\}/);
   assert.match(errs({from: 'air', to: 'glass', angles: [95]}), /0 to 85 degrees/);
   assert.match(errs({from: 'glass', to: 'air', angles: [30], slab: 4}), /slab is of the optically denser medium/);
 });
@@ -680,4 +680,14 @@ test("prism: Newton's first test passes one colour into a second prism, and whit
   assert.ok((sp.meta as any).facts.some((f: string) => /violet slows the most in the glass: 1\.961 × 10\^8 m\/s against 1\.981/.test(f)));
   assert.match(compile({verb: 'prism', setup: 'newton_test', colour: 'pink'} as any).errors.join(), /colour \(for newton_test\) is one of/);
   assert.deepEqual(compile({verb: 'prism', glass: 'glass'} as any).errors, [], 'glass alone is crown glass, and the check does not throw');
+});
+
+test('refraction: a named medium {name, n}, and a bare index is named once', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const s = compile({verb: 'refraction', from: {name: 'air', n: 1}, to: {name: 'cornea', n: 1.38}, angles: [40]} as any).scene!;
+  const texts = s.props.filter(p => p.type === 'text').map(p => (p as any).text);
+  assert.ok(texts.includes('cornea') && texts.includes('n = 1.38'));
+  const bare = compile({verb: 'refraction', from: 1, to: 1.38, angles: [40]} as any).scene!.props.filter(p => p.type === 'text').map(p => (p as any).text);
+  assert.equal(bare.filter(t => t === 'n = 1').length, 1, 'not twice');
+  assert.match(compile({verb: 'refraction', from: {name: 'cornea'}, to: 'air', angles: [40]} as any).errors.join(), /\{name, n\}/);
 });
