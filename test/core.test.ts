@@ -641,10 +641,10 @@ test('scattering: the Tyndall effect, a blue sky, a red sunset and red signals, 
   const [nr, ng, nb] = hex(transmitted(0.098)), [sr, sg, sb] = hex(transmitted(0.098 * 38));
   assert.ok(nb > 200 && ng > 220, `noon near white: ${transmitted(0.098)}`);
   assert.ok(sr === 255 && sg < 120 && sb < 30, `sunset red: ${transmitted(0.098 * 38)}`); void nr; void sg;
-  for (const scene of ['tyndall', 'sky', 'sunset', 'fog']) assert.deepEqual(compile({verb: 'scattering', scene} as any).errors, [], scene);
+  for (const scene of ['tyndall', 'sky', 'sunset', 'fog', 'sizes']) assert.deepEqual(compile({verb: 'scattering', scene} as any).errors, [], scene);
   const fog = (compile({verb: 'scattering', scene: 'fog'} as any).scene!.meta as any).facts.join(' ');
   assert.match(fog, /about 50% of the red light gets through against 3% of the blue/);
-  assert.match(compile({verb: 'scattering', scene: 'rainbow'} as any).errors.join(), /scene is tyndall, sky, sunset or fog/);
+  assert.match(compile({verb: 'scattering', scene: 'rainbow'} as any).errors.join(), /scene is tyndall, sky, sunset, fog or sizes/);
 });
 
 test('ray_diagram: lenses in contact act as one lens of power P1 + P2; without a panel, power shows beside the lens', async () => {

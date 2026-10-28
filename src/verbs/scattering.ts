@@ -13,8 +13,9 @@ type Common = {title?: string; width?: number; height?: number; fps?: number; th
 export type ScatteringSpec = Common & {
   verb: 'scattering';
   /** tyndall: a beam through a clear liquid and a colloid; sky: air scattering blue; sunset: the Sun overhead and at the
-   * horizon; fog: red and blue lamps seen through fog. */
-  scene: 'tyndall' | 'sky' | 'sunset' | 'fog';
+   * horizon; fog: red and blue lamps seen through fog; sizes: very fine, larger and large particles side by side,
+   * scattering blue, longer wavelengths and white. */
+  scene: 'tyndall' | 'sky' | 'sunset' | 'fog' | 'sizes';
   panel?: boolean;
   seconds?: number;
 };
@@ -33,7 +34,7 @@ const noise = (i: number) => { const x = Math.sin(i * 12.9898) * 43758.5453; ret
 
 export function scatteringErrors(s: ScatteringSpec): string[] {
   const e: string[] = [];
-  if (!['tyndall', 'sky', 'sunset', 'fog'].includes(s.scene)) e.push('scattering: scene is tyndall, sky, sunset or fog');
+  if (!['tyndall', 'sky', 'sunset', 'fog', 'sizes'].includes(s.scene)) e.push('scattering: scene is tyndall, sky, sunset, fog or sizes');
   if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('scattering: panel is true or false');
   if (s.seconds !== undefined && !(isNum(s.seconds) && s.seconds >= 4 && s.seconds <= 20)) e.push('scattering: seconds is 4 to 20');
   return e;
@@ -136,6 +137,31 @@ export function scattering(s: ScatteringSpec): Scene {
     lines = ['At noon sunlight crosses little air: little blue is scattered out', `Near the horizon it crosses about ${AIRMASS} times as much air`, 'Most of the blue is scattered away on the way: the Sun looks red'];
     facts.push(`near the horizon sunlight passes through about ${AIRMASS} times as much air as overhead, so most of its blue and shorter wavelengths are scattered out and the Sun looks reddish at sunrise and sunset (the drawing is not to scale)`,
       'overhead, sunlight crosses less air and little blue is scattered out, so the Sun looks white');
+  } else if (s.scene === 'sizes') {
+    // The book: very fine particles scatter mainly blue; larger ones longer wavelengths; large enough ones, white.
+    // Three boxes of white light, particles growing from box to box, each scattering its colours sideways.
+    const kinds: [string, number, string[]][] = [['very fine', 2.5, ['#3b7bff', '#5a5bff', '#3b7bff', '#7a4cff']],
+      ['larger', 6, ['#3fbf6a', '#ffd23f', '#ff9a3c', '#3b7bff']], ['large', 11, ['#ffffff', '#f4efe4', '#ffffff', '#f4efe4']]];
+    kinds.forEach(([name, r, colours], j) => {
+      const x0 = left + (j * w) / 3 + 0.02 * w, x1 = x0 + w / 3 - 0.04 * w, y0 = top + 0.22 * h, y1 = top + 0.78 * h, yb = (y0 + y1) / 2;
+      props.push({id: `box${j}`, type: 'rect', x: round(x0, 2), y: round(y0, 2), w: round(x1 - x0, 2), h: round(y1 - y0, 2), style: {fill: 'cool', opacity: 0.1, stroke: 'cool', width: 2.5 * k}, layer: 1},
+        {id: `beam${j}`, type: 'line', x1: round(x0, 2), y1: round(yb, 2), x2: round(x1, 2), y2: round(yb, 2), ...draw(0.5 + 0.5 * j, 1.5 + 0.5 * j), style: {stroke: '#fff4d6', width: 8 * k, opacity: 0.8}, layer: 2});
+      for (let i = 0; i < 6; i++) {
+        const px = x0 + (x1 - x0) * (0.12 + 0.15 * i), py = yb + (i % 2 ? 1 : -1) * 6 * k;
+        props.push({id: `particle${j}-${i}`, type: 'circle', x: round(px, 2), y: round(py, 2), r: r * k, style: {fill: 'muted'}, layer: 3});
+        for (let q = 0; q < 2; q++) {
+          const a = (q ? 1 : -1) * (0.9 + 0.5 * noise(j * 40 + i * 3 + q)), L = (34 + 20 * noise(j * 50 + i + q)) * k;
+          props.push({id: `ray${j}-${i}-${q}`, type: 'line', x1: round(px, 2), y1: round(py, 2), x2: round(px + Math.cos(a) * L * 0.6, 2), y2: round(py + Math.sin(a) * L, 2),
+            ...draw(1.6 + 0.5 * j + 0.08 * i, 2.2 + 0.5 * j + 0.08 * i), style: {stroke: colours[(i + q) % colours.length], width: 3 * k}, layer: 3});
+        }
+      }
+      label(`name${j}`, name, (x0 + x1) / 2, y1 + 40 * k, 'cool', 0, 'middle');
+      label(`result${j}`, ['mainly blue', 'longer wavelengths', 'white'][j], (x0 + x1) / 2, y0 - 22 * k, ['cool', 'accent', 'ink'][j], 2.4 + 0.5 * j, 'middle');
+      anchors[['fine', 'larger', 'large'][j]] = [round((x0 + x1) / 2, 2), round(yb, 2)];
+    });
+    label('size-axis', 'particle size grows →', left + w / 2, top + 0.92 * h, 'muted', 0, 'middle');
+    lines = ['The colour of scattered light depends on the size of the particles', 'Very fine particles scatter mainly blue; larger ones, longer wavelengths', 'Large enough particles scatter all colours alike: the light looks white (clouds)'];
+    facts.push('very fine particles scatter mainly blue light, particles of larger size scatter light of longer wavelengths, and if the particles are large enough the scattered light may even appear white');
   } else {
     // Two lamps shining through fog to a distant observer: blue thins out fast, red carries.
     const y = [top + 0.3 * h, top + 0.62 * h], x0 = left + 60 * k, x1 = right - 80 * k;
