@@ -861,3 +861,14 @@ test('domestic_circuit: appliances in parallel, I = P/V against each fuse; overl
   assert.match(errors({circuits: [{rating: 15, appliances: [{name: 'bulb', watts: 60}]}], fault: 'overload'}), /within its 15 A fuse/);
   assert.match(errors({circuits: [{rating: 15, appliances: [{name: 'bulb', watts: 60}]}], fault: 'short', at: 0}), /at is \[circuit, appliance\]/);
 });
+
+test('no verb writes into the film\'s header strip (the top 9.5%: the film\'s title, up to two lines, and the scene count)', async () => {
+  // 2026-10-29: a graph's y-axis name sat under the header of the Factors Affecting Resistance film
+  const {CARDS} = await import('../src/verbs/cards.ts');
+  const texts = (items: any[]): any[] => items.flatMap(p => p.type === 'group' ? texts(p.items) : p.type === 'text' ? [p] : []);
+  for (const [name, card] of Object.entries(CARDS)) for (const spec of [card.example, card.shortest].filter(Boolean)) {
+    const scene = compile(spec as any).scene!, f = frame(scene, scene.duration - 0.01) as any;
+    const high = texts(f.props).filter(t => t.y - (t.size ?? 24) < 0.095 * scene.height);
+    assert.deepEqual(high.map(t => t.id), [], name);
+  }
+});

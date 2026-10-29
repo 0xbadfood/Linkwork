@@ -46,7 +46,7 @@ export function numberLine(spec: NumberLineSpec): Scene {
     props.push({id: `tick${n}`, type: 'line', x1: xOf(n), y1: y - (big ? 18 : 12) * k, x2: xOf(n), y2: y + (big ? 18 : 12) * k, style: {stroke: big ? 'ink' : 'muted', width: (big ? 5 : 4) * k}});
     props.push({id: `num${n}`, type: 'text', x: xOf(n), y: y + 50 * k, text: num(n), size: (big ? 36 : 32) * k, weight: big ? 700 : 500, align: 'middle', style: {fill: big ? 'ink' : 'muted'}});
   }
-  if (spec.title) props.push({id: 'title', type: 'text', x: W / 2, y: 0.12 * H, size: 46 * k, weight: 700, align: 'middle', text: spec.title});
+  if (spec.title) props.push({id: 'title', type: 'text', x: W / 2, y: 0.155 * H, size: 46 * k, weight: 700, align: 'middle', text: spec.title});
 
   const foot = (n: number): Vec => [xOf(n), y - 3 * k];
   const actor: Actor = {id: 'hopper', rig: 'figure', at: foot(spec.start), scale: 0.85 * k, facing: 1, drivers: [],

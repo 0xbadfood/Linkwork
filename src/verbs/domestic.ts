@@ -95,7 +95,7 @@ export function domesticCircuit(s: DomesticSpec): Scene {
   const leakSafe = s.fault === 'leak' && Array.isArray(s.at) && s.circuits[s.at[0]].appliances[s.at[1]].earth !== false;
   if (s.fault === 'leak' && !leakSafe) cutAt[faultCircuit] = 1e9;   // no earth wire: nothing makes the fuse blow, the body stays live
   // The supply: live and neutral from the pole, through the meter and the main fuse to the distribution box.
-  const yL = top + 50 * k, yN = top + 90 * k, meterX = left + 120 * k, fuseX = left + 360 * k, boxX = left + 440 * k, boxW = 170 * k, busX = boxX + 40 * k;
+  const yL = top + 70 * k, yN = top + 110 * k, meterX = left + 120 * k, fuseX = left + 360 * k, boxX = left + 440 * k, boxW = 170 * k, busX = boxX + 40 * k;
   text('mains', `mains ${V} V, 50 Hz AC`, [left, yL - 40 * k], 'ink', 22, [0, 1e9], 'start');
   wire('supply-live', [[left, yL], [boxX, yL]], LIVE); wire('supply-neutral', [[left, yN], [boxX, yN]], NEUTRAL);
   props.push({id: 'meter', type: 'rect', x: round(meterX, 2), y: round(yL - 30 * k, 2), w: 150 * k, h: 90 * k, r: 8 * k, style: {fill: 'paper', stroke: 'muted', width: 3 * k}, layer: 5},

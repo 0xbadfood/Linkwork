@@ -183,7 +183,7 @@ export function graph(s: GraphSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const v = s.x.name.trim(), [a, b] = s.x.range, [c, d] = s.y.range;
   // The plane leaves room on its right for the x axis's name before the panel.
-  const plane: Plane = {id: 'p', x: [a, b], y: [c, d], box: [0.09 * W, 0.13 * H, 0.555 * W, 0.88 * H]};
+  const plane: Plane = {id: 'p', x: [a, b], y: [c, d], box: [0.09 * W, 0.18 * H, 0.555 * W, 0.9 * H]};
   const P = (x: number, y: number) => toScene(plane, [x, y]);
   const axisY = P(0, Math.min(Math.max(0, c), d))[1], axisX = P(Math.min(Math.max(0, a), b), 0)[0];
   const px = 0.655 * W, pw = W - px - 40 * k, ptext = panel(W, k);
@@ -194,7 +194,7 @@ export function graph(s: GraphSpec): Scene {
   const fx = (x: number) => n2(x, placesOf(s.x)), fy = (y: number) => n2(y, placesOf(s.y));
   const valueOf = (ser: Series) => ('expr' in ser ? fn(inX(ser.expr, v)) : (x: number) => dataAt(pathOf(ser), x));
 
-  let row = 0.13 * H;
+  let row = 0.155 * H;
   if (s.title) {
     props.push(ptext('title', px, row, s.title, 44 * k, {weight: 700}));
     row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k;

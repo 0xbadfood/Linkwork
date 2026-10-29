@@ -28,10 +28,10 @@ function windowErrors(s: Window, verb: string): string[] {
 
 function layout(s: Window & Common) {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
-  const plane: Plane = {id: 'p', x: s.x ?? [-5, 5], y: s.y ?? [-5, 5], box: [0.08 * W, 0.13 * H, 0.6 * W, 0.9 * H]};
+  const plane: Plane = {id: 'p', x: s.x ?? [-5, 5], y: s.y ?? [-5, 5], box: [0.08 * W, 0.18 * H, 0.6 * W, 0.92 * H]};
   const axes: Prop = {id: 'axes', type: 'axes', plane: 'p', step: s.step ?? [1, 1], size: 24 * k};
   const px = 0.66 * W;
-  const title: Prop[] = s.title ? [{id: 'title', type: 'text', x: px, y: 0.13 * H, size: 44 * k, weight: 700, text: s.title, width: W - px - 40 * k}] : [];
+  const title: Prop[] = s.title ? [{id: 'title', type: 'text', x: px, y: 0.155 * H, size: 44 * k, weight: 700, text: s.title, width: W - px - 40 * k}] : [];
   // Panel rows are placed by fraction of the height, moved down when the title wraps onto more lines.
   const shift = s.title ? (wrapText(s.title, 44 * k, W - px - 40 * k).length - 1) * 1.25 * 44 * k : 0;
   const py = (f: number) => f * H + shift;

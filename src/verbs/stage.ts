@@ -400,7 +400,7 @@ export function stage(s: StageSpec): Scene {
     const [x, y] = P(l.x, l.y);
     props.push({id: `label${n}`, type: 'text', x, y, text: l.text, size: 30 * k, align: 'middle', weight: 700, show: [l.t0 ?? 0, l.t1 ?? 1e9], layer: 4});
   }
-  let row = 0.08 * Hpx;
+  let row = 0.155 * Hpx;   // level with the title, below the film's header strip
   // Velocity arrows: from the mover's centre, keyed sample by sample from its computed path (each sample's velocity is
   // that of the step after it), so they stretch, shrink and turn as it moves; zero-length arrows draw nothing.
   const COLOURS = {v: 'accent', vx: 'cool', vy: 'good'} as const;

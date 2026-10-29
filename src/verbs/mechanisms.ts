@@ -11,7 +11,7 @@ const deg = (r: number) => r * 180 / Math.PI, rad = (d: number) => d * Math.PI /
 const panelText = (id: string, x: number, y: number, text: string, size: number, extra: Partial<Prop> = {}): Prop =>
   ({id, type: 'text', x, y, text, size, ...extra} as Prop);
 const titleOf = (spec: Common, W: number, H: number, k: number): Prop[] =>
-  spec.title ? [{id: 'title', type: 'text', x: 0.6 * W, y: 0.14 * H, size: 46 * k, weight: 700, text: spec.title}] : [];
+  spec.title ? [{id: 'title', type: 'text', x: 0.6 * W, y: 0.155 * H, size: 46 * k, weight: 700, text: spec.title}] : [];
 
 // ---------------------------------------------------------------------------------------------------------------
 export type LadderSlideSpec = Common & {verb: 'sliding_ladder'; length?: number; from_angle?: number; to_angle?: number;
@@ -178,7 +178,7 @@ export function sliderCrank(s: CrankSpec): Scene {
     {id: 'stroke-near', type: 'line', x1: near, y1: c[1] + half + 14 * k, x2: near, y2: c[1] + half + 44 * k, style: {stroke: 'accent', width: 3 * k}},
     {id: 'stroke-far', type: 'line', x1: far, y1: c[1] + half + 14 * k, x2: far, y2: c[1] + half + 44 * k, style: {stroke: 'accent', width: 3 * k}},
     panelText('stroke', (near + far) / 2, c[1] + half + 70 * k, `stroke = 2r = ${2 * r} cm`, 30 * k, {align: 'middle', style: {fill: 'accent'}}),
-    ...(s.title ? [panelText('title', 0.5 * W, 0.12 * H, s.title, 46 * k, {weight: 700, align: 'middle'})] : []),
+    ...(s.title ? [panelText('title', 0.5 * W, 0.155 * H, s.title, 46 * k, {weight: 700, align: 'middle'})] : []),
     {id: 'ro-theta', type: 'readout', x, y: y0, size: 38 * k, text: 'crank angle θ = {a}°', decimals: 0,
       measures: {a: {kind: 'heading', a: {actor: 'crank', joint: 'center'}, b: {actor: 'crank', joint: 'pin'}}}},
     {id: 'ro-x', type: 'readout', x, y: y0 + 60 * k, size: 38 * k, text: 'piston at x = {x} cm from the centre', decimals: 2,
