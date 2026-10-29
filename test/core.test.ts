@@ -834,6 +834,13 @@ test('magnetic_force: I × B on a rod, Fleming\'s left-hand rule from any two di
   assert.equal(fleming({current: 'east', force: 'north'})!.field, 'down');
   assert.equal(fleming({field: 'down', force: 'north'})!.current, 'east');
   assert.equal(fleming({field: 'up', current: 'up'}), null);
+  // 2026-10-29, the force-on-a-conductor film: Ampère's equal and opposite force on the magnet, and no current, no swing
+  const rx = compile({verb: 'magnetic_force', scene: 'rod', currents: [0, 2], reaction: true} as any);
+  assert.deepEqual(rx.errors, []);
+  const on = rx.scene!.props.find(p => p.id === 'force1') as any, back = rx.scene!.props.find(p => p.id === 'reaction1') as any;
+  assert.ok(Math.sign(on.x2 - on.x1) === -Math.sign(back.x2 - back.x1), 'the magnet is pushed the other way');
+  assert.ok(!rx.scene!.props.some(p => p.id === 'force0'), 'no current, no force');
+  assert.match(compile({verb: 'magnetic_force', scene: 'rule', current: 'east', field: 'up', reaction: true} as any).errors.join(), /reaction are for scene rod/);
   // NCERT Exercise: an alpha particle (positive) moving west is deflected north: the field is upward
   assert.equal(fleming({current: 'west', force: 'north'})!.field, 'up');
   // an electron beam moving north is a current flowing south

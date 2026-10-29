@@ -26,8 +26,10 @@ export type ForceSpec = Common & {
   charge?: 'positive' | 'negative';
   /** rod: half-way, the current or the field is reversed. */
   reverse?: 'current' | 'field';
-  /** rod: currents in A shown in turn (a larger current, a larger swing). */
+  /** rod: currents in A shown in turn (a larger current, a larger swing; 0: no current, the rod hangs still). */
   currents?: number[];
+  /** rod: the equal and opposite force on the magnet beside the force on the rod (Ampère's suggestion). */
+  reaction?: boolean;
   /** angle: angles between the rod and the field shown in turn, in degrees (default 90, 45, 0). */
   angles?: number[];
   panel?: boolean;
@@ -54,11 +56,12 @@ export function forceErrors(s: ForceSpec): string[] {
     if (s.current !== undefined && !['out', 'in'].includes(s.current)) e.push('magnetic_force: rod: current is out or in (of the page)');
     if (s.field !== undefined && !['up', 'down'].includes(s.field)) e.push('magnetic_force: rod: field is up (N pole below) or down');
     if (s.reverse !== undefined && !['current', 'field'].includes(s.reverse)) e.push('magnetic_force: reverse is current or field');
-    if (s.currents !== undefined && (!Array.isArray(s.currents) || s.currents.length < 1 || s.currents.length > 3 || s.currents.some(c => !(isNum(c) && c > 0 && c <= 10))))
-      e.push('magnetic_force: currents is a list of 1 to 3 currents, each above 0 and up to 10 A');
+    if (s.currents !== undefined && (!Array.isArray(s.currents) || s.currents.length < 1 || s.currents.length > 3 || s.currents.some(c => !(isNum(c) && c >= 0 && c <= 10)) || s.currents.every(c => c === 0)))
+      e.push('magnetic_force: currents is a list of 1 to 3 currents, each 0 (none: the rod hangs still) up to 10 A, not all 0');
+    if (s.reaction !== undefined && typeof s.reaction !== 'boolean') e.push('magnetic_force: reaction is true or false');
     if (s.reverse && (s.currents?.length ?? 1) > 1) e.push('magnetic_force: reverse with one current, or currents without reverse');
   } else {
-    if (s.reverse !== undefined || s.currents !== undefined) e.push('magnetic_force: reverse and currents are for scene rod');
+    if (s.reverse !== undefined || s.currents !== undefined || s.reaction !== undefined) e.push('magnetic_force: reverse, currents and reaction are for scene rod');
   }
   if (s.scene === 'rule') {
     const given = (['current', 'field', 'force'] as const).filter(f => s[f] !== undefined);
@@ -120,8 +123,15 @@ export function magneticForce(s: ForceSpec): Scene {
         const x = cx + j * 60 * k, [y1, y2] = p.up ? [rodY + gap - ph / 2 - 8 * k, rodY - gap + ph / 2 + 8 * k] : [rodY - gap + ph / 2 + 8 * k, rodY + gap - ph / 2 - 8 * k];
         arrow(`field${i}${j + 2}`, [x, y1], [x, y2], 'cool', show, 2.5);
       }
+      if (!p.I) { text(`current${i}-label`, 'no current: no force', [cx, rodY + 70 * k], 'ink', 24, show); return; }
       mark(`current${i}`, [cx, rodY], p.out, 15 * k, show, 'ink', xs);
       const f = shift[i] / Math.abs(shift[i]), L = 70 * k + 60 * k * p.I / Imax;
+      if (s.reaction) {
+        // On the lower pole, the other way: the current pushes the magnet as hard as the magnet pushes the current.
+        const y = rodY + gap, t: [number, number] = [at(i)[0] + 2.6, at(i)[1]];
+        arrow(`reaction${i}`, [cx, y], [cx - f * L, y], 'accent', t);
+        text(`reaction${i}-label`, 'force on the magnet', [cx - f * L / 2, y + ph / 2 + 30 * k], 'accent', 24, t);
+      }
       arrow(`force${i}`, [cx + shift[i] + f * 34 * k, rodY], [cx + shift[i] + f * (34 * k + L), rodY], 'good', [at(i)[0] + 1.8, at(i)[1]]);
       text(`force${i}-label`, 'force', [cx + shift[i] + f * (34 * k + L / 2), rodY - 26 * k], 'good', 26, [at(i)[0] + 1.8, at(i)[1]]);
       text(`current${i}-label`, `current ${p.out ? 'out of' : 'into'} the page${phases.length > 1 && s.currents ? `: ${p.I} A` : ''}`, [cx, rodY + 70 * k], 'ink', 24, show);
@@ -131,7 +141,11 @@ export function magneticForce(s: ForceSpec): Scene {
     lines.push('A current in a magnetic field feels a force: the rod is pushed sideways');
     if (s.reverse === 'current') lines.push('Reverse the current: the force reverses');
     if (s.reverse === 'field') lines.push('Reverse the field (swap the poles): the force reverses');
-    if ((s.currents?.length ?? 0) > 1) lines.push('A larger current: a larger force, a larger swing');
+    if ((s.currents?.length ?? 0) > 1) lines.push(s.currents!.includes(0) ? 'The rod moves only while the current flows' : 'A larger current: a larger force, a larger swing');
+    if (s.reaction) {
+      lines.push('The magnet feels an equal and opposite force (Ampère\'s suggestion)');
+      facts.push('Ampère suggested that the magnet also experiences an equal and opposite force from the current-carrying conductor');
+    }
     lines.push('The force is at right angles to both the current and the field (Fleming\'s left-hand rule)');
     facts.push('a current-carrying rod placed in a magnetic field experiences a force and is displaced: the magnet exerts a force on the current (Ampere)',
       'the direction of the force reverses when the direction of the current is reversed, and also when the direction of the field is reversed',
