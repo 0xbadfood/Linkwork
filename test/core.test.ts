@@ -885,5 +885,8 @@ test('no verb writes into the film\'s header strip (the top 9.5%: the film\'s ti
     const scene = compile(spec as any).scene!, f = frame(scene, scene.duration - 0.01) as any;
     const high = texts(f.props).filter(t => t.y - (t.size ?? 24) < 0.095 * scene.height);
     assert.deepEqual(high.map(t => t.id), [], name);
+    // the film fits a scene's 9.5%–96% above its captions (renderer LINKWORK_FIT): no text below 96%
+    const low = texts(f.props).filter(t => t.y > 0.96 * scene.height);
+    assert.deepEqual(low.map(t => t.id), [], name);
   }
 });
