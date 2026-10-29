@@ -19,6 +19,9 @@ import {energyUseErrors, energyUseScene, type EnergyUseSpec} from './energy-use.
 import {fieldErrors, magneticField, type FieldSpec} from './magnetism.ts';
 import {forceErrors, magneticForce, type ForceSpec} from './magnetic-force.ts';
 import {domesticCircuit, domesticErrors, type DomesticSpec} from './domestic.ts';
+import {dimensionsErrors, dimensionsScene, type DimensionsSpec} from './dimensions.ts';
+import {sigFigsErrors, sigFigsScene, type SigFigsSpec} from './sig-figs.ts';
+import {angleErrors, angleMeasure, type AngleSpec} from './angle-measure.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -26,7 +29,8 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec;
+  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
+  | DimensionsSpec | SigFigsSpec | AngleSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -84,6 +88,12 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "the force on a current in a magnetic field, computed as I × B: a rod between a horseshoe magnet's poles pushed sideways, reversed with the current or the field, further for a larger current; Fleming's left-hand rule finding field, current or force from the other two (an electron's current against its motion); a charge curving at constant speed across a field; the force largest at right angles, zero along the field"} as Verb<ForceSpec>,
   domestic_circuit: {errors: domesticErrors, compile: domesticCircuit,
     about: "a house's wiring: the 220 V mains on live (red) and neutral (black) wires through the meter, main fuse and distribution box to separate 15 A and 5 A circuits with their fuses; appliances in parallel with their own switches, currents I = P/V added per circuit; the earth wire (green) from metal bodies to a plate in the ground; overloading, a short circuit or a live wire touching a metal body, and the fuse melting"} as Verb<DomesticSpec>,
+  dimensions: {errors: dimensionsErrors, compile: dimensionsScene,
+    about: 'dimensions of physical quantities, computed: a dimensional formula built factor by factor ([M L T⁻²] for force), an equation checked term by term for consistency, a relation deduced by matching powers (a pendulum\'s period T = k √(l/g)), and a value converted between unit systems (1 J = 10⁷ erg)'} as Verb<DimensionsSpec>,
+  sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
+    about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
+  angle_measure: {errors: angleErrors, compile: angleMeasure,
+    about: 'the plane angle and the solid angle as defined: an arc growing on a circle, θ = s/r in radians (1 rad when the arc equals the radius, 2π for the circle), or a patch spreading on a sphere seen from its centre, Ω = A/r² in steradians (4π for the sphere)'} as Verb<AngleSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

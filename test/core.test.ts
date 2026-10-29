@@ -890,3 +890,50 @@ test('no verb writes into the film\'s header strip (the top 9.5%: the film\'s ti
     assert.deepEqual(low.map(t => t.id), [], name);
   }
 });
+
+test('dimensions: formulas, consistency, a deduced relation and a unit conversion, all computed', async () => {
+  // 2026-10-29, Class 11 Units and Measurement (keph1-01 C5–C8)
+  const {deduce, convert, dimText, product} = await import('../src/verbs/dimensions.ts');
+  assert.equal(dimText(product([['mass', 1], ['acceleration', 1]])), '[M L T⁻²]');
+  assert.equal(dimText(product([['angle', 1]])), '[M⁰ L⁰ T⁰]');
+  assert.deepEqual(deduce('period', ['length', 'mass', 'g']), [0.5, 0, -0.5]);          // T = k √(l/g)
+  assert.equal(deduce('force', ['length', 'time']), null);                                 // no mass: cannot be built
+  assert.ok(Math.abs(convert('energy', {M: 'kg', L: 'm', T: 's'}, {M: 'g', L: 'cm', T: 's'}).factor - 1e7) < 1e-3);   // 1 J = 10⁷ erg
+  assert.ok(Math.abs(convert('force', {M: 'kg', L: 'm', T: 's'}, {M: 'g', L: 'cm', T: 's'}).factor - 1e5) < 1e-6);   // 1 N = 10⁵ dyne
+  const check = (right: any[]) => compile({verb: 'dimensions', mode: 'check', left: {label: 'x', factors: [['distance', 1]]}, right} as any).scene!;
+  const good = check([{label: 'v₀t', factors: [['velocity', 1], ['time', 1]]}, {label: '½at²', factors: [['acceleration', 1], ['time', 2]]}]);
+  assert.match((good.props.find(p => p.id === 'verdict') as any).text, /dimensionally consistent/);
+  const bad = check([{label: 'v₀t²', factors: [['velocity', 1], ['time', 2]]}]);
+  assert.match((bad.props.find(p => p.id === 'verdict') as any).text, /Not consistent: v₀t²/);
+  const errors = (spec: object) => compile({verb: 'dimensions', ...spec} as any).errors.join(' | ');
+  assert.match(errors({mode: 'formula', quantity: 'force', factors: [['mass', 1], ['velocity', 1]]}), /force is \[M L T⁻²\] but its factors give \[M L T⁻¹\]/);
+  assert.match(errors({mode: 'deduce', quantity: 'force', depends: ['length', 'time']}), /cannot be built from length, time/);
+  assert.match(errors({mode: 'formula', quantity: 'speed', factors: [['velocty', 1]]}), /'velocty' is not a known quantity/);
+});
+
+test('sig_figs: the book\'s rules for significant figures, operations and rounding', async () => {
+  // 2026-10-29, Class 11 Units and Measurement (keph1-01 C3–C4)
+  const {sigCount, roundSig, operate} = await import('../src/verbs/sig-figs.ts');
+  assert.deepEqual(['0.0025', '4.700', '4700', '2.308', '0.200', '2.64e24', '6.032'].map(sigCount), [2, 4, 2, 4, 3, 3, 4]);
+  // a dropped 5: an even digit stays, an odd one rises (the book's 2.745 → 2.74, 2.735 → 2.74)
+  assert.equal(roundSig('2.745', 3), '2.74');
+  assert.equal(roundSig('2.735', 3), '2.74');
+  assert.equal(roundSig('2.746', 3), '2.75');
+  assert.equal(operate('divide', ['4.237', '2.51']).result, '1.69');               // density 1.69 g cm⁻³
+  assert.equal(operate('add', ['436.32', '227.2', '0.301']).result, '663.8');      // the book's 663.8 g
+  assert.equal(operate('subtract', ['0.307', '0.304']).result, '0.003');
+  const errors = (spec: object) => compile({verb: 'sig_figs', ...spec} as any).errors.join(' | ');
+  assert.match(errors({mode: 'count', numbers: [4.7]}), /is a string, so its zeros keep/);
+  assert.match(errors({mode: 'round', numbers: ['2.745'], figures: 4}), /figures is how many significant figures to keep, 1 to 3/);
+});
+
+test('angle_measure: θ = s/r and Ω = A/r², counted from the drawing\'s measures', () => {
+  // 2026-10-29, Class 11 Units and Measurement (keph1-01 C2, Fig. 1.1)
+  const facts = (spec: object) => (compile({verb: 'angle_measure', ...spec} as any).scene!.meta as any).facts.join(' ');
+  assert.match(facts({kind: 'plane', radius: 2, arc: 2}), /θ = s\/r = 1 rad \(57\.3°\)/);
+  assert.match(facts({kind: 'plane', radius: 1, arc: 2 * Math.PI}), /= 6\.283 rad \(360°\)/);
+  assert.match(facts({kind: 'solid', radius: 2, area: 4}), /Ω = A\/r² = 1 sr/);
+  const errors = (spec: object) => compile({verb: 'angle_measure', ...spec} as any).errors.join(' | ');
+  assert.match(errors({kind: 'plane', radius: 1, arc: 7}), /up to the whole circle \(2πr = 6\.28 m\)/);
+  assert.match(errors({kind: 'plane', area: 1}), /area is for kind solid/);
+});
