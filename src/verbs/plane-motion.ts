@@ -47,6 +47,16 @@ function kinematics(s: PlaneMotionSpec) {
     a: (t: number): P2 => { const p = v(t + h), q = v(t - h); return [(p[0] - q[0]) / (2 * h), (p[1] - q[1]) / (2 * h)]; }};
 }
 
+const DV_ANGLES = [Math.PI / 3, Math.PI / 6, Math.PI / 12];
+
+/** Where the velocity triangle goes (its common tail H, beside the circle), the drawn length per m/s, and every point
+ * it reaches. */
+function hodograph(R: number, v: number, at: number, vel: (t: number) => P2) {
+  const H: P2 = [2.1 * R, 0], scale = 0.8 * R / v, w = v / R;
+  const points: P2[] = [H, ...[0, ...DV_ANGLES].map(th => { const u = vel(at + th / w); return [H[0] + u[0] * scale, H[1] + u[1] * scale] as P2; })];
+  return {H, scale, points};
+}
+
 export function planeMotionErrors(s: PlaneMotionSpec): string[] {
   const e: string[] = [], ways = [s.accelerate, s.formula, s.circle].filter(Boolean).length;
   if (ways !== 1) return ['plane_motion: give exactly one path: accelerate {r0?, v0, a, t}, formula {x, y, t} (formulas of t) or circle {radius, speed}'];
@@ -77,8 +87,12 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const vmax = Math.max(...samples.map(t => Math.hypot(...kin.v(t))), 1e-9), amax = Math.max(...samples.map(t => Math.hypot(...kin.a(t))), 0);
   // the window: the path and the origin, with room for arrows, at equal scale across and up
   const fr = frame(W, H, k, s.title), box = fr.box;
-  let [x0, x1] = s.x ?? [Math.min(0, ...path.map(p => p[0])), Math.max(0, ...path.map(p => p[0]))];
-  let [y0, y1] = s.y ?? [Math.min(0, ...path.map(p => p[1])), Math.max(0, ...path.map(p => p[1]))];
+  // delta_v draws the velocity triangle apart, to the right of the circle, as the book does (Fig. 3.18): it is in the window
+  const dvAt = s.circle ? s.at ?? Math.PI / 4 / (s.circle.speed / s.circle.radius) : 0;
+  const hodo = show.has('delta_v') && s.circle ? hodograph(s.circle.radius, s.circle.speed, dvAt, kin.v) : undefined;
+  const reach = [...path, ...(hodo?.points ?? [])];
+  let [x0, x1] = s.x ?? [Math.min(0, ...reach.map(p => p[0])), Math.max(0, ...reach.map(p => p[0]))];
+  let [y0, y1] = s.y ?? [Math.min(0, ...reach.map(p => p[1])), Math.max(0, ...reach.map(p => p[1]))];
   const size = Math.max(x1 - x0, y1 - y0, 1e-6), vs = 0.2 * size / vmax, as = amax > 1e-9 ? 0.16 * size / amax : 0;
   if (!s.x) { x0 -= 0.25 * size; x1 += 0.25 * size; }
   if (!s.y) { y0 -= 0.25 * size; y1 += 0.25 * size; }
@@ -153,6 +167,8 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
     props.push({id: 'P', type: 'circle', plane: 'p', x: P[0], y: P[1], r: 7 * k, style: {fill: 'ink'}, show: [begin, 1e9]} as Prop);
     const [sx, sy] = toScene(plane, P);
     props.push(text('lP', sx - 18 * k, sy - 14 * k, 'P', 30 * k, {weight: 700, align: 'end', show: [begin, 1e9]}));
+    // in words as well, for an illustrative scene, which hides every line with a number in it
+    row += line('dtw', 'Δt halves at each step: the average velocity Δr/Δt turns towards the tangent at P', begin, {}, 1e9);
     steps.forEach((dt, i) => {
       const Q = kin.r(at + dt), dr: P2 = [Q[0] - P[0], Q[1] - P[1]], vbar: P2 = [dr[0] / dt, dr[1] / dt], on = begin + each * i, off = begin + each * (i + 1);
       props.push({id: `Q${i}`, type: 'circle', plane: 'p', x: Q[0], y: Q[1], r: 6 * k, style: {fill: 'muted'}, show: [on, off]} as Prop,
@@ -162,29 +178,60 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
     });
     const vP = kin.v(at), fin = begin + each * steps.length;
     props.push({id: 'vP', type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + vP[0] * vs, y2: P[1] + vP[1] * vs, head: 20 * k, style: {stroke: 'cool', width: 6 * k}, show: [fin, 1e9]} as Prop);
-    line('vlim', `As Δt → 0, Δr/Δt → v = (${f(vP[0])}, ${f(vP[1])}) ${u}/s at t = ${f(at)} s, along the tangent at P`, fin, {weight: 700});
+    row += 1.35 * 30 * k;
+    row += line('vlimw', 'As Δt shrinks, Δr/Δt becomes the velocity v, along the tangent at P', fin, {weight: 700});
+    line('vlim', `v = (${f(vP[0])}, ${f(vP[1])}) ${u}/s at t = ${f(at)} s`, fin, {weight: 700});
     facts.push(`at t = ${f(at)} s the velocity is (${f(vP[0])}, ${f(vP[1])}) ${u}/s, speed ${f(Math.hypot(...vP))} ${u}/s`);
     end = fin + 2.2;
   }
 
-  // uniform circular motion: v at P and at P' later, moved tail to tail: Δv points to the centre
-  if (show.has('delta_v') && s.circle) {
-    const {radius: R, speed: v} = s.circle, w = v / R, at = s.at ?? Math.PI / 4 / w, begin = end, each = 1.8;
-    const angles = [Math.PI / 3, Math.PI / 6, Math.PI / 12];
+  // uniform circular motion, the book's two triangles (Fig. 3.18): r, r′ and Δr in the circle, and beside it v and v′
+  // from one tail with Δv between their heads; both turn through Δθ, so they are similar and Δv points to the centre.
+  // Named in letters an illustrative scene keeps (2026-10-29: drawn at P at the motion's arrow scale, the triangles were
+  // specks in a half-width part, and every line with a number in it was hidden).
+  if (hodo && s.circle) {
+    const {radius: R, speed: v} = s.circle, w = v / R, at = dvAt, begin = end, each = 2.4, {H, scale: vd} = hodo;
     row = motionRow;
-    const P = kin.r(at), v1 = kin.v(at);
-    props.push({id: 'v1', type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + v1[0] * vs, y2: P[1] + v1[1] * vs, head: 18 * k, style: {stroke: 'cool', width: 5 * k}, show: [begin, 1e9]} as Prop);
-    angles.forEach((th, i) => {
+    const P = kin.r(at), v1 = kin.v(at), O: P2 = [0, 0], tip1 = plus(H, v1, vd), d = 32 * k * (plane.x[1] - plane.x[0]) / (box[2] - box[0]);
+    const unit = (p: P2): P2 => { const l = Math.hypot(...p) || 1; return [p[0] / l, p[1] / l]; };
+    const turn = (p: P2, side: number): P2 => { const q = unit(p); return [side * q[1], -side * q[0]]; };   // side 1: clockwise
+    const mid = (p: P2, q: P2): P2 => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+    // a name at p, pushed d along the plane direction n
+    const name = (id: string, p: P2, n: P2, t: string, fill: string, on: number, off: number) => {
+      const [x, y] = toScene(plane, [p[0] + n[0] * d, p[1] + n[1] * d]);
+      props.push(text(id, x, y + 10 * k, t, 30 * k, {weight: 700, align: 'middle', style: {fill}, show: [on, off]}));
+    };
+    const arrow = (id: string, p: P2, q: P2, stroke: string, on: number, off: number, width = 5, extra: Partial<Prop> = {}): Prop =>
+      ({id, type: 'arrow', plane: 'p', x1: p[0], y1: p[1], x2: q[0], y2: q[1], head: 16 * k, style: {stroke, width: width * k}, show: [on, off], ...extra} as Prop);
+    const tan = 0.35 * R / v;           // v and v′ on the circle, short: the triangle beside it carries the names
+    props.push(arrow('r1', O, P, 'accent', begin, 1e9), arrow('v1t', P, plus(P, v1, tan), 'cool', begin, 1e9, 3),
+      arrow('v1', H, tip1, 'cool', begin + 0.4, 1e9),
+      {id: 'H', type: 'circle', plane: 'p', x: H[0], y: H[1], r: 5 * k, style: {fill: 'ink'}, show: [begin + 0.4, 1e9]} as Prop);
+    name('lP', P, unit(P), 'P', 'ink', begin, 1e9);
+    name('lr1', mid(O, P), turn(P, 1), 'r', 'accent', begin, 1e9);
+    name('lv1', mid(H, tip1), turn(v1, 1), 'v', 'cool', begin + 0.4, 1e9);
+    row += line('dvw', 'The triangle of r, r′, Δr and the triangle of v, v′, Δv are similar: both turn through Δθ', begin, {}, 1e9);
+    DV_ANGLES.forEach((th, i) => {
       const t2 = at + th / w, Q = kin.r(t2), v2 = kin.v(t2), on = begin + each * i, off = begin + each * (i + 1);
-      const dv: P2 = [v2[0] - v1[0], v2[1] - v1[1]];
-      props.push({id: `v2-${i}`, type: 'arrow', plane: 'p', x1: Q[0], y1: Q[1], x2: Q[0] + v2[0] * vs, y2: Q[1] + v2[1] * vs, head: 16 * k, style: {stroke: 'good', width: 4 * k}, show: [on, off]} as Prop,
-        {id: `v2c-${i}`, type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + v2[0] * vs, y2: P[1] + v2[1] * vs, head: 16 * k, style: {stroke: 'good', width: 3 * k, dash: [8 * k, 6 * k]}, show: [on + 0.5, off]} as Prop,
-        {id: `dv-${i}`, type: 'arrow', plane: 'p', x1: P[0] + v1[0] * vs, y1: P[1] + v1[1] * vs, x2: P[0] + v2[0] * vs, y2: P[1] + v2[1] * vs, head: 14 * k, style: {stroke: 'bad', width: 4 * k}, show: [on + 0.9, off]} as Prop);
+      const tip2 = plus(H, v2, vd), dv: P2 = [v2[0] - v1[0], v2[1] - v1[1]];
+      props.push(arrow(`r2-${i}`, O, Q, 'accent', on, off, 4),
+        arrow(`dr-${i}`, P, Q, 'ink', on + 0.4, off, 4),
+        arrow(`v2t-${i}`, Q, plus(Q, v2, tan), 'good', on, off, 3),
+        arrow(`v2-${i}`, H, tip2, 'good', on + 0.8, off, 4),
+        arrow(`dv-${i}`, tip1, tip2, 'bad', on + 1.2, off, 5));
+      name(`lQ${i}`, Q, unit(Q), 'P′', 'ink', on, off);
+      name(`lr2-${i}`, mid(O, Q), turn(Q, -1), 'r′', 'accent', on, off);
+      name(`ldr-${i}`, mid(P, Q), unit(mid(P, Q)), 'Δr', 'ink', on + 0.4, off);
+      name(`lv2-${i}`, mid(H, tip2), turn(v2, -1), 'v′', 'good', on + 0.8, off);
+      name(`ldv-${i}`, mid(tip1, tip2), unit([mid(tip1, tip2)[0] - H[0], mid(tip1, tip2)[1] - H[1]]), 'Δv', 'bad', on + 1.2, off);
       line(`dvt${i}`, `Δθ = ${f(th * 180 / Math.PI)}°: |Δv| = ${f(Math.hypot(...dv))} ${u}/s; |Δv|/Δt = ${f(Math.hypot(...dv) / (th / w))} ${u}/s²`, on, {style: {fill: 'bad'}}, off);
     });
-    const fin = begin + each * angles.length, a = kin.a(at);
-    props.push({id: 'aP', type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + a[0] * as, y2: P[1] + a[1] * as, head: 18 * k, style: {stroke: 'bad', width: 6 * k}, show: [fin, 1e9]} as Prop);
-    line('alim', `As Δt → 0, Δv/Δt points at the centre: a = v²/R = ${f(v * v / R)} ${u}/s²`, fin, {weight: 700});
+    const fin = begin + each * DV_ANGLES.length, a = kin.a(at), aTip = plus(P, a, 0.6 * R / (v * w));
+    props.push(arrow('aP', P, aTip, 'bad', fin, 1e9, 6));
+    name('laP', mid(P, aTip), turn(a, 1), 'a', 'bad', fin, 1e9);
+    row += 1.35 * 30 * k;
+    row += line('alimw', 'As Δt shrinks, Δv points at the centre: the acceleration is centripetal', fin, {weight: 700});
+    line('alim', `a = v²/R = ${f(v * v / R)} ${u}/s²`, fin, {weight: 700});
     end = fin + 2.2;
   }
   // after the motion the mover steps aside for the Δt and Δv constructions

@@ -960,6 +960,40 @@ test('plane_motion: velocity along the tangent, constant acceleration and unifor
   assert.deepEqual(check(tri.scene!, {every: 3}), []);
 });
 
+test('vector_add: the unit vector â = a / |a| beside a; a factor of 1 is refused', () => {
+  // 2026-10-29, Resolution of Vectors: a plan for "a unit vector" drew a of length 1 times 1, two arrows both named a
+  const unit = compile({verb: 'vector_add', mode: 'unit', a: [3, 4], illustrative: true} as any).scene!;
+  const texts = unit.props.filter(q => q.type === 'text').map(q => (q as any).text as string);
+  assert.ok(texts.includes('â'));
+  assert.ok(texts.some(t => /â = a \/ \|a\|.*length one/.test(t)), 'the words survive an illustrative scene');
+  const hat = unit.props.find(q => q.id === 'k0') as any;
+  assert.ok(Math.abs(Math.hypot(hat.x2 - hat.x1, hat.y2 - hat.y1) - 1) < 1e-9);
+  assert.match((compile({verb: 'vector_add', mode: 'unit', a: [3, 4]} as any).scene!.meta!.facts as string[]).join(' | '), /â = \(0\.60, 0\.80\), length 1/);
+  assert.match(compile({verb: 'vector_add', mode: 'scale', a: [1, 0], factors: [1]} as any).errors.join(' '), /factor of 1 draws a again.*mode 'unit'/);
+  assert.match(compile({verb: 'vector_add', mode: 'unit', a: {magnitude: 1, angle: 0}} as any).errors.join(' '), /length other than 1/);
+});
+
+test('plane_motion delta_v: both triangles, named, beside each other, in a half-width illustrative part', () => {
+  // 2026-10-29, Uniform Circular Motion: the Δv triangle was drawn at P at the motion's arrow scale, specks in a
+  // half-width part, and an illustrative scene hid every line about it
+  const both = compile({compound: true, parts: [{id: 'v', box: [960, 0, 960, 1080], spec: {verb: 'plane_motion', title: 'Velocity vectors',
+    circle: {radius: 3, speed: 2}, show: ['delta_v'], illustrative: true}}]} as any);
+  assert.deepEqual(both.errors, []);
+  const sc = both.scene!.parts![0].scene, texts = sc.props.filter(q => q.type === 'text').map(q => (q as any).text as string);
+  for (const name of ['r', 'r′', 'Δr', 'v', 'v′', 'Δv', 'P', 'P′', 'a']) assert.ok(texts.includes(name), name);
+  assert.ok(texts.some(t => /triangle of r, r′, Δr and the triangle of v, v′, Δv are similar/.test(t)));
+  assert.ok(texts.some(t => /Δv points at the centre/.test(t)));
+  // the velocity triangle is big: v is drawn at least half the radius long, and beside the circle, inside the window
+  const p = sc.planes![0], v1 = sc.props.find(q => q.id === 'v1') as any;
+  assert.ok(Math.hypot(v1.x2 - v1.x1, v1.y2 - v1.y1) >= 1.5);
+  assert.ok(v1.x1 > 3 && v1.x1 < p.x[1]);
+  for (const q of sc.props.filter(q => /^(v2|dv)-/.test(q.id)) as any[]) assert.ok(q.x2 < p.x[1] && q.y2 < p.y[1] && q.y2 > p.y[0], q.id);
+  assert.deepEqual(check(both.scene!, {every: 3}), []);
+  // limit: an illustrative scene keeps the words
+  const lim = compile({verb: 'plane_motion', formula: {x: '3*t', y: '2*t^2', t: [0, 2]}, show: ['limit'], illustrative: true} as any).scene!;
+  assert.ok(lim.props.some(q => q.type === 'text' && /Δr\/Δt becomes the velocity v/.test((q as any).text)));
+});
+
 test('stage: in a scene where nothing moves, every item is big enough to see', () => {
   // 2026-10-29, Scalars and Vectors: a 1 m block and a marker on a 30 m stage were specks under their labels
   const still = compile({verb: 'stage', width_m: 30, ground: 'floor', items: [{id: 'b', object: 'block', x: 10}, {id: 'm', object: 'marker', x: 20}]} as any);

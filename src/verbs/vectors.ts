@@ -11,7 +11,7 @@ import {n2, panel, scene, text} from './calculus.ts';
 
 /** A vector by components [x, y], or by magnitude and direction (degrees anticlockwise from +x). */
 export type V = [number, number] | {magnitude: number; angle: number};
-export const MODES = ['add', 'subtract', 'scale', 'equal', 'resolve', 'components'] as const;
+export const MODES = ['add', 'subtract', 'scale', 'unit', 'equal', 'resolve', 'components'] as const;
 export type VectorSpec = {verb: 'vector_add'; mode?: (typeof MODES)[number]; a: V; b?: V; method?: 'triangle' | 'parallelogram';
   factors?: number[]; at?: [number, number][]; names?: [string, string]; unit?: string; x?: [number, number]; y?: [number, number];
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
@@ -47,6 +47,7 @@ function points(s: VectorSpec): [number, number][] {
     case 'add': return [[0, 0], a, b, sum];
     case 'subtract': return [[0, 0], a, b, [a[0] - b[0], a[1] - b[1]]];
     case 'scale': return [[0, 0], a, ...(s.factors ?? [2, -1]).map(k => [k * a[0], k * a[1]] as [number, number])];
+    case 'unit': { const m = Math.hypot(...a) || 1; return [[0, 0], a, [a[0] / m, a[1] / m]]; }
     case 'equal': return [[0, 0], a, ...(s.at ?? [[2, 1]]).flatMap(p => [p, [p[0] + a[0], p[1] + a[1]]] as [number, number][])];
     case 'resolve': return [[0, 0], a, [a[0], 0], [0, a[1]]];
     case 'components': return [[0, 0], a, b, sum, [a[0], 0], [0, a[1]], [b[0], 0], [0, b[1]]];
@@ -75,6 +76,8 @@ export function vectorErrors(s: VectorSpec): string[] {
   if (s.method !== undefined && !['triangle', 'parallelogram'].includes(s.method)) e.push('vector_add: method is triangle or parallelogram');
   if (s.factors !== undefined && (!Array.isArray(s.factors) || !s.factors.length || s.factors.length > 3 || !s.factors.every(isNum)))
     e.push('vector_add: factors is 1 to 3 numbers (2, −1, 0.5)');
+  // 2026-10-29: a plan for "a unit vector" multiplied a vector of length 1 by 1 and drew a twice, both named a
+  else if (s.factors?.includes(1)) e.push("vector_add: a factor of 1 draws a again; for the unit vector â = a / |a| use mode 'unit'");
   if (s.at !== undefined && (!Array.isArray(s.at) || !s.at.length || s.at.length > 3 || !s.at.every(p => Array.isArray(p) && p.length === 2 && p.every(isNum))))
     e.push('vector_add: at is 1 to 3 tail points [x, y] for copies of a');
   if (s.names !== undefined && (!Array.isArray(s.names) || s.names.length !== 2 || !s.names.every(n => typeof n === 'string' && n.length >= 1 && n.length <= 3)))
@@ -82,6 +85,8 @@ export function vectorErrors(s: VectorSpec): string[] {
   if (e.length) return e;
   const [ax, ay] = xy(s.a);
   if (Math.hypot(ax, ay) < 1e-9 && mode !== 'add') e.push('vector_add: a has zero length');
+  else if (mode === 'unit' && Math.abs(Math.hypot(ax, ay) - 1) < 0.2)
+    e.push('vector_add: unit draws â = a / |a| beside a, so give a a length other than 1 (such as [3, 4], length 5)');
   for (const [lo, hi, name] of [[...(s.x ?? [0, 1]), 'x'], [...(s.y ?? [0, 1]), 'y']] as [number, number, string][])
     if (!(lo < hi)) e.push(`vector_add: ${name} is a window [low, high]`);
   if (s.x || s.y) {
@@ -185,17 +190,25 @@ export function vectorAdd(s: VectorSpec): Scene {
     return scene(s, W, H, 6.4, plane, props, [], {verb: 'vector_add', facts});
   }
 
-  if (mode === 'scale') {
-    const ks = s.factors ?? [2, -1];
+  if (mode === 'scale' || mode === 'unit') {
+    // unit: â = a / |a|, a multiple like any other, named with a hat
+    const ks = mode === 'unit' ? [1 / magA] : s.factors ?? [2, -1], hat = `${A}\u0302`;
     // each multiple from its own tail, set apart across a's direction so they do not overlap
     const nx = -a[1] / magA, ny = a[0] / magA, gap = 0.12 * Math.max(span, 1);
     props.push(arrow('a', [0, 0], a, 'accent', 0.6), label('la', [0, 0], a, A, 'accent', 0.6, 1));
     line('l1', given(A, s.a), 0.6);
     ks.forEach((m, i) => {
       const t0: [number, number] = [-(i + 1) * gap * nx, -(i + 1) * gap * ny], t1: [number, number] = [t0[0] + m * a[0], t0[1] + m * a[1]];
-      const at = 1.8 + 1.4 * i, name = m === 1 ? A : m === -1 ? `−${A}` : `${f(m)}${A}`;
+      const at = 1.8 + 1.4 * i, name = mode === 'unit' ? hat : m === -1 ? `−${A}` : `${f(m)}${A}`;
       props.push(arrow(`k${i}`, t0, t1, m < 0 ? 'bad' : 'cool', at), label(`lk${i}`, t0, t1, name, m < 0 ? 'bad' : 'cool', at, -1));
-      const size = Math.abs(m) === 1 ? 'the same length' : m === 0 ? 'the zero vector' : `${f(Math.abs(m))} times as long`;
+      if (mode === 'unit') {
+        // in words too, so an illustrative scene (no numbers) still says what â is
+        line(`m${i}`, `${hat} = ${A} / |${A}|: the same direction as ${A}, length one, no unit; it only gives the direction`, at);
+        line(`n${i}`, `|${A}| = ${f(magA)}${u}, so ${hat} = (${f(m * a[0])}, ${f(m * a[1])}) and ${A} = ${f(magA)} ${hat}`, at + 0.8);
+        facts.push(`|${A}| = ${f(magA)}${u}`, `${hat} = (${f(m * a[0])}, ${f(m * a[1])}), length 1`, `${A} = ${f(magA)} ${hat}`);
+        return;
+      }
+      const size = Math.abs(m) === 0 ? 'the zero vector' : Math.abs(m) === 1 ? 'the same length' : `${f(Math.abs(m))} times as long`;
       line(`m${i}`, `${name}: ${size}${m < 0 ? ', turned the other way' : ''}; |${name}| = ${f(Math.abs(m) * magA)}${u}`, at);
       facts.push(`|${name}| = ${f(Math.abs(m) * magA)}${u}`, `${name} = (${f(m * a[0])}, ${f(m * a[1])})${u}`);
     });
