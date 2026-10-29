@@ -764,3 +764,27 @@ test('circuit: potential difference as work per unit charge, a voltmeter across 
   assert.ok((closed.props.find(p => p.id === 'energy-level') as any).keys.w.length === 2, 'runs down while current flows');
   assert.ok((closed.meta as any).anchors.lamp_left && (closed.meta as any).anchors.lamp_right);
 });
+
+test('energy_use: the book\'s refrigerator bill, a cycling compressor, and the current against a fuse', async () => {
+  // NCERT Class 10 Example 11.13: a 400 W refrigerator 8 hours a day for 30 days uses 96 kWh; at Rs 3.00 a unit, Rs 288
+  const {energyUse} = await import('../src/verbs/energy-use.ts');
+  assert.equal(energyUse({appliances: [{name: 'refrigerator', watts: 400, hours: 8}], days: 30}).kwh, 96);
+  assert.equal(energyUse({appliances: [{name: 'refrigerator', watts: 400, hours: 24, duty: 0.4}]}).kwh, 3.84);
+  const bill = compile({verb: 'energy_use', appliances: [{name: 'refrigerator', watts: 400, hours: 8}], days: 30, rate: 3, units: true} as any);
+  assert.deepEqual(bill.errors, []);
+  const facts = (bill.scene!.meta as any).facts.join(' ');
+  assert.match(facts, /96,000 Wh = 96 kWh/);
+  assert.match(facts, /Rs 288/);
+  const texts = bill.scene!.props.map(p => (p as any).text).join(' ');
+  assert.match(texts, /3\.46 × 10⁸ J/);
+  const house = compile({verb: 'energy_use', appliances: [{name: 'heater', watts: 2000}, {name: 'iron', watts: 1000}], volts: 220, fuse: 10} as any);
+  assert.match((house.scene!.meta as any).facts.join(' '), /13\.64 A exceeds the fuse's 10 A rating/);
+  // a meter under one unit counts watt-hours
+  const one = compile({verb: 'energy_use', appliances: [{name: 'bulb', watts: 1}]} as any).scene!;
+  assert.equal((one.props.find(p => p.id === 'meter-reading') as any).text, '{e} Wh');
+  const errors = (spec: object) => compile({verb: 'energy_use', ...spec} as any).errors.join(' | ');
+  assert.match(errors({appliances: []}), /appliances is a list of 1 to 5/);
+  assert.match(errors({appliances: [{name: 'fan', watts: 75, hours: 30}]}), /hours is hours of use a day/);
+  assert.match(errors({appliances: [{name: 'fan', watts: 75, duty: 1.5}]}), /duty is the fraction/);
+  assert.match(errors({appliances: [{name: 'fan', watts: 75}], fuse: 5}), /a fuse needs volts/);
+});
