@@ -881,13 +881,17 @@ test('no verb writes into the film\'s header strip (the top 9.5%: the film\'s ti
   // 2026-10-29: a graph's y-axis name sat under the header of the Factors Affecting Resistance film
   const {CARDS} = await import('../src/verbs/cards.ts');
   const texts = (items: any[]): any[] => items.flatMap(p => p.type === 'group' ? texts(p.items) : p.type === 'text' ? [p] : []);
-  for (const [name, card] of Object.entries(CARDS)) for (const spec of [card.example, card.shortest].filter(Boolean)) {
-    const scene = compile(spec as any).scene!, f = frame(scene, scene.duration - 0.01) as any;
+  // and a half-width part of a compound, which is compiled at its box's size (its own title once sat in the strip)
+  for (const [name, card] of Object.entries(CARDS)) for (const spec of [card.example, card.shortest].filter(Boolean)) for (const half of [false, true]) {
+    if (half && !['vector_add', 'forces', 'plane_motion'].includes(name)) continue;    // the verbs with a narrow layout (frame())
+    const r = compile(half ? {...(spec as any), width: 960, height: 1080} : spec as any);
+    if (!r.scene) continue;
+    const scene = r.scene, f = frame(scene, scene.duration - 0.01) as any;
     const high = texts(f.props).filter(t => t.y - (t.size ?? 24) < 0.095 * scene.height);
-    assert.deepEqual(high.map(t => t.id), [], name);
+    assert.deepEqual(high.map(t => t.id), [], `${name}${half ? ' (half width)' : ''}`);
     // the film fits a scene's 9.5%–96% above its captions (renderer LINKWORK_FIT): no text below 96%
     const low = texts(f.props).filter(t => t.y > 0.96 * scene.height);
-    assert.deepEqual(low.map(t => t.id), [], name);
+    assert.deepEqual(low.map(t => t.id), [], `${name}${half ? ' (half width)' : ''}`);
   }
 });
 

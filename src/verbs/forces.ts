@@ -150,13 +150,15 @@ export function forcesErrors(spec: ForcesSpec): string[] {
 export function forces(spec: ForcesSpec): Scene {
   const s = fill(spec);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
-  const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], facts: string[] = [];
+  const fr = frame(W, H, k, s.title), props: Prop[] = [...fr.titles], facts: string[] = [];
+  // a half-width part keeps a shorter drawing and smaller lines, so its readouts and sentences stay above the captions
+  const narrow = W < 1.3 * H, box: [number, number, number, number] = narrow ? [fr.box[0], fr.box[1], fr.box[2], fr.box[1] + 0.3 * H] : fr.box;
   const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
-  const px = fr.px, ptext = panel(W, k);
-  let row = fr.row;
+  const px = fr.px, ptext = panel(W, k), fs0 = (narrow ? 26 : 30) * k;
+  let row = narrow ? box[3] + 50 * k : fr.row;
   const line = (id: string, t: string, at: number, extra: Partial<Prop> = {}, until = 1e9) => {
-    props.push(ptext(id, px, row, t, 30 * k, {show: [at, until], ...extra}));
-    row += wrapText(t, 30 * k, W - px - 40 * k).length * 1.3 * 30 * k + 6 * k;
+    props.push(ptext(id, px, row, t, fs0, {show: [at, until], ...extra}));
+    row += wrapText(t, fs0, W - px - 40 * k).length * 1.3 * fs0 + 6 * k;
   };
   const arrow = (id: string, p: P2, q: P2, stroke: string, at: number, width = 6, extra: Partial<Prop> = {}): Prop =>
     ({id, type: 'arrow', x1: p[0], y1: p[1], x2: q[0], y2: q[1], head: 20 * k, style: {stroke, width: width * k}, show: [at, 1e9], fade: 0.3, ...extra} as Prop);

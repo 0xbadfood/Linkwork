@@ -86,7 +86,9 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const samples = Array.from({length: 121}, (_, i) => t0 + (t1 - t0) * i / 120), path = samples.map(kin.r);
   const vmax = Math.max(...samples.map(t => Math.hypot(...kin.v(t))), 1e-9), amax = Math.max(...samples.map(t => Math.hypot(...kin.a(t))), 0);
   // the window: the path and the origin, with room for arrows, at equal scale across and up
-  const fr = frame(W, H, k, s.title), box = fr.box;
+  const fr = frame(W, H, k, s.title), narrow = W < 1.3 * H;
+  // a half-width part keeps a shorter drawing and smaller lines, so its readouts and sentences stay above the captions
+  const box: [number, number, number, number] = narrow ? [fr.box[0], fr.box[1], fr.box[2], fr.box[1] + 0.3 * H] : fr.box, lineSize = (narrow ? 25 : 30) * k;
   // delta_v draws the velocity triangle apart, to the right of the circle, as the book does (Fig. 3.18): it is in the window
   const dvAt = s.circle ? s.at ?? Math.PI / 4 / (s.circle.speed / s.circle.radius) : 0;
   const hodo = show.has('delta_v') && s.circle ? hodograph(s.circle.radius, s.circle.speed, dvAt, kin.v) : undefined;
@@ -101,11 +103,11 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const span = plane.x[1] - plane.x[0], step = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].find(v => span / v <= 14) ?? 1000;
   const px = fr.px, ptext = panel(W, k);
   const props: Prop[] = [{id: 'axes', type: 'axes', plane: 'p', step: [step, step], size: 22 * k, grid: true, names: ['x', 'y']}];
-  let row = fr.row;
+  let row = narrow ? box[3] + 50 * k : fr.row;
   props.push(...fr.titles);
   const line = (id: string, t: string, at: number, extra: Partial<Prop> = {}, until = 1e9) => {
-    props.push(ptext(id, px, row, t, 30 * k, {show: [at, until], ...extra}));
-    return wrapText(t, 30 * k, W - px - 40 * k).length * 1.3 * 30 * k + 6 * k;
+    props.push(ptext(id, px, row, t, lineSize, {show: [at, until], ...extra}));
+    return wrapText(t, lineSize, W - px - 40 * k).length * 1.3 * lineSize + 6 * k;
   };
   const facts: string[] = [];
 
@@ -135,9 +137,9 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   legend.forEach(([t, c], i) => { row += line(`legend${i}`, t, lead, {style: {fill: c}}); });
   // live readouts during the motion
   const ro = (id: string, t: string, measures: Record<string, Key[]>) => {
-    props.push({id, type: 'readout', x: px, y: row, size: 30 * k, text: t, decimals: 2, show: [lead, hold],
+    props.push({id, type: 'readout', x: px, y: row, size: lineSize, text: t, decimals: 2, show: [lead, hold],
       measures: Object.fromEntries(Object.entries(measures).map(([n, keys]) => [n, {kind: 'keys', keys}]))} as Prop);
-    row += 1.35 * 30 * k;
+    row += 1.35 * lineSize;
   };
   row += 8 * k;
   ro('ro-t', 't = {t} s', {t: keyed(t => t)});
@@ -178,7 +180,7 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
     });
     const vP = kin.v(at), fin = begin + each * steps.length;
     props.push({id: 'vP', type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + vP[0] * vs, y2: P[1] + vP[1] * vs, head: 20 * k, style: {stroke: 'cool', width: 6 * k}, show: [fin, 1e9]} as Prop);
-    row += 1.35 * 30 * k;
+    row += 1.35 * lineSize;
     row += line('vlimw', 'As Δt shrinks, Δr/Δt becomes the velocity v, along the tangent at P', fin, {weight: 700});
     line('vlim', `v = (${f(vP[0])}, ${f(vP[1])}) ${u}/s at t = ${f(at)} s`, fin, {weight: 700});
     facts.push(`at t = ${f(at)} s the velocity is (${f(vP[0])}, ${f(vP[1])}) ${u}/s, speed ${f(Math.hypot(...vP))} ${u}/s`);
@@ -229,7 +231,7 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
     const fin = begin + each * DV_ANGLES.length, a = kin.a(at), aTip = plus(P, a, 0.6 * R / (v * w));
     props.push(arrow('aP', P, aTip, 'bad', fin, 1e9, 6));
     name('laP', mid(P, aTip), turn(a, 1), 'a', 'bad', fin, 1e9);
-    row += 1.35 * 30 * k;
+    row += 1.35 * lineSize;
     row += line('alimw', 'As Δt shrinks, Δv points at the centre: the acceleration is centripetal', fin, {weight: 700});
     line('alim', `a = v²/R = ${f(v * v / R)} ${u}/s²`, fin, {weight: 700});
     end = fin + 2.2;

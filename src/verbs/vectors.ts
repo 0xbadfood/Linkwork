@@ -32,8 +32,10 @@ const deg = (x: number, y: number) => Math.atan2(y, x) / DEG;
 export function frame(W: number, H: number, k: number, title?: string) {
   const narrow = W < 1.3 * H, px = narrow ? 0.06 * W : 0.66 * W, width = W - px - 40 * k;
   const titleH = title ? wrapText(title, 44 * k, width).length * 1.25 * 44 * k + 20 * k : 0;
-  const top = narrow ? 0.06 * H + 44 * k : 0.155 * H;
-  const box: [number, number, number, number] = narrow ? [0.08 * W, top + titleH, 0.92 * W, top + titleH + Math.min(0.42 * H, 0.84 * W)]
+  // a narrow part's title starts below the film's header strip (top 9.5%): half-width panels' titles ran into the
+  // film's own title (Laws of Motion C1, 2026-10-29)
+  const top = narrow ? 0.1 * H + 44 * k : 0.155 * H;
+  const box: [number, number, number, number] = narrow ? [0.08 * W, top + titleH, 0.92 * W, top + titleH + Math.min(0.38 * H, 0.84 * W)]
     : [0.06 * W, 0.16 * H, 0.6 * W, 0.94 * H];
   const titles: Prop[] = title ? [{id: 'title', type: 'text', x: px, y: top, size: 44 * k, weight: 700, text: title, width}] : [];
   return {box, px, width, titles, row: narrow ? box[3] + 60 * k : top + titleH};
