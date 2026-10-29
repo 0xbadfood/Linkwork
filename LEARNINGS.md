@@ -80,3 +80,5 @@ caught or a reviewer saw while building the examples and the first pilot film (h
   Quote results from the closed form (½kx² + µmg x = ½mv²); integration only draws the motion. (2026-10-30)
 - Half-width parts of a compound are compiled at their box's size: every layout rule (header strip, text above the
   captions, label sizes) must hold at 960 × 1080 too, and the header test compiles the frame() verbs that way. (2026-10-30)
+- A mover drawn to scale on a stage wide enough for its journey is a speck (a 1 m cart on a 20 m floor, 4% of the frame).
+  Draw a ground mover at least 8% of the stage, as a textbook figure would; a projectile stays small so its path reads. (2026-10-30)

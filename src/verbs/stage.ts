@@ -66,7 +66,7 @@ const fmt = (v: number, p = 2) => n2(Number(v.toFixed(p)), p).replace(/(\.\d*?)0
 const FIGURE_ROLES: Role[] = ['mover', 'general'];
 const rolesOf = (item: StageItem) => (item.object === 'figure' ? FIGURE_ROLES : OBJECTS[item.object]?.roles ?? []);
 const has = (item: StageItem | undefined, role: Role) => !!item && rolesOf(item).includes(role);
-let WIDTH = 10, FIGURES = new Map<string, StageItem>();
+let WIDTH = 10, FIGURES = new Map<string, StageItem>(), LAUNCHED = new Set<string>();
 /** Its size in metres, as drawn: a launcher or a mover too small to see on a wide stage is drawn larger, as a textbook
  * figure would, and the physics uses the drawn geometry (where the muzzle is, how long the slope is) so both agree. */
 const sizeOf = (i: StageItem): number => {
@@ -75,7 +75,9 @@ const sizeOf = (i: StageItem): number => {
   // quarter of the figure; a general prop is never smaller than a few percent of the stage.
   if (i.object === 'bulb' && i.on && FIGURES.get(i.on)) return i.size ?? sizeOf(FIGURES.get(i.on)!) * 0.25;
   if (i.object === 'figure') return Math.max(size, 0.11 * WIDTH);
-  return Math.max(size, roles.includes('launcher') ? 0.07 * WIDTH : roles.includes('mover') ? 0.02 * WIDTH
+  // A mover along the ground (a cart, a car, a block) is drawn at least 8% of the stage: at 2% a cart crossing a
+  // 20 m floor was a speck (Kinetic Energy, 2026-10-30). A projectile keeps 2%, so its flight reads as a path.
+  return Math.max(size, roles.includes('launcher') ? 0.07 * WIDTH : roles.includes('mover') ? (LAUNCHED.has(i.id) || i.object === 'ball' ? 0.02 : 0.08) * WIDTH
     : roles.includes('general') ? 0.06 * WIDTH : 0);
 };
 
@@ -86,6 +88,7 @@ type State = Sample;
 function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[]; end: number; errors: string[]} {
   const g = s.g ?? 9.8, W = WIDTH = s.width_m ?? 10, errors: string[] = [], facts: string[] = [];
   FIGURES = new Map(s.items.filter(i => i.object === 'figure').map(i => [i.id, i]));
+  LAUNCHED = new Set((s.events ?? []).filter(e => e.kind === 'launch').map(e => e.item));
   const items = new Map(s.items.map(i => [i.id, i]));
   const state = new Map<string, State>();
   const restY = (i: StageItem): number => {

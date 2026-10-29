@@ -1054,7 +1054,8 @@ test('forces: an illustrative diagram needs no mass', () => {
 test('stage: in a scene where nothing moves, every item is big enough to see', () => {
   // 2026-10-29, Scalars and Vectors: a 1 m block and a marker on a 30 m stage were specks under their labels
   const still = compile({verb: 'stage', width_m: 30, ground: 'floor', items: [{id: 'b', object: 'block', x: 10}, {id: 'm', object: 'marker', x: 20}]} as any);
-  assert.match(still.errors.join(' '), /b is drawn only 3% of the stage wide.*set width_m to at most 12/);
+  // the block is a mover, drawn at least 8% of the stage since 2026-10-30, so it is big enough by itself; the marker is not
+  assert.doesNotMatch(still.errors.join(' '), /b is drawn only/);
   assert.match(still.errors.join(' '), /m is drawn only/);
   assert.deepEqual(compile({verb: 'stage', width_m: 10, ground: 'none', items: [{id: 't', object: 'figure', x: 5}, {id: 'bulb', object: 'bulb', x: 5, on: 't', a: 1}]} as any).errors, []);
 });
@@ -1184,4 +1185,12 @@ test('energy: kinetic and potential energy trade, the total kept or lost to heat
   assert.match(err({system: 'slope', mass: 1, h: 1, paths: 'two', mu: 0.1}), /frictionless/);
   assert.match(err({system: 'drop', h: 2}), /give mass.*illustrative: true/);
   assert.deepEqual(compile({verb: 'energy', system: 'drop', h: 2, illustrative: true} as any).errors, []);
+});
+
+test('stage: a mover along the ground is drawn big enough to see; a projectile stays small', () => {
+  // Kinetic Energy (2026-10-30): a cart crossing a 20 m floor was a speck at 2% of the stage
+  const cart = compile({verb: 'stage', width_m: 20, ground: 'floor', items: [{id: 'cart', object: 'cart', x: 2, size: 1}],
+    events: [{t: 0.5, item: 'cart', kind: 'move', to: 16, duration: 8}]} as any).scene!;
+  const drawn = cart.props.find((p: any) => p.id === 'o-cart') as any;
+  assert.ok(drawn.size >= 0.07 * 1920, `the cart is drawn ${drawn.size} px wide (it was 86)`);
 });
