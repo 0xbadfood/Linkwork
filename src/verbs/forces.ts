@@ -152,7 +152,7 @@ export function forces(spec: ForcesSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const fr = frame(W, H, k, s.title), props: Prop[] = [...fr.titles], facts: string[] = [];
   // a half-width part keeps a shorter drawing and smaller lines, so its readouts and sentences stay above the captions
-  const narrow = W < 1.3 * H, box: [number, number, number, number] = narrow ? [fr.box[0], fr.box[1], fr.box[2], fr.box[1] + 0.3 * H] : fr.box;
+  const narrow = W < 1.3 * H, box: [number, number, number, number] = narrow ? [fr.box[0], fr.box[1], fr.box[2], fr.box[1] + 0.36 * H] : fr.box;
   const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
   const px = fr.px, ptext = panel(W, k), fs0 = (narrow ? 26 : 30) * k;
   let row = narrow ? box[3] + 50 * k : fr.row;
@@ -172,7 +172,8 @@ export function forces(spec: ForcesSpec): Scene {
   const split = show.has('triangle'), bw = box[2] - box[0], bh = box[3] - box[1];
   const region = split ? [box[0], box[1], box[0] + 0.58 * bw, box[3]] : [box[0], box[1], box[2], box[3]];
   const C: P2 = [(region[0] + region[2]) / 2, (region[1] + region[3]) / 2], room = Math.min(region[2] - region[0], region[3] - region[1]);
-  const body = s.body ?? 'block', side = body === 'point' ? 0 : body === 'ball' ? 0.16 * room : 0.2 * room;
+  // a half-width part's body is drawn larger: at a fifth of its short drawing, "1 kg" could not be read (C5, 2026-10-30)
+  const body = s.body ?? 'block', side = (body === 'point' ? 0 : body === 'ball' ? 0.16 * room : 0.2 * room) * (narrow ? 1.3 : 1);
   const [hx, hy] = body === 'car' ? [0.8 * side, 0.37 * side] : body === 'block' ? [0.5 * side, 0.35 * side] : [side / 2, side / 2];
   // pixels per newton: the longest arrow, from the body's edge, ends inside the region with room for its name
   const big = Math.max(...fs.map(x => x.size), Math.hypot(...net)), L = (0.42 * room - Math.max(hx, hy, 12 * k)) / big;
@@ -204,9 +205,16 @@ export function forces(spec: ForcesSpec): Scene {
   const foot = (u: P2): P2 => [C[0] + u[0] * edge(u), C[1] - u[1] * edge(u)];
   // the forces one by one, each named at its head
   const t0 = 0.6, step = 0.9;
+  // forces pointing the same way are drawn side by side, not one over the other (Laws of Motion C7, 2026-10-30: the
+  // cylinder's push C ran down the block's weight W, its name on W's shaft)
+  const same = (i: number) => fs.map((y, j) => j).filter(j => fs[j].size > 1e-9 && Math.hypot(fs[j].u[0] - fs[i].u[0], fs[j].u[1] - fs[i].u[1]) < 1e-6);
+  const apart = (i: number, p: P2): P2 => {
+    const g = same(i), d = (g.indexOf(i) - (g.length - 1) / 2) * 40 * k, u = fs[i].u;
+    return [p[0] + u[1] * d, p[1] + u[0] * d];
+  };
   fs.forEach((x, i) => {
     if (x.size < 1e-9) return;
-    const from = x.kind === 'tension' ? C : foot(x.u), at = t0 + step * i, tip = sc(x.u, x.size, from), name = sc(x.u, x.size + 34 * k / L, from);
+    const from = apart(i, x.kind === 'tension' ? C : foot(x.u)), at = t0 + step * i, tip = sc(x.u, x.size, from), name = sc(x.u, x.size + 34 * k / L, from);
     props.push(arrow(`F${i}`, from, tip, COLOURS[x.kind], at), label(`lF${i}`, name, x.name, COLOURS[x.kind], at));
     const how = x.kind === 'weight' && m && !(s.forces ?? [])[i].magnitude ? `${x.name === 'mg' ? '' : ' = mg'} = ${f(m)} × ${f(s.g ?? 9.8)}` : '';
     line(`v${i}`, `${x.name}${how} = ${f(x.size)} N${x.solved ? ' (solved)' : ''}${x.flipped ? ', pointing the other way' : ''}`, at, {style: {fill: COLOURS[x.kind]}});

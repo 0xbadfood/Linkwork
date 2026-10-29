@@ -1105,6 +1105,9 @@ test('forces: arrows start at the body, the net stays clear of them, and one lin
   const net = by('net'), W = by('F0');
   assert.ok(net.y1 < body.y - 0.35 * side && net.y2 < body.y - 0.35 * side, 'a sideways net is drawn above the centre, off the weight');
   assert.ok(Math.min(net.x1, net.x2) > W.x1, 'and right of the weight');
+  const two = compile({verb: 'forces', mass: 2, surface: 'floor', forces: [{name: 'W', kind: 'weight'}, {name: 'C', kind: 'other', magnitude: 4, direction: 'down'}, {name: 'N', kind: 'normal'}], a: [0, 0]} as any).scene!;
+  const w = two.props.find((p: any) => p.id === 'F0') as any, c = two.props.find((p: any) => p.id === 'F1') as any;
+  assert.ok(Math.abs(w.x1 - c.x1) > 30, 'two forces pointing down are drawn side by side');
   assert.match(compile({verb: 'forces', surface: 'floor', illustrative: true, show: ['triangle'], forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal'}]} as any).errors.join(' '), /along one line.*leave 'triangle' out/);
   assert.deepEqual(compile({verb: 'forces', body: 'point', show: ['triangle'], forces: [{name: 'T2', kind: 'tension', magnitude: 60, direction: 'down'}, {name: 'F', magnitude: 50, direction: 'right'}, {name: 'T1', kind: 'tension'}], a: [0, 0]} as any).errors, []);
 });

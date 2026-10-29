@@ -170,7 +170,8 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
     case 'block': {
       const h = 100 * +(o.params?.height ?? 0.7);
       poly(box(-50, -h, 50, 0), {fill: 'faint', stroke: 'ink', width: W(4)});
-      if (o.label) text([0, -h / 2], o.label, 32);
+      // the name fits inside the block: a word like "cylinder" ran out past both sides (Laws of Motion C7, 2026-10-30)
+      if (o.label) text([0, -h / 2], o.label, Math.min(32, 150 / Math.max(1, o.label.length)));
       break;
     }
     case 'upright_ruler': {
