@@ -161,7 +161,9 @@ export const CARDS: Record<string, Card> = {
   },
   graph: {
     subjects: ['physics', 'chemistry', 'maths', 'biology'],
-    concepts: ['motion graphs (x–t, v–t, a–t)', 'distance as the area under v–t', 'acceleration as the slope of v–t', "Boyle's law",
+    concepts: ['motion graphs (x–t, v–t, a–t)', 'distance as the area under v–t', 'acceleration as the slope of v–t',
+      'velocity–time graph', 'position–time graph', 'v–t graph', 'v–t curve', 'x–t graph', 'area under the curve', 'slope of the graph',
+      'graphically represented', 'displacement from the area under the velocity–time graph', "Boyle's law",
       "Charles' law", "Hooke's law", 'stress–strain curve', 'heating and cooling curves', 'periodic trends (ionisation enthalpy, atomic radius)',
       'rate of reaction from a concentration–time graph', 'first-order and zero-order kinetics', 'Arrhenius plot', 'Maxwell–Boltzmann distribution',
       "Raoult's law", "Henry's law", 'V–I characteristics', 'photoelectric effect graphs', 'any quantity plotted against another'],

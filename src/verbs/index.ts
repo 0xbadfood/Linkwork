@@ -122,12 +122,15 @@ const words = (text: string) => new Set((text.toLowerCase().match(/[a-z][a-z-]{3
 
 /** The cards worth showing a planner for this teaching text (a concept's name, summary and coverage): the verbs of the
  * subject whose concepts the text names (a whole concept phrase counts most), best first, at most `limit`. */
+// Dashes of every kind read as one (the book's "v-t curve" is the card's "v–t"), and a hyphenated pair as two words.
+const plain = (text: string) => text.toLowerCase().replace(/[‐‑‒–—−]/g, '-');
+
 export function shortlist(text: string, subject: string, statuses: Card['status'][] = ['trusted'], limit = 6) {
-  const lower = ` ${text.toLowerCase()} `, have = words(text);
+  const lower = ` ${plain(text)} `, have = words(plain(text));
   const scored = Object.entries(cards(statuses)).filter(([, c]) => c.subjects.includes(subject as never)).map(([name, c]) => {
     let score = 0;
     for (const concept of c.concepts) {
-      const phrase = concept.toLowerCase().replace(/\s*\(.*?\)/g, '');
+      const phrase = plain(concept).replace(/\s*\(.*?\)/g, '');
       if (lower.includes(phrase)) score += 3;
       score += [...words(concept)].filter(w => have.has(w)).length * 0.5;
     }
