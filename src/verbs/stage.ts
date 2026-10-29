@@ -305,6 +305,18 @@ export function stageErrors(s: StageSpec): string[] {
     }
     if (tallest > shown) sim.errors.push(`stage: ${what} reaches ${fmt(tallest)} m up, but a ${fmt(W)} m wide stage shows only ${fmt(shown)} m of height; set width_m to at least ${Math.ceil(1.05 * tallest * W / shown)}`);
   }
+  // A scene where nothing moves is a display of things: each must be big enough to see. True scale is kept for motion
+  // (a range needs a wide stage); a still scene has no such reason (2026-10-29, Scalars and Vectors: a 1 m block and a
+  // marker on a 30 m stage, specks under their labels).
+  const MOVES = ['move', 'launch', 'slide', 'roll', 'collide'];
+  if (!sim.errors.length && !(s.events ?? []).some(ev => MOVES.includes(ev.kind))) {
+    const W = s.width_m ?? 10;
+    for (const i of s.items) {
+      if (rolesOf(i).includes('ground') || (i.object === 'bulb' && i.on)) continue;
+      const share = sizeOf(i) / W;
+      if (share < 0.05) sim.errors.push(`stage: ${i.id} is drawn only ${Math.round(100 * share)}% of the stage wide, too small to see in a scene where nothing moves; set width_m to at most ${fmt(Math.max(1, Math.floor(sizeOf(i) / 0.08)))} (or give it a larger size)`);
+    }
+  }
   for (const [n, v] of (s.velocity ?? []).entries()) if ((sim.paths.get(v.item)?.length ?? 0) < 2) sim.errors.push(`stage: velocity ${n + 1}: ${v.item} never moves; give it an event (launch, slide, roll, collide)`);
   return sim.errors;
 }

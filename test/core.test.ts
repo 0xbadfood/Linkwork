@@ -960,6 +960,14 @@ test('plane_motion: velocity along the tangent, constant acceleration and unifor
   assert.deepEqual(check(tri.scene!, {every: 3}), []);
 });
 
+test('stage: in a scene where nothing moves, every item is big enough to see', () => {
+  // 2026-10-29, Scalars and Vectors: a 1 m block and a marker on a 30 m stage were specks under their labels
+  const still = compile({verb: 'stage', width_m: 30, ground: 'floor', items: [{id: 'b', object: 'block', x: 10}, {id: 'm', object: 'marker', x: 20}]} as any);
+  assert.match(still.errors.join(' '), /b is drawn only 3% of the stage wide.*set width_m to at most 12/);
+  assert.match(still.errors.join(' '), /m is drawn only/);
+  assert.deepEqual(compile({verb: 'stage', width_m: 10, ground: 'none', items: [{id: 't', object: 'figure', x: 5}, {id: 'bulb', object: 'bulb', x: 5, on: 't', a: 1}]} as any).errors, []);
+});
+
 test('a verb whose numbers are the picture is never illustrative', () => {
   const digits = compile({verb: 'sig_figs', mode: 'count', numbers: ['0.0025'], illustrative: true} as any);
   assert.equal(digits.scene, undefined);
