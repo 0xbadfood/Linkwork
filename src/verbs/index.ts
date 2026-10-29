@@ -30,11 +30,12 @@ import {vectorAdd, vectorErrors, type VectorSpec} from './vectors.ts';
 import {planeMotion, planeMotionErrors, type PlaneMotionSpec} from './plane-motion.ts';
 import {forces, forcesErrors, type ForcesSpec} from './forces.ts';
 import {work, workErrors, type WorkSpec} from './work.ts';
+import {energy, energyErrors, type EnergySpec} from './energy.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
-  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec;
+  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -100,6 +101,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "forces on a body, computed: a free-body diagram of a block, ball, car or point on a floor, an incline or in the air, its weight, normal force, tension, friction and pushes drawn to scale; unknown forces solved by the second law (equilibrium, or a given acceleration); components along and across a slope, the net force and a = F/m, the forces head to tail closing a triangle when they balance; friction at work: a growing push or a tilting plane, static friction up to µs N, then slipping with µk N"} as Verb<ForcesSpec>,
   work: {errors: workErrors, compile: work,
     about: 'work done by a constant force, computed: a body pulled or pushed through a displacement d at θ to the motion, with kinetic friction; W = F d cos θ (positive, zero or negative), −f d for friction, none for N and mg; bars of the net work done and the kinetic energy grow together (the work-energy theorem); the final speed, time and power'} as Verb<WorkSpec>,
+  energy: {errors: energyErrors, compile: energy,
+    about: 'mechanical energy, computed: a ball dropped, a block or ball down a slope (with friction: heat; or a straight track and a curve: the same speed by either path), a pendulum swinging, a block running into a spring or let go from one; live bars of kinetic, potential (mgh or ½kx²), heat and total energy'} as Verb<EnergySpec>,
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,

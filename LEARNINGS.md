@@ -74,3 +74,9 @@ caught or a reviewer saw while building the examples and the first pilot film (h
     Δv steps) was left unlabelled; name arrows in letters (r′, Δv) and add a words-only line beside the numeric one.
 20. **Scale an arrow by a unit vector times its size, never the raw vector times its size.** forces' net arrow was
     first drawn |F|² long and ran off the frame; render every new verb's frames before trusting `check`.
+
+- A speed a book gives for a body "arriving" (a car into a buffer spring, Example 5.8) is the speed at arrival: a run-up drawn
+  before it must not change it (friction on the run-up made the car reach the spring slower and the energy sums disagreed).
+  Quote results from the closed form (½kx² + µmg x = ½mv²); integration only draws the motion. (2026-10-30)
+- Half-width parts of a compound are compiled at their box's size: every layout rule (header strip, text above the
+  captions, label sizes) must hold at 960 × 1080 too, and the header test compiles the frame() verbs that way. (2026-10-30)

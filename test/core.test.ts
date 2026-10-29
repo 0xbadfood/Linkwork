@@ -1159,3 +1159,29 @@ test('stage collide: kinetic energy kept when elastic, partly lost when the bodi
   assert.match(facts(true), /kinetic energy before: 9 J; after: 9 J \(conserved: elastic\)/);
   assert.match(facts(false), /kinetic energy before: 9 J; after: 4.5 J; 4.5 J \(50%\) is lost/);
 });
+
+test('energy: kinetic and potential energy trade, the total kept or lost to heat, from the book', () => {
+  // 2026-10-30, Class 11 Work, Energy and Power: no verb kept energy bars for a moving body
+  const facts = (spec: object) => (compile({verb: 'energy', ...spec} as any).scene!.meta!.facts as string[]).join(' | ');
+  assert.match(facts({system: 'drop', mass: 0.5, h: 5}), /v = √\(2gh\) = 9.90 m\/s/);
+  // Example 5.8: a 1000 kg car at 18 km/h into a spring of k = 6.25 × 10³ N/m: 2.00 m; with µ = 0.5, 1.35 m
+  assert.match(facts({system: 'spring', mass: 1000, k: 6250, v0: 5}), /greatest compression x = v√\(m\/k\) = 2 m/);
+  assert.match(facts({system: 'spring', mass: 1000, k: 6250, v0: 5, mu: 0.5, g: 10}), /greatest compression x = 1.35 m/);
+  const slope = facts({system: 'slope', mass: 2, h: 3, angle: 35, mu: 0.3});
+  assert.match(slope, /mgh = K \+ heat: 58.80 = 33.6\d \+ 25.1\d J/);
+  const two = facts({system: 'slope', mass: 1, h: 2, paths: 'two'});
+  assert.match(two, /v = √\(2gh\) = 6.26 m\/s: the same speed by either path/);
+  const [ts, tc] = two.match(/straight track: ([\d.]+) s; down the curve: ([\d.]+) s/)!.slice(1).map(Number);
+  assert.ok(tc < ts, 'the curve, steeper at first, gets there sooner');
+  assert.match(facts({system: 'pendulum', mass: 0.2, length: 1, amplitude: 60}), /at the bottom: v = √\(2gh\) = 3.13 m\/s/);
+  // the bars keep the total: K + U (+ heat) never drifts from the start
+  const scene = compile({verb: 'energy', system: 'pendulum', mass: 1, length: 2, amplitude: 50} as any).scene!;
+  const total = (scene.props.find((p: any) => p.id === 'bE') as any).keys.h.map((k: any) => k[1]);
+  assert.ok(Math.max(...total) - Math.min(...total) < 0.01 * Math.max(...total), 'the total bar stays level');
+  const err = (spec: object) => compile({verb: 'energy', ...spec} as any).errors.join(' ');
+  assert.match(err({system: 'slope', mass: 1, h: 1, angle: 20, mu: 0.5}), /does not slide/);
+  assert.match(err({system: 'spring', mass: 1, k: 10, v0: 1, x0: 0.1}), /not both/);
+  assert.match(err({system: 'slope', mass: 1, h: 1, paths: 'two', mu: 0.1}), /frictionless/);
+  assert.match(err({system: 'drop', h: 2}), /give mass.*illustrative: true/);
+  assert.deepEqual(compile({verb: 'energy', system: 'drop', h: 2, illustrative: true} as any).errors, []);
+});
