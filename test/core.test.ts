@@ -844,3 +844,20 @@ test('magnetic_force: I × B on a rod, Fleming\'s left-hand rule from any two di
   assert.match(errors({scene: 'rod', current: 'east'}), /rod: current is out or in/);
   assert.match(errors({scene: 'angle', angles: [120]}), /0 to 90 degrees/);
 });
+
+test('domestic_circuit: appliances in parallel, I = P/V against each fuse; overload, short circuit and earthing', () => {
+  const home = compile({verb: 'domestic_circuit', circuits: [{rating: 15, appliances: [{name: 'geyser', watts: 2000, earth: true}]}, {rating: 5, appliances: [{name: 'bulb', watts: 60}, {name: 'fan', watts: 75}]}]} as any);
+  assert.deepEqual(home.errors, []);
+  assert.match((home.scene!.meta as any).facts.join(' '), /geyser 2,000 W takes 9\.09 A; together 9\.09 A/);
+  // NCERT Exercise 12: a 2 kW oven on a 5 A circuit at 220 V draws 9.09 A: the fuse melts
+  const oven = compile({verb: 'domestic_circuit', circuits: [{rating: 5, appliances: [{name: 'oven', watts: 2000, earth: true}]}], fault: 'overload', at: 0} as any).scene!;
+  assert.ok(oven.props.some(p => p.id === 'c0-fuse-blown'));
+  // with an earth wire a leak blows the fuse; without one the body stays live
+  const leak = (earth: boolean) => compile({verb: 'domestic_circuit', circuits: [{rating: 15, appliances: [{name: 'iron', watts: 1000, earth}]}], fault: 'leak', at: [0, 0]} as any).scene!;
+  assert.ok(leak(true).props.some(p => p.id === 'c0-fuse-blown') && leak(true).props.some(p => p.id === 'earth-path'));
+  assert.ok(!leak(false).props.some(p => p.id === 'c0-fuse-blown') && leak(false).props.some(p => p.id === 'shock'));
+  const errors = (spec: object) => compile({verb: 'domestic_circuit', ...spec} as any).errors.join(' | ');
+  assert.match(errors({circuits: [{rating: 5, appliances: [{name: 'heater', watts: 2000}]}]}), /take 9\.09 A, over its 5 A fuse/);
+  assert.match(errors({circuits: [{rating: 15, appliances: [{name: 'bulb', watts: 60}]}], fault: 'overload'}), /within its 15 A fuse/);
+  assert.match(errors({circuits: [{rating: 15, appliances: [{name: 'bulb', watts: 60}]}], fault: 'short', at: 0}), /at is \[circuit, appliance\]/);
+});

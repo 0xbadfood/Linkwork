@@ -18,6 +18,7 @@ import {circuit, circuitErrors, type CircuitSpec} from './circuit.ts';
 import {energyUseErrors, energyUseScene, type EnergyUseSpec} from './energy-use.ts';
 import {fieldErrors, magneticField, type FieldSpec} from './magnetism.ts';
 import {forceErrors, magneticForce, type ForceSpec} from './magnetic-force.ts';
+import {domesticCircuit, domesticErrors, type DomesticSpec} from './domestic.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -25,7 +26,7 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec;
+  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -81,6 +82,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "magnetic fields, computed: a bar magnet's field lines (N to S outside, S to N inside), iron filings and compasses, a compass traced along a line; a straight wire's concentric circles (right-hand thumb rule), a wire in the page with the field out of and into the page; a loop and a solenoid (like a bar magnet, uniform inside, an electromagnet with a core); a compass deflected when the key is plugged in or the current reversed; a uniform field"} as Verb<FieldSpec>,
   magnetic_force: {errors: forceErrors, compile: magneticForce,
     about: "the force on a current in a magnetic field, computed as I × B: a rod between a horseshoe magnet's poles pushed sideways, reversed with the current or the field, further for a larger current; Fleming's left-hand rule finding field, current or force from the other two (an electron's current against its motion); a charge curving at constant speed across a field; the force largest at right angles, zero along the field"} as Verb<ForceSpec>,
+  domestic_circuit: {errors: domesticErrors, compile: domesticCircuit,
+    about: "a house's wiring: the 220 V mains on live (red) and neutral (black) wires through the meter, main fuse and distribution box to separate 15 A and 5 A circuits with their fuses; appliances in parallel with their own switches, currents I = P/V added per circuit; the earth wire (green) from metal bodies to a plate in the ground; overloading, a short circuit or a live wire touching a metal body, and the fuse melting"} as Verb<DomesticSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */

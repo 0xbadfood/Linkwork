@@ -132,9 +132,9 @@ export function energyUseScene(s: EnergyUseSpec): Scene {
   return {linkwork: 1, width: W, height: H, fps: s.fps ?? 30, duration: T, theme: s.theme ?? 'dark', props, actors: [], meta: {verb: 'energy_use', facts, anchors}};
 }
 
-/** A plain icon for an appliance, chosen by its name (a plug for any other); it lights when the appliance is on. */
-function icon(name: string, [x, y]: Vec, k: number, id: string, on: number): Prop[] {
-  const lit = {show: [on, 1e9] as [number, number], fade: 0.3}, line = {stroke: 'ink', width: 3 * k}, kind = name.toLowerCase();
+/** A plain icon for an appliance, chosen by its name (a plug for any other); shown while the appliance is on. */
+export function icon(name: string, [x, y]: Vec, k: number, id: string, on: number, off = 1e9): Prop[] {
+  const lit = {show: [on, off] as [number, number], fade: 0.3}, line = {stroke: 'ink', width: 3 * k}, kind = name.toLowerCase();
   if (/bulb|lamp|light/.test(kind)) return [
     {id: `${id}-glass`, type: 'circle', x: round(x, 2), y: round(y - 8 * k, 2), r: 24 * k, ...lit, style: {fill: 'accent', opacity: 0.85, ...line}, layer: 4},
     {id: `${id}-base`, type: 'rect', x: round(x - 11 * k, 2), y: round(y + 16 * k, 2), w: 22 * k, h: 18 * k, ...lit, style: {fill: 'muted'}, layer: 4}];
