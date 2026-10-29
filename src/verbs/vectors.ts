@@ -11,7 +11,7 @@ import {n2, panel, scene, text} from './calculus.ts';
 
 /** A vector by components [x, y], or by magnitude and direction (degrees anticlockwise from +x). */
 export type V = [number, number] | {magnitude: number; angle: number};
-export const MODES = ['add', 'subtract', 'scale', 'unit', 'equal', 'resolve', 'components'] as const;
+export const MODES = ['add', 'subtract', 'scale', 'unit', 'equal', 'resolve', 'components', 'dot'] as const;
 export type VectorSpec = {verb: 'vector_add'; mode?: (typeof MODES)[number]; a: V; b?: V; method?: 'triangle' | 'parallelogram';
   factors?: number[]; at?: [number, number][]; names?: [string, string]; unit?: string; x?: [number, number]; y?: [number, number];
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
@@ -50,6 +50,7 @@ function points(s: VectorSpec): [number, number][] {
     case 'subtract': return [[0, 0], a, b, [a[0] - b[0], a[1] - b[1]]];
     case 'scale': return [[0, 0], a, ...(s.factors ?? [2, -1]).map(k => [k * a[0], k * a[1]] as [number, number])];
     case 'unit': { const m = Math.hypot(...a) || 1; return [[0, 0], a, [a[0] / m, a[1] / m]]; }
+    case 'dot': { const q = (a[0] * b[0] + a[1] * b[1]) / ((a[0] * a[0] + a[1] * a[1]) || 1); return [[0, 0], a, b, [q * a[0], q * a[1]]]; }
     case 'equal': return [[0, 0], a, ...(s.at ?? [[2, 1]]).flatMap(p => [p, [p[0] + a[0], p[1] + a[1]]] as [number, number][])];
     case 'resolve': return [[0, 0], a, [a[0], 0], [0, a[1]]];
     case 'components': return [[0, 0], a, b, sum, [a[0], 0], [0, a[1]], [b[0], 0], [0, b[1]]];
@@ -73,7 +74,7 @@ export function vectorErrors(s: VectorSpec): string[] {
   const e: string[] = [], mode = s.mode ?? 'add';
   if (!MODES.includes(mode)) return [`vector_add: mode is one of ${MODES.join(', ')}`];
   if (!okV(s.a)) return ['vector_add: a is [x, y] or {magnitude, angle} (angle in degrees from +x)'];
-  const needsB = ['add', 'subtract', 'components'].includes(mode);
+  const needsB = ['add', 'subtract', 'components', 'dot'].includes(mode);
   if (needsB && !okV(s.b)) e.push(`vector_add: ${mode} needs b as [x, y] or {magnitude, angle}`);
   if (s.method !== undefined && !['triangle', 'parallelogram'].includes(s.method)) e.push('vector_add: method is triangle or parallelogram');
   if (s.factors !== undefined && (!Array.isArray(s.factors) || !s.factors.length || s.factors.length > 3 || !s.factors.every(isNum)))
@@ -216,6 +217,33 @@ export function vectorAdd(s: VectorSpec): Scene {
     });
     end = 2.4 + 1.4 * ks.length;
     return scene(s, W, H, end, plane, props, [], {verb: 'vector_add', facts});
+  }
+
+  if (mode === 'dot') {
+    // A·B = AB cos θ: B's shadow on A (B cos θ) times A; by components AxBx + AyBy (user's chapter: Work, Energy and
+    // Power, Class 11, 2026-10-30). Past 90° the shadow falls behind A's tail and the product is negative.
+    const dot = a[0] * b[0] + a[1] * b[1], cos = dot / ((magA * magB) || 1), theta = Math.acos(Math.max(-1, Math.min(1, cos))) / DEG;
+    const shadow = dot / magA, foot: [number, number] = [shadow * a[0] / magA, shadow * a[1] / magA];
+    const right = Math.abs(cos) < 1e-9;
+    props.push(arrow('a', [0, 0], a, 'accent', 0.6), arrow('b', [0, 0], b, 'cool', 1.4),
+      label('la', [0, 0], a, A, 'accent', 0.6, -1), label('lb', [0, 0], b, B, 'cool', 1.4, 1),
+      arc('th', 0.18 * Math.max(span, 1) * 0.6, deg(...a), deg(...a) + (((deg(...b) - deg(...a)) % 360 + 540) % 360 - 180), 2.2, 'ink'));
+    const mid = (deg(...a) + (((deg(...b) - deg(...a)) % 360 + 540) % 360 - 180) / 2) * DEG, rr = 0.3 * Math.max(span, 1) * 0.6;
+    const [tx, ty] = toScene(plane, [rr * Math.cos(mid), rr * Math.sin(mid)]);
+    props.push(text('lth', tx, ty + 10 * k, 'θ', 32 * k, {weight: 700, align: 'middle', show: [2.4, 1e9]}));
+    if (!right) props.push(dashed('drop', b, foot, 3), arrow('proj', [0, 0], foot, shadow < 0 ? 'bad' : 'good', 3.4, {style: {stroke: shadow < 0 ? 'bad' : 'good', width: 9 * k, opacity: 0.85}, head: 18 * k}),
+      label('lproj', [0, 0], foot, `${B} cos θ`, shadow < 0 ? 'bad' : 'good', 3.4, 1));
+    line('l1', `${given(A, s.a)};  ${given(B, s.b!)}`, 0.6);
+    line('l2', `${A}·${B} = ${A} ${B} cos θ: the length of ${B}'s shadow on ${A} (${B} cos θ), times ${A}`, 2.2);
+    line('l3', right ? `θ = 90°: ${B} casts no shadow on ${A}, so ${A}·${B} = 0` : shadow < 0
+      ? `θ is more than 90°: the shadow falls behind ${A}, so ${A}·${B} is negative` : `θ is less than 90°: the shadow lies along ${A}, so ${A}·${B} is positive`, 3.4, {style: {fill: right ? 'muted' : shadow < 0 ? 'bad' : 'good'}});
+    line('l4', `θ = ${f(theta)}°;  ${B} cos θ = ${f(shadow)}${u}`, 4.2);
+    line('l5', `${A}·${B} = ${f(magA)} × ${f(magB)} × cos ${f(theta)}° = ${f(dot)}`, 4.8, {weight: 700});
+    if (!polar(s.a) && !polar(s.b!)) line('l6', `By components: ${A}x × ${B}x + ${A}y × ${B}y = ${f(a[0])} × ${f(b[0])} + ${f(a[1])} × ${f(b[1])} = ${f(dot)}`, 5.4);
+    line('l7', `A scalar: a number, with no direction. ${A}·${B} = ${B}·${A}.`, 6, {style: {fill: 'muted'}});
+    facts.push(`${A}·${B} = ${f(dot)}`, `angle between ${A} and ${B} = ${f(theta)}°`, `cos θ = ${f(cos)}`, `projection of ${B} on ${A} = ${B} cos θ = ${f(shadow)}${u}`,
+      `projection of ${A} on ${B} = ${A} cos θ = ${f(dot / magB)}${u}`, `|${A}| = ${f(magA)}${u}, |${B}| = ${f(magB)}${u}`);
+    return scene(s, W, H, 7.4, plane, props, [], {verb: 'vector_add', facts, dot: round(dot, 6)});
   }
 
   if (mode === 'equal') {

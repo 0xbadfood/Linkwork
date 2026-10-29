@@ -1120,3 +1120,42 @@ test('annotate: a label near a drawing\'s right edge reads leftwards, clear of t
   assert.equal(label.align, 'end');
   assert.ok(label.x <= box[2], 'it ends inside the drawing');
 });
+
+test('work: W = F d cos θ, friction −f d, and the net work equals ΔK, from the book', () => {
+  // 2026-10-30, Class 11 Work, Energy and Power: no verb computed the work done on a moving body
+  const facts = (spec: object) => (compile({verb: 'work', ...spec} as any).scene!.meta!.facts as string[]).join(' | ');
+  // Example 5.2: a cyclist skids to a stop in 10 m against 200 N from the road: the road does −2000 J of work
+  assert.match(facts({mass: 100, v0: Math.sqrt(40), friction: {magnitude: 200}}), /d = 10 m.*\| .*net work = −2000 J/s);
+  assert.match(facts({mass: 100, v0: Math.sqrt(40), friction: {magnitude: 200}}), /work done by friction = −f d = −2000 J/);
+  // a rope at 30°: N = mg − F sin θ, only F cos θ does work, net work 28.70 J = ½mv²
+  const rope = facts({mass: 2, force: {magnitude: 10, angle: 30}, friction: {mu: 0.2}, d: 5, show: ['power']});
+  assert.match(rope, /work done by F = F d cos θ = 43.30 J \(positive\)/);
+  assert.match(rope, /N = 14.60 N/);
+  assert.match(rope, /kinetic energy 0 J → 28.70 J/);
+  assert.match(rope, /average power of F = 23.20 W/);
+  assert.match(facts({mass: 1, v0: 2, force: {magnitude: 5, angle: 90}, d: 3}), /= 0 J \(zero\)/);
+  assert.match(facts({mass: 1, v0: 4, force: {magnitude: 2, angle: 180}, d: 3}), /= −6 J \(negative\)/);
+  const err = (spec: object) => compile({verb: 'work', ...spec} as any).errors.join(' ');
+  assert.match(err({mass: 1, force: {magnitude: 20, angle: 90}, d: 1}), /lifts the body off the floor|never moves/);
+  assert.match(err({mass: 2, force: {magnitude: 1}, friction: {mu: 0.5}, d: 1}), /never moves/);
+  assert.match(err({mass: 1, v0: 2, friction: {mu: 0.5}, d: 10}), /stops after 0.41 m/);
+  assert.match(err({mass: 1, force: {magnitude: 3}}), /give d/);
+  assert.match(err({force: {magnitude: 3}, d: 2}), /give mass.*illustrative: true/);
+  assert.deepEqual(compile({verb: 'work', illustrative: true, force: {magnitude: 3, angle: 20}, d: 2} as any).errors, []);
+});
+
+test('vector_add dot: A·B = AB cos θ, the projection, by components; negative past 90°', () => {
+  const facts = (spec: object) => (compile({verb: 'vector_add', mode: 'dot', ...spec} as any).scene!.meta!.facts as string[]).join(' | ');
+  assert.match(facts({a: [4, 0], b: [3, 4]}), /a·b = 12 \| angle between a and b = 53.13° .* projection of b on a = b cos θ = 3/);
+  assert.match(facts({a: [4, 1], b: [-2, 3]}), /a·b = −5/);
+  // Example 5.1 (in the plane of F and d): |F| = |d| = √50, F·d = 16, cos θ = 0.32
+  assert.match(facts({a: {magnitude: Math.sqrt(50), angle: 0}, b: {magnitude: Math.sqrt(50), angle: Math.acos(0.32) * 180 / Math.PI}, names: ['F', 'd']}), /F·d = 16 \|.*cos θ = 0.32/);
+  assert.match(compile({verb: 'vector_add', mode: 'dot', a: [1, 2]} as any).errors.join(' '), /dot needs b/);
+});
+
+test('stage collide: kinetic energy kept when elastic, partly lost when the bodies stick', () => {
+  const facts = (elastic: boolean) => (compile({verb: 'stage', width_m: 20, ground: 'floor', items: [{id: 'a', object: 'cart', x: 3, mass: 2}, {id: 'b', object: 'cart', x: 10, mass: 2}],
+    events: [{t: 0.5, item: 'a', kind: 'collide', with: 'b', speed: 3, elastic}]} as any).scene!.meta!.facts as string[]).join(' | ');
+  assert.match(facts(true), /kinetic energy before: 9 J; after: 9 J \(conserved: elastic\)/);
+  assert.match(facts(false), /kinetic energy before: 9 J; after: 4.5 J; 4.5 J \(50%\) is lost/);
+});

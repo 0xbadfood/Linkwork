@@ -202,6 +202,11 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
         if (e.elastic === false) { v1 = v2 = m1 * u1 / (m1 + m2); }
         else { v1 = (m1 - m2) / (m1 + m2) * u1; v2 = 2 * m1 / (m1 + m2) * u1; }
         facts.push(`momentum before: ${fmt(m1 * e.speed)} kg m/s; after: ${fmt(Math.abs(m1 * v1 + m2 * v2))} kg m/s (conserved)`);
+        // kinetic energy: kept in an elastic collision, partly lost when they stick (Work, Energy and Power, 2026-10-30)
+        const k0 = m1 * e.speed * e.speed / 2, k1 = (m1 * v1 * v1 + m2 * v2 * v2) / 2;
+        facts.push(e.elastic === false
+          ? `kinetic energy before: ${fmt(k0)} J; after: ${fmt(k1)} J; ${fmt(k0 - k1)} J (${fmt(100 * (k0 - k1) / k0, 1)}%) is lost to heat, sound and deformation`
+          : `kinetic energy before: ${fmt(k0)} J; after: ${fmt(k1)} J (conserved: elastic)`);
       }
       const a0 = state.get(id)!, b0 = state.get(other.id)!, m = Math.max(1, Math.ceil(after / DT));
       for (let k = 1; k <= m; k++) {
