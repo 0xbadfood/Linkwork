@@ -30,6 +30,9 @@ export type FieldSpec = Common & {
   turns?: number;
   /** solenoid: a soft iron core inside it, an electromagnet. */
   core?: boolean;
+  /** solenoid: closely packed turns all carrying the current one way first, then the same turns spread out (spread)
+   * or every fourth turn carrying it the other way (reversed): fewer lines and the field at the centre, computed, drop. */
+  compare?: 'spread' | 'reversed';
   lines?: boolean;
   filings?: boolean;
   /** Compasses around the source (1 to 12), each pointing along the field where it sits. */
@@ -55,14 +58,19 @@ export function fieldAt(wires: Wire[], [x, y]: Vec): Vec {
 const psi = (wires: Wire[], [x, y]: Vec) => wires.reduce((s, w) => s - w.I * Math.log(Math.hypot(x - w.x, y - w.y) || 1e-9), 0);
 
 /** The source as straight currents, in world units (the page's y up), with what is drawn about them. */
-function model(s: FieldSpec, I: number) {
+function model(s: FieldSpec, I: number, alt = false) {
   const sign = s.north === 'left' ? -1 : 1, wires: Wire[] = [];
   if (s.source === 'wire') wires.push({x: 0, y: 0, I: s.direction === 'in' ? -I : I});
   if (s.source === 'loop') { const n = s.turns ?? 1; wires.push({x: 0, y: 1.5, I: sign * I * n}, {x: 0, y: -1.5, I: -sign * I * n}); }
   if (s.source === 'solenoid' || s.source === 'bar_magnet') {
-    const magnet = s.source === 'bar_magnet', n = magnet ? 24 : s.turns ?? 8, L = magnet ? 4 : 5, R = magnet ? 0.7 : 1.1;
+    const magnet = s.source === 'bar_magnet', n = magnet ? 24 : s.turns ?? 8, R = magnet ? 0.7 : 1.1;
+    // Compared: closely packed turns (pitch 0.35) against the same turns three times as far apart.
+    const L = magnet ? 4 : s.compare ? Math.min(9, 0.35 * n * (alt && s.compare === 'spread' ? 3 : 1)) : 5;
     const each = (magnet ? 8 / n : 1) * I * (s.core ? 3 : 1);
-    for (let j = 0; j < n; j++) { const x = -L / 2 + L * (j + 0.5) / n; wires.push({x, y: R, I: sign * each}, {x, y: -R, I: -sign * each}); }
+    for (let j = 0; j < n; j++) {
+      const x = -L / 2 + L * (j + 0.5) / n, f = alt && s.compare === 'reversed' && j % 4 === 1 ? -1 : 1;
+      wires.push({x, y: R, I: f * sign * each}, {x, y: -R, I: -f * sign * each});
+    }
     return {wires, L, R};
   }
   return {wires, L: 0, R: 1.5};
@@ -119,6 +127,10 @@ export function fieldErrors(s: FieldSpec): string[] {
   if (s.turns !== undefined && !(src === 'solenoid' ? Number.isInteger(s.turns) && s.turns >= 2 && s.turns <= 16 : src === 'loop' && Number.isInteger(s.turns) && s.turns >= 1 && s.turns <= 50))
     e.push('magnetic_field: turns is 2 to 16 for a solenoid, 1 to 50 for a loop\'s coil');
   if (s.core !== undefined && (typeof s.core !== 'boolean' || src !== 'solenoid')) e.push('magnetic_field: core (true or false) is for a solenoid');
+  if (s.compare !== undefined) {
+    if (!['spread', 'reversed'].includes(s.compare) || src !== 'solenoid') e.push('magnetic_field: compare (spread or reversed) is for a solenoid; for a loop\'s coil use source solenoid');
+    else if (s.key || (s.currents?.length ?? 1) > 1 || s.core || s.filings || s.compasses) e.push('magnetic_field: compare shows one current through two arrangements: no key, currents list, core, filings or compasses with it');
+  }
   if (s.compasses !== undefined && !(Number.isInteger(s.compasses) && s.compasses >= 1 && s.compasses <= 12)) e.push('magnetic_field: compasses is 1 to 12');
   if (s.compasses !== undefined && (src === 'uniform' || view === 'face')) e.push('magnetic_field: compasses need a field in the page (not a face view or a uniform field)');
   if (s.trace !== undefined && (typeof s.trace !== 'boolean' || src !== 'bar_magnet')) e.push('magnetic_field: trace (true or false) is for a bar_magnet');
@@ -134,14 +146,15 @@ export function magneticField(s: FieldSpec): Scene {
   const left = 0.03 * W, right = panel ? 0.63 * W : 0.97 * W, top = (panel ? 0.12 : s.title ? 0.22 : 0.13) * H, bottom = 0.96 * H;
   const T = s.seconds ?? 10, props: Prop[] = [], facts: string[] = [], anchors: Record<string, Vec> = {}, lines: string[] = [];
   const src = s.source, view = s.view ?? ({wire: 'end', loop: 'section'} as Record<string, string>)[src];
-  const X = src === 'wire' && view === 'end' ? 4 : src === 'loop' ? 4.5 : src === 'uniform' ? 4 : 5.6;
+  const X = src === 'wire' && view === 'end' ? 4 : src === 'loop' ? 4.5 : src === 'uniform' ? 4 : s.compare === 'spread' ? 6.2 : 5.6;
   const cx = (left + right) / 2, cy = (top + bottom) / 2, sc = (right - left) / (2 * X), Y = (bottom - top) / 2 / sc;
   const P = ([x, y]: Vec): Vec => [round(cx + x * sc, 2), round(cy - y * sc, 2)];
   const text = (id: string, value: string, [x, y]: Vec, fill = 'ink', size = 28, t = 0, align: 'start' | 'middle' | 'end' = 'middle') =>
     props.push({id, type: 'text', x: round(x, 2), y: round(y, 2), text: value, size: size * k, align, weight: 700, show: [t, 1e9], fade: 0.3, style: {fill, stroke: 'paper', width: 6 * k}, layer: id.startsWith('rule') ? 11 : 8});
   // Phases: the currents in turn; a key that closes starts from none, one that reverses turns the current round.
   const I0 = s.currents?.[0] ?? 1;
-  const phases = src === 'bar_magnet' || src === 'uniform' ? [1] : s.key === 'closes' ? [0, I0] : s.key === 'reverses' ? [I0, -I0] : (s.currents ?? [1]);
+  const phases = src === 'bar_magnet' || src === 'uniform' ? [1] : s.key === 'closes' ? [0, I0] : s.key === 'reverses' ? [I0, -I0] : s.compare ? [I0, I0] : (s.currents ?? [1]);
+  const mod = (I: number, i: number) => model(s, I, !!s.compare && i === 1);   // a compared solenoid's second arrangement
   const span = T / phases.length, at = (i: number): [number, number] => [i * span, i === phases.length - 1 ? 1e9 : (i + 1) * span];
   const Imax = Math.max(...phases.map(Math.abs));
   const switched = !!s.key, earth = switched && (src === 'wire' || src === 'loop' || src === 'solenoid');
@@ -175,15 +188,18 @@ export function magneticField(s: FieldSpec): Scene {
     anchors.wire = P([0, 0]);
   }
   if (src === 'loop' && view === 'section' || src === 'solenoid') {
-    const w = model(s, 1).wires, coil: Vec[] = [];
+    const arrangements = s.compare ? [0, 1] : [0], shown = (i: number): [number, number] => s.compare ? at(i) : [0, 1e9];
+    const coil: Vec[] = [];
     if (src === 'solenoid') {
       // The coil's front strands, from each turn's top to the next turn's bottom, over its cut ends.
-      const pitch = geo.L / (s.turns ?? 8);
-      for (let j = 0; j < (s.turns ?? 8); j++) {
-        const x = -geo.L / 2 + pitch * (j + 0.5), [a, b] = [P([x, geo.R]), P([x + pitch / 2, -geo.R])];
-        props.push({id: `strand${j}`, type: 'line', x1: a[0], y1: a[1], x2: b[0], y2: b[1], style: {stroke: '#c8793a', width: 5 * k, opacity: 0.8}, layer: 3});
-        coil.push(a);
-      }
+      arrangements.forEach(i => {
+        const g = mod(1, i), pitch = g.L / (s.turns ?? 8), tag = i ? `-b` : '';
+        for (let j = 0; j < (s.turns ?? 8); j++) {
+          const x = -g.L / 2 + pitch * (j + 0.5), [a, b] = [P([x, g.R]), P([x + Math.min(pitch, 0.6) / 2, -g.R])];
+          props.push({id: `strand${j}${tag}`, type: 'line', x1: a[0], y1: a[1], x2: b[0], y2: b[1], show: shown(i), fade: 0.3, style: {stroke: '#c8793a', width: 5 * k, opacity: 0.8}, layer: 3});
+          coil.push(a);
+        }
+      });
       if (s.core) {
         const [x0, y0] = P([-geo.L / 2 - 0.35, 0.6 * geo.R]);
         props.push({id: 'core', type: 'rect', x: x0, y: y0, w: round((geo.L + 0.7) * sc, 2), h: round(1.2 * geo.R * sc, 2), r: 6 * k, style: {fill: 'muted', opacity: 0.55}, layer: 1});
@@ -194,8 +210,18 @@ export function magneticField(s: FieldSpec): Scene {
       const pts = Array.from({length: 61}, (_, j) => { const a = Math.PI * 2 * j / 60; return P([0.45 * Math.sin(a), 1.5 * Math.cos(a)]); });
       props.push({id: 'loop', type: 'polyline', points: pts, closed: true, style: {stroke: '#c8793a', width: 6 * k}, layer: 3});
     }
-    w.forEach((wire, j) => { const p = P([wire.x, wire.y]); props.push({id: `cut${j}`, type: 'circle', x: p[0], y: p[1], r: 11 * k, style: {fill: 'paper', stroke: '#c8793a', width: 3 * k}, layer: 6}); });
-    phases.forEach((I, i) => { if (I) w.forEach((wire, j) => mark(`flow${i}-${j}`, P([wire.x, wire.y]), (wire.I > 0) === (I > 0), 8 * k, at(i), 'ink')); });
+    arrangements.forEach(i => mod(1, i).wires.forEach((wire, j) => { const p = P([wire.x, wire.y]); props.push({id: `cut${j}${i ? '-b' : ''}`, type: 'circle', x: p[0], y: p[1], r: 11 * k, show: shown(i), fade: 0.3, style: {fill: 'paper', stroke: '#c8793a', width: 3 * k}, layer: 6}); }));
+    phases.forEach((I, i) => { if (I) mod(1, i).wires.forEach((wire, j) => mark(`flow${i}-${j}`, P([wire.x, wire.y]), (wire.I > 0) === (I > 0), 8 * k, at(i), 'ink')); });
+    if (s.compare) {
+      // Each arrangement named under the coil, with its field at the centre against the closely packed coil's.
+      const B = (i: number) => Math.hypot(...fieldAt(mod(I0, i).wires, [0, 0])), ratio = Math.round(100 * B(1) / B(0));
+      const names = ['Closely packed, current the same way in every turn', s.compare === 'spread' ? 'The same turns spread out' : 'Some turns carrying the current the other way'];
+      arrangements.forEach(i => {
+        const q = P([0, -Y + 0.75]);   // under the field, clear of the coil
+        props.push({id: `arrangement${i}`, type: 'text', x: q[0], y: q[1], text: names[i], size: 28 * k, align: 'middle', weight: 700, show: [at(i)[0] + 0.2, at(i)[1]], fade: 0.3, style: {fill: 'ink', stroke: 'paper', width: 6 * k}, layer: 8},
+          {id: `centre-field${i}`, type: 'text', x: q[0], y: round(q[1] + 40 * k, 2), text: `Field at the centre: ${i ? ratio : 100}%${i ? ' of the packed coil\'s' : ''}`, size: 26 * k, align: 'middle', weight: 400, show: [at(i)[0] + 1.6, at(i)[1]], fade: 0.3, style: {fill: 'accent', stroke: 'paper', width: 6 * k}, layer: 8});
+      });
+    }
     anchors.centre = P([0, 0]); anchors.top = P([0, geo.R]); anchors.bottom = P([0, -geo.R]);
   }
   // Field lines, phase by phase: traced for the computed currents, more of them for a larger current.
@@ -206,7 +232,7 @@ export function magneticField(s: FieldSpec): Scene {
     let made = 0;
     phases.forEach((I, i) => {
       if (!I) return;
-      const traced = fieldLines(model(s, I).wires, seg, step, [X, Y]), t0 = at(i)[0] + 0.3 + (s.trace ? 4.5 : 0);
+      const traced = fieldLines(mod(I, i).wires, seg, step, [X, Y]), t0 = at(i)[0] + 0.3 + (s.trace ? 4.5 : 0);
       traced.forEach(line => {
         // Clip to the frame; a line through a magnet is drawn inside it too (from S to N).
         let piece: Vec[] = [];
@@ -366,7 +392,7 @@ export function magneticField(s: FieldSpec): Scene {
   // Poles of a solenoid, read from the computed field at its ends.
   if (src === 'solenoid' || (src === 'loop' && view === 'section')) {
     const I = phases.find(v => v) ?? 1, end = src === 'solenoid' ? geo.L / 2 + 0.55 : 0.9, bx = fieldAt(model(s, I).wires, [0, 0])[0];
-    if (src === 'solenoid') { text('pole-right', bx > 0 ? 'N' : 'S', P([end, 0]), bx > 0 ? RED : '#3b7bff', 40, at(phases.findIndex(v => v))[0] + 1.5); text('pole-left', bx > 0 ? 'S' : 'N', P([-end, 0]), bx > 0 ? '#3b7bff' : RED, 40, at(phases.findIndex(v => v))[0] + 1.5); }
+    if (src === 'solenoid' && !s.compare) { text('pole-right', bx > 0 ? 'N' : 'S', P([end, 0]), bx > 0 ? RED : '#3b7bff', 40, at(phases.findIndex(v => v))[0] + 1.5); text('pole-left', bx > 0 ? 'S' : 'N', P([-end, 0]), bx > 0 ? '#3b7bff' : RED, 40, at(phases.findIndex(v => v))[0] + 1.5); }
   }
   // The words for each source: the panel's lines and the facts a narration may use.
   const strength = (s.currents?.length ?? 0) > 1 ? 'A larger current: a stronger field, its lines closer together' : '';
@@ -392,6 +418,10 @@ export function magneticField(s: FieldSpec): Scene {
     const acw = s.direction !== 'clockwise';
     lines.push(`Current ${acw ? 'anticlockwise' : 'clockwise'} as seen`, `Inside the loop the field points ${acw ? 'out of' : 'into'} the page`, `Outside it, ${acw ? 'into' : 'out of'} the page`);
     facts.push(`a current going ${acw ? 'anticlockwise' : 'clockwise'} round a loop lying in the page makes a field ${acw ? 'out of' : 'into'} the page inside the loop and ${acw ? 'into' : 'out of'} it outside (right-hand rule)`);
+  } else if (src === 'solenoid' && s.compare) {
+    lines.push('Turns packed close, current the same way in each: their fields add up', s.compare === 'spread' ? 'Spread the same turns out: their fields add less at the centre; fewer lines' : 'Reverse the current in some turns: their fields take away from the rest; fewer lines', 'The field is strongest when the turns are close and the current flows the same way in all of them');
+    facts.push('the fields of the turns of a coil add up when the current flows the same way in every turn',
+      s.compare === 'spread' ? 'spreading the same turns out over a longer coil makes the field at its centre smaller' : 'turns carrying the current the opposite way make fields that cancel part of the others\' fields: the net field is smaller');
   } else if (src === 'solenoid') {
     lines.push('A solenoid\'s field is like a bar magnet\'s: one end is N, the other S', 'Inside, the lines are parallel straight lines: the field is the same at all points (uniform)', s.core ? 'A soft iron core inside makes an electromagnet' : 'A soft iron rod inside would make an electromagnet');
     facts.push('the field of a current-carrying solenoid is similar to that of a bar magnet: one end behaves as a north pole, the other as a south pole',

@@ -818,6 +818,14 @@ test('magnetic_field: computed field lines of a wire, loop, solenoid and bar mag
   assert.match(errors({source: 'bar_magnet', key: 'closes'}), /a bar_magnet has no current or key/);
   assert.match(errors({source: 'loop', turns: 60}), /turns is 2 to 16 for a solenoid, 1 to 50/);
   assert.match(errors({source: 'wire', trace: true}), /trace .* is for a bar_magnet/);
+  // 2026-10-29, the loop and solenoid film: why a coil's turns add up needs packed same-way turns against spread or
+  // reversed ones; the reviewer rejected two identical drawings titled differently
+  const centre = (c: string) => Number(((compile({verb: 'magnetic_field', source: 'solenoid', compare: c} as any).scene!.props.find(p => p.id === 'centre-field1') as any).text).match(/(\d+)%/)![1]);
+  for (const c of ['spread', 'reversed']) assert.ok(centre(c) > 10 && centre(c) < 80, `${c}: a smaller field at the centre, not none`);
+  const lines = (c: string, i: number) => compile({verb: 'magnetic_field', source: 'solenoid', compare: c} as any).scene!.props.filter(p => p.id.startsWith('line') && !p.id.includes('arrow') && (p as any).show[0] < (i ? 1e9 : 5) && (p as any).show[0] >= (i ? 5 : 0)).length;
+  assert.ok(lines('spread', 1) < lines('spread', 0), 'fewer lines once spread');
+  assert.match(errors({source: 'loop', compare: 'spread'}), /compare .* is for a solenoid/);
+  assert.match(errors({source: 'solenoid', compare: 'spread', key: 'closes'}), /compare shows one current/);
 });
 
 test('magnetic_force: I × B on a rod, Fleming\'s left-hand rule from any two directions, a charge curving, F ∝ sin θ', async () => {
