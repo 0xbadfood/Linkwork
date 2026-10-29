@@ -951,6 +951,13 @@ test('plane_motion: velocity along the tangent, constant acceleration and unifor
   assert.match(insect, /ω = 0\.44 rad\/s/); assert.match(insect, /a = v²\/R = 2\.32 cm\/s²/); assert.match(insect, /ν = 0\.07 per second/);
   assert.match(compile({verb: 'plane_motion', circle: {radius: 1, speed: 1}, accelerate: {v0: [1, 0], a: [0, 0], t: [0, 1]}} as any).errors.join(' '), /exactly one path/);
   assert.match(compile({verb: 'plane_motion', accelerate: {v0: [1, 0], a: [0, 0], t: [0, 1]}, show: ['delta_v']} as any).errors.join(' '), /delta_v is for a circle/);
+  // three side by side (a recap): each part's text fits its narrow box (2026-10-29: a recap's text ran off its parts)
+  const part = (id: string, x: number, spec: object) => ({id, box: [x, 0, 640, 1080], spec});
+  const tri = compile({compound: true, parts: [part('p', 0, {verb: 'plane_motion', title: 'Position vector', accelerate: {r0: [1, 1], v0: [2, 1], a: [0, 0], t: [0, 2]}, show: ['position']}),
+    part('e', 640, {verb: 'vector_add', mode: 'equal', title: 'Equal vectors', a: [3, 2], at: [[4, -1]]}),
+    part('r', 1280, {verb: 'vector_add', mode: 'resolve', title: 'Resolving a vector', a: {magnitude: 5, angle: 37}, names: ['A', 'B'], unit: 'N'})]} as any);
+  assert.deepEqual(tri.errors, []);
+  assert.deepEqual(check(tri.scene!, {every: 3}), []);
 });
 
 test('a verb whose numbers are the picture is never illustrative', () => {

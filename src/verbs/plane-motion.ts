@@ -10,6 +10,7 @@ import type {Actor, Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
+import {frame} from './vectors.ts';
 
 type P2 = [number, number];
 export const SHOWS = ['position', 'velocity', 'acceleration', 'components', 'limit', 'delta_v'] as const;
@@ -75,7 +76,7 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const samples = Array.from({length: 121}, (_, i) => t0 + (t1 - t0) * i / 120), path = samples.map(kin.r);
   const vmax = Math.max(...samples.map(t => Math.hypot(...kin.v(t))), 1e-9), amax = Math.max(...samples.map(t => Math.hypot(...kin.a(t))), 0);
   // the window: the path and the origin, with room for arrows, at equal scale across and up
-  const box: [number, number, number, number] = [0.06 * W, 0.16 * H, 0.6 * W, 0.94 * H];
+  const fr = frame(W, H, k, s.title), box = fr.box;
   let [x0, x1] = s.x ?? [Math.min(0, ...path.map(p => p[0])), Math.max(0, ...path.map(p => p[0]))];
   let [y0, y1] = s.y ?? [Math.min(0, ...path.map(p => p[1])), Math.max(0, ...path.map(p => p[1]))];
   const size = Math.max(x1 - x0, y1 - y0, 1e-6), vs = 0.2 * size / vmax, as = amax > 1e-9 ? 0.16 * size / amax : 0;
@@ -84,10 +85,10 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const per = Math.max((x1 - x0) / (box[2] - box[0]), (y1 - y0) / (box[3] - box[1])), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   const plane: Plane = {id: 'p', x: [cx - per * (box[2] - box[0]) / 2, cx + per * (box[2] - box[0]) / 2], y: [cy - per * (box[3] - box[1]) / 2, cy + per * (box[3] - box[1]) / 2], box};
   const span = plane.x[1] - plane.x[0], step = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].find(v => span / v <= 14) ?? 1000;
-  const px = 0.66 * W, ptext = panel(W, k);
+  const px = fr.px, ptext = panel(W, k);
   const props: Prop[] = [{id: 'axes', type: 'axes', plane: 'p', step: [step, step], size: 22 * k, grid: true, names: ['x', 'y']}];
-  let row = 0.155 * H;
-  if (s.title) { props.push({id: 'title', type: 'text', x: px, y: row, size: 44 * k, weight: 700, text: s.title, width: W - px - 40 * k}); row += wrapText(s.title, 44 * k, W - px - 40 * k).length * 1.25 * 44 * k + 20 * k; }
+  let row = fr.row;
+  props.push(...fr.titles);
   const line = (id: string, t: string, at: number, extra: Partial<Prop> = {}, until = 1e9) => {
     props.push(ptext(id, px, row, t, 30 * k, {show: [at, until], ...extra}));
     return wrapText(t, 30 * k, W - px - 40 * k).length * 1.3 * 30 * k + 6 * k;
@@ -102,7 +103,9 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
     base: ts.map((t, i) => ({t: tau(t), at: toScene(plane, kin.r(t)), ...(i ? {ease: 'linear' as const} : {})}))};
   props.push({id: 'path', type: 'polyline', plane: 'p', points: path, style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k], opacity: 0.7}} as Prop);
   if (s.circle) props.push({id: 'centre', type: 'circle', plane: 'p', x: 0, y: 0, r: 6 * k, style: {fill: 'ink'}} as Prop);
-  const moving = (id: string, from: (t: number) => P2, to: (t: number) => P2, stroke: string, width = 5, until = tau(t1) + 0.01): Prop =>
+  // with nothing after the motion, its last frame holds; else the arrows and readouts make way for the construction
+  const after = show.has('limit') || (show.has('delta_v') && !!s.circle), hold = after ? tau(t1) + 0.01 : 1e9;
+  const moving = (id: string, from: (t: number) => P2, to: (t: number) => P2, stroke: string, width = 5, until = hold): Prop =>
     ({id, type: 'arrow', plane: 'p', x1: from(t0)[0], y1: from(t0)[1], x2: to(t0)[0], y2: to(t0)[1], head: 18 * k,
       keys: {x1: keyed(t => from(t)[0]), y1: keyed(t => from(t)[1]), x2: keyed(t => to(t)[0]), y2: keyed(t => to(t)[1])},
       style: {stroke, width: width * k}, show: [lead, until], fade: 0.2} as Prop);
@@ -118,7 +121,7 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   legend.forEach(([t, c], i) => { row += line(`legend${i}`, t, lead, {style: {fill: c}}); });
   // live readouts during the motion
   const ro = (id: string, t: string, measures: Record<string, Key[]>) => {
-    props.push({id, type: 'readout', x: px, y: row, size: 30 * k, text: t, decimals: 2, show: [lead, tau(t1)],
+    props.push({id, type: 'readout', x: px, y: row, size: 30 * k, text: t, decimals: 2, show: [lead, hold],
       measures: Object.fromEntries(Object.entries(measures).map(([n, keys]) => [n, {kind: 'keys', keys}]))} as Prop);
     row += 1.35 * 30 * k;
   };
@@ -130,13 +133,13 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const motionRow = row;
   if (s.accelerate) {
     const {v0, a} = s.accelerate;
-    row += line('eqx', `x and y move independently: vx = ${f(v0[0])} + ${f(a[0])}t, vy = ${f(v0[1])} + ${f(a[1])}t`, lead + 1, {style: {fill: 'muted'}}, tau(t1));
+    row += line('eqx', `x and y move independently: vx = ${f(v0[0])} + ${f(a[0])}t, vy = ${f(v0[1])} + ${f(a[1])}t`, lead + 1, {style: {fill: 'muted'}}, hold);
     facts.push(`a = (${f(a[0])}, ${f(a[1])}) ${u}/s²`, `at t = ${f(t1)} s: r = (${f(kin.r(t1)[0])}, ${f(kin.r(t1)[1])}) ${u}, v = (${f(kin.v(t1)[0])}, ${f(kin.v(t1)[1])}) ${u}/s`);
   }
   if (s.circle) {
     const {radius: R, speed: v} = s.circle, w = v / R;
-    row += line('c1', `ω = v / R = ${f(w)} rad/s;  T = 2πR / v = ${f(2 * Math.PI / w)} s`, lead + 1, {}, tau(t1));
-    row += line('c2', `|v| stays ${f(v)} ${u}/s; its direction turns: a = v²/R = ${f(v * v / R)} ${u}/s², towards the centre`, lead + 2, {weight: 700}, tau(t1));
+    row += line('c1', `ω = v / R = ${f(w)} rad/s;  T = 2πR / v = ${f(2 * Math.PI / w)} s`, lead + 1, {}, hold);
+    row += line('c2', `|v| stays ${f(v)} ${u}/s; its direction turns: a = v²/R = ${f(v * v / R)} ${u}/s², towards the centre`, lead + 2, {weight: 700}, hold);
     facts.push(`speed v = ${f(v)} ${u}/s`, `radius R = ${f(R)} ${u}`, `angular speed ω = ${f(w)} rad/s`, `period T = ${f(2 * Math.PI / w)} s`,
       `centripetal acceleration a = v²/R = ${f(v * v / R)} ${u}/s²`, `frequency ν = ${f(w / (2 * Math.PI))} per second`);
   }

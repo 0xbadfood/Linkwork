@@ -26,6 +26,19 @@ const polar = (v: V) => !Array.isArray(v);
 const f = (v: number) => n2(round(v, 9), Number.isInteger(round(v, 9)) ? 0 : 2);
 const deg = (x: number, y: number) => Math.atan2(y, x) / DEG;
 
+/** Where the drawing, the title and the text go: the drawing on the left with the text in a column on the right; or,
+ * in a box that is not wide (a compound's part: three side by side are 640 × 1080), the title on top, the drawing below
+ * it and the text under the drawing, across the box (2026-10-29: a three-part recap's text ran off its narrow parts). */
+export function frame(W: number, H: number, k: number, title?: string) {
+  const narrow = W < 1.3 * H, px = narrow ? 0.06 * W : 0.66 * W, width = W - px - 40 * k;
+  const titleH = title ? wrapText(title, 44 * k, width).length * 1.25 * 44 * k + 20 * k : 0;
+  const top = narrow ? 0.06 * H + 44 * k : 0.155 * H;
+  const box: [number, number, number, number] = narrow ? [0.08 * W, top + titleH, 0.92 * W, top + titleH + Math.min(0.42 * H, 0.84 * W)]
+    : [0.06 * W, 0.16 * H, 0.6 * W, 0.94 * H];
+  const titles: Prop[] = title ? [{id: 'title', type: 'text', x: px, y: top, size: 44 * k, weight: 700, text: title, width}] : [];
+  return {box, px, width, titles, row: narrow ? box[3] + 60 * k : top + titleH};
+}
+
 /** Every point the drawing reaches (tails and heads), for the window. */
 function points(s: VectorSpec): [number, number][] {
   const a = xy(s.a), b = s.b ? xy(s.b) : [0, 0] as [number, number], mode = s.mode ?? 'add';
@@ -82,14 +95,13 @@ export function vectorErrors(s: VectorSpec): string[] {
 
 export function vectorAdd(s: VectorSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, mode = s.mode ?? 'add';
-  const box: [number, number, number, number] = [0.06 * W, 0.16 * H, 0.6 * W, 0.94 * H];
+  const fr = frame(W, H, k, s.title), box = fr.box;
   const win = fit(s, box[2] - box[0], box[3] - box[1]);
   const plane: Plane = {id: 'p', x: win.x, y: win.y, box};
   const span = win.x[1] - win.x[0], step = [1, 2, 5, 10, 20, 50, 100].find(v => span / v <= 14) ?? 200;
   const axes: Prop = {id: 'axes', type: 'axes', plane: 'p', step: [step, step], size: 22 * k, grid: true};
-  const px = 0.66 * W, ptext = panel(W, k);
-  const title: Prop[] = s.title ? [{id: 'title', type: 'text', x: px, y: 0.155 * H, size: 44 * k, weight: 700, text: s.title, width: W - px - 40 * k}] : [];
-  let row = 0.155 * H + (s.title ? wrapText(s.title, 44 * k, W - px - 40 * k).length * 1.25 * 44 * k + 20 * k : 0);
+  const px = fr.px, ptext = panel(W, k), title = fr.titles;
+  let row = fr.row;
   const [A, B] = s.names ?? ['a', 'b'], u = s.unit ? ` ${s.unit}` : '';
   const a = xy(s.a), b = s.b ? xy(s.b) : [0, 0] as [number, number];
   const magA = Math.hypot(...a), magB = Math.hypot(...b);
