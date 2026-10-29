@@ -38,6 +38,9 @@ const POSES: Record<string, World> = {
     thigh_l: -66, shin_l: -84, thigh_r: -112, shin_r: -122},
   walk_b: {spine: 88, head: 90, upper_arm_l: -66, forearm_l: -48, upper_arm_r: -112, forearm_r: -100,
     thigh_l: -112, shin_l: -122, thigh_r: -66, shin_r: -84},
+  // a standing passenger's lurch (the feet stay with the floor): back when the bus starts, forward when it stops
+  lean_back: {...STAND, spine: 114, head: 118, upper_arm_l: -40, forearm_l: -22, upper_arm_r: -150, forearm_r: -160},
+  lean_forward: {...STAND, spine: 64, head: 60, upper_arm_l: -20, forearm_l: -5, upper_arm_r: -40, forearm_r: -25},
   push: {spine: 70, head: 75, upper_arm_l: 8, forearm_l: 6, upper_arm_r: 0, forearm_r: -2,
     thigh_l: -60, shin_l: -95, thigh_r: -122, shin_r: -120},
 };

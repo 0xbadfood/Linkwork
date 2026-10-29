@@ -36,7 +36,9 @@ export type StageEvent = {t: number; item: string} & (
   | {kind: 'light'; on?: boolean}
   | {kind: 'run'; duration: number});
 /** The figure's poses a stage may ask for. */
-export const POSES = ['stand', 'think', 'point', 'cheer', 'shrug', 'push', 'crouch'] as const;
+export const POSES = ['stand', 'think', 'point', 'cheer', 'shrug', 'push', 'crouch', 'lean_back', 'lean_forward'] as const;
+/** Vehicles a figure can stand in as a passenger, and their floor's height over their size. */
+export const RIDES: Record<string, number> = {bus: 0.08, train: 0.08, cart: 0.3};
 export type StageSpec = Common & {
   verb: 'stage'; width_m?: number; ground?: 'floor' | 'grass' | 'none'; g?: number;
   items: StageItem[]; events?: StageEvent[];
@@ -90,6 +92,7 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
     if (isNum(i.y)) return i.y;
     const under = i.on ? items.get(i.on) : undefined;
     if (under?.object === 'figure') return restY(under) + sizeOf(under) * 1.06;     // a bulb over the head
+    if (i.object === 'figure' && under && RIDES[under.object] !== undefined) return restY(under) + RIDES[under.object] * sizeOf(under);
     return under ? restY(under) + top(under) * sizeOf(under) : 0;
   };
   for (const i of s.items) state.set(i.id, {t: 0, x: i.x, y: restY(i), angle: i.angle ?? 0, travel: 0});
@@ -216,6 +219,14 @@ function simulate(s: StageSpec): {paths: Map<string, Sample[]>; facts: string[];
       for (const q of p) if (q.x < -0.5 || q.x > W + 0.5) { errors.push(`stage: ${pid} goes off the stage (x = ${fmt(q.x)} m; it is 0 to ${W} m)`); break; }
     }
   }
+  // a passenger rides along: its feet go with the vehicle's floor (2026-10-29: the book's bus that starts or stops
+  // suddenly could not carry anyone)
+  for (const i of s.items) {
+    const ride = i.on ? items.get(i.on) : undefined;
+    if (i.object !== 'figure' || !ride || RIDES[ride.object] === undefined) continue;
+    const dx = i.x - ride.x, y = restY(i);
+    paths.set(i.id, paths.get(ride.id)!.map(q => ({...q, x: q.x + dx, y, angle: 0})));
+  }
   return {paths, facts, end, errors: [...new Set(errors)]};
 }
 
@@ -236,7 +247,10 @@ export function stageErrors(s: StageSpec): string[] {
     if (!isNum(i?.x) || i.x < 0 || i.x > W) e.push(`${where}: x must be on the stage (0 to ${W} m)`);
     if (i?.size !== undefined && !(i.size > 0)) e.push(`${where}: size (metres) must be positive`);
     const over = i?.object === 'bulb' && items.get(i?.on as string)?.object === 'figure';
-    if (i?.on !== undefined && !over && !has(items.get(i.on), 'support')) e.push(`${where}: on must name an item that things can rest on (a table, block, plank, wall), or a figure for a bulb`);
+    const rider = i?.object === 'figure' && RIDES[items.get(i?.on as string)?.object as string] !== undefined;
+    if (i?.on !== undefined && !over && !rider && !has(items.get(i.on), 'support'))
+      e.push(`${where}: on must name an item that things can rest on (a table, block, plank, wall), a figure for a bulb, or a ${Object.keys(RIDES).join(', ')} for a standing passenger`);
+    if (rider && (s.events ?? []).some(ev => ev?.item === i.id && ev.kind === 'move')) e.push(`${where}: a passenger moves with its ${items.get(i.on!)!.object}; move the ${items.get(i.on!)!.object} instead`);
   });
   if (e.length) return e;
   for (const [n, ev] of (s.events ?? []).entries()) {
@@ -353,6 +367,22 @@ export function stage(s: StageSpec): Scene {
       for (const e of [...events].sort((a, b) => a.t - b.t).filter(e => e.item === item.id)) {
         if (e.kind === 'pose') pose.push({t: e.t, pose: e.pose}, {t: e.t + 0.5, pose: e.pose});
         if (e.kind === 'move') pose.push(...walking(e.t, e.t + e.duration));
+      }
+      // a passenger: the feet go with the floor, the body tends to stay as it was (inertia): it lurches back when the
+      // vehicle starts and forward when it stops or hits something, then the muscles bring it upright
+      const ride = item.on ? s.items.find(x => x.id === item.on) : undefined;
+      if (ride && RIDES[ride.object] !== undefined) {
+        const lurch = (t: number, lean: string) => pose.push({t, pose: 'stand'}, {t: t + 0.25, pose: lean}, {t: t + 0.9, pose: lean}, {t: t + 1.6, pose: 'stand'});
+        // from the vehicle's computed motion: setting off from rest, and a sharp loss of speed (a stop, a crash)
+        const q = paths.get(ride.id)!, speed = q.slice(1).map((r, n) => Math.abs(r.x - q[n].x) / Math.max(r.t - q[n].t, 1e-9));
+        const fast = Math.max(...speed, 0), last = {t: -9};
+        speed.forEach((v, n) => {
+          const before = n ? speed[n - 1] : 0, t = q[n].t;
+          if (t - last.t < 1.6) return;
+          if (before < 0.05 * fast && v > 0.2 * fast) { lurch(t, 'lean_back'); last.t = t; }
+          else if (before > 0.3 * fast && v < before - 0.3 * fast) { lurch(t, 'lean_forward'); last.t = t; }
+        });
+        if (q.length > 1 && speed.at(-1)! > 0.3 * fast && q.at(-1)!.t - last.t >= 1.6) lurch(q.at(-1)!.t, 'lean_forward');   // stops dead at the end
       }
       const moves = path.length > 1;
       const facings = moves ? path.slice(1).flatMap((q, i) => (q.x !== path[i].x ? [{t: path[i].t, facing: (q.x > path[i].x ? 1 : -1) as 1 | -1}] : [])) : [];

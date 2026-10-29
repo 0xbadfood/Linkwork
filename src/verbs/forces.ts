@@ -26,7 +26,11 @@ export type ForceItem = {name: string; kind?: (typeof KINDS)[number]; magnitude?
 export type ForcesSpec = {verb: 'forces'; body?: (typeof BODIES)[number]; label?: string; mass?: number; g?: number;
   surface?: 'none' | 'floor' | 'incline'; angle?: number; forces?: ForceItem[]; a?: P2; show?: (typeof SHOWS)[number][];
   ramp?: {kind: 'push' | 'tilt'; mu_s: number; mu_k?: number; to?: number};
-  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
+  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+
+/** An illustrative diagram hides every number, so a mass it never states may stand in (2026-10-29: plans for "a book
+ * at rest", with no mass in the narration, were refused round after round for want of one). */
+const fill = (s: ForcesSpec): ForcesSpec => (s.illustrative && s.mass === undefined ? {...s, mass: 1} : s);
 
 const DEG = Math.PI / 180;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -94,7 +98,8 @@ function solve(s: ForcesSpec): {forces: Solved[]; net: P2; errors: string[]} {
   return {forces: out, net: sum(new Set()), errors};
 }
 
-export function forcesErrors(s: ForcesSpec): string[] {
+export function forcesErrors(spec: ForcesSpec): string[] {
+  const s = fill(spec);
   const e: string[] = [];
   if (s.body !== undefined && !BODIES.includes(s.body)) e.push(`forces: body is one of ${BODIES.join(', ')}`);
   if (s.surface !== undefined && !['none', 'floor', 'incline'].includes(s.surface)) e.push('forces: surface is none, floor or incline');
@@ -125,7 +130,7 @@ export function forcesErrors(s: ForcesSpec): string[] {
     if (x.direction !== undefined && !isNum(x.direction) && !DIRS.includes(x.direction))
       e.push(`forces: ${x.name}'s direction is degrees anticlockwise from +x, or one of ${DIRS.join(', ')}`);
     if (['up_slope', 'down_slope'].includes(String(x.direction)) && s.surface !== 'incline') e.push(`forces: ${x.name} is along a slope, so surface is incline`);
-    if (x.kind === 'weight' && x.magnitude === undefined && !(isNum(s.mass) && s.mass > 0)) e.push(`forces: ${x.name} is a weight with no magnitude, so give mass (kg): W = mg`);
+    if (x.kind === 'weight' && x.magnitude === undefined && !(isNum(s.mass) && s.mass > 0)) e.push(`forces: ${x.name} is a weight with no magnitude, so give mass (kg): W = mg; or, when the narration states no numbers, set illustrative: true`);
   }
   if (e.length) return e;
   const {forces, errors} = solve(s);
@@ -138,7 +143,8 @@ export function forcesErrors(s: ForcesSpec): string[] {
   return e;
 }
 
-export function forces(s: ForcesSpec): Scene {
+export function forces(spec: ForcesSpec): Scene {
+  const s = fill(spec);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], facts: string[] = [];
   const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};

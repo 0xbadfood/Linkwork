@@ -1027,6 +1027,26 @@ test('forces: free-body diagrams solved by the second law, from the book', () =>
   }
 });
 
+test('stage: a passenger rides a bus, thrown back as it starts and forward as it stops (inertia)', () => {
+  // 2026-10-29, Force and Inertia: no passenger could stand in the book's bus; every plan for it was refused or rejected
+  const sc = compile({verb: 'stage', width_m: 40, ground: 'floor', items: [{id: 'bus', object: 'bus', x: 6}, {id: 'p', object: 'figure', x: 7, on: 'bus'}],
+    events: [{t: 1, item: 'bus', kind: 'move', to: 30, duration: 5, ease: 'linear'}]} as any);
+  assert.deepEqual(sc.errors, []);
+  const p = sc.scene!.actors.find(a => a.id === 'f-p')!, poses = p.pose!.map(k => k.pose);
+  assert.ok(poses.indexOf('lean_back') >= 0 && poses.indexOf('lean_forward') > poses.indexOf('lean_back'));
+  // the feet go with the bus
+  const bus = sc.scene!.actors.find(a => a.id === 'd-bus')!;
+  assert.ok(p.base!.length > 2 && Math.abs((p.base!.at(-1)!.at[0] - p.base![0].at[0]) - (bus.base!.at(-1)!.at[0] - bus.base![0].at[0])) < 1e-6);
+  assert.deepEqual(check(sc.scene!, {every: 3}), []);
+  assert.match(compile({verb: 'stage', items: [{id: 'bus', object: 'bus', x: 3}, {id: 'p', object: 'figure', x: 3, on: 'bus'}],
+    events: [{t: 0, item: 'p', kind: 'move', to: 8, duration: 2}]} as any).errors.join(' '), /moves with its bus; move the bus/);
+});
+
+test('forces: an illustrative diagram needs no mass', () => {
+  assert.deepEqual(compile({verb: 'forces', surface: 'floor', illustrative: true, forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal'}]} as any).errors, []);
+  assert.match(compile({verb: 'forces', surface: 'floor', forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal'}]} as any).errors.join(' '), /give mass.*illustrative: true/);
+});
+
 test('stage: in a scene where nothing moves, every item is big enough to see', () => {
   // 2026-10-29, Scalars and Vectors: a 1 m block and a marker on a 30 m stage were specks under their labels
   const still = compile({verb: 'stage', width_m: 30, ground: 'floor', items: [{id: 'b', object: 'block', x: 10}, {id: 'm', object: 'marker', x: 20}]} as any);
