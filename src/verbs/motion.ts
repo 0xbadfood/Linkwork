@@ -20,11 +20,11 @@ import {round} from '../vec.ts';
 import {n2, walking} from './calculus.ts';
 import {niceStep} from './graph.ts';
 
-const MOVERS = ['dot', 'figure', 'car', 'bus', 'train', 'bicycle', 'ball', 'block'] as const;
-const SCALED = ['car', 'bus', 'train', 'bicycle', 'ball', 'block', 'figure'] as const;
+const MOVERS = ['dot', 'figure', 'car', 'bus', 'train', 'bicycle', 'ball', 'block', 'ruler'] as const;
+const SCALED = ['car', 'bus', 'train', 'bicycle', 'ball', 'block', 'figure', 'ruler'] as const;
 const READOUTS = ['t', 'x', 'y', 'displacement', 'v', 'distance'] as const;
 /** What can move on an upright axis: things that fall. */
-const UPRIGHT = ['dot', 'ball', 'block'] as const;
+const UPRIGHT = ['dot', 'ball', 'block', 'ruler'] as const;
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
 
 export type MotionSpec = Common & {
@@ -153,6 +153,10 @@ export function motionOnLine(s: MotionSpec): Scene {
   const axis: Plane = up ? {id: 'axis', x: [0, 1], y: [a, b], box: [xAxis, top, xAxis + 10, bottom]}
     : {id: 'axis', x: [a, b], y: [0, 1], box: [left, yAxis - 10, right, yAxis]};
   const X = (x: number) => (up ? [xAxis, toScene(axis, [0, x])[1]] as [number, number] : toScene(axis, [x, 0]));
+  // Pixels per axis unit along the axis (an upright axis runs from top to bottom), so object_length draws to scale.
+  const unitPx = up ? (bottom - top) / (b - a) : (right - left) / (b - a);
+  // A ruler stands just right of an upright axis: a mark's label moves out past it.
+  const beside = up && kind === 'ruler' ? 0.16 * (s.object_length ? s.object_length * unitPx : OBJECTS.upright_ruler.length * k) : 0;
   const step = s.axis.step ?? niceStep(a, b);
   const props: Prop[] = up ? [
     {id: 'axis', type: 'arrow', x1: xAxis, y1: bottom + 30 * k, x2: xAxis, y2: top - 40 * k, style: {stroke: 'muted', width: 4 * k}, head: 18 * k},
@@ -187,7 +191,7 @@ export function motionOnLine(s: MotionSpec): Scene {
   (s.marks ?? []).filter(m => !(Math.abs(m.x) < 1e-9 && /^(o|origin)$/i.test(m.label.trim()))).forEach((m, i) => {
     const [px, py] = X(m.x);
     props.push({id: `mark${i}`, type: 'circle', x: px, y: py, r: 8 * k, style: {fill: 'cool'}, layer: 1},
-      up ? {id: `mark${i}-label`, type: 'text', x: xAxis + house + 30 * k, y: py + 9 * k, text: m.label, size: 26 * k, weight: 700, style: {fill: 'cool'}}
+      up ? {id: `mark${i}-label`, type: 'text', x: xAxis + house + beside + 30 * k, y: py + 9 * k, text: m.label, size: 26 * k, weight: 700, style: {fill: 'cool'}}
         : {id: `mark${i}-label`, type: 'text', x: px, y: yAxis + 112 * k, text: m.label, size: 26 * k, align: 'middle', weight: 700, style: {fill: 'cool'}});
   });
 
@@ -201,7 +205,6 @@ export function motionOnLine(s: MotionSpec): Scene {
   const facings: [number, number][] = [];
   moves.slice(1).forEach((m, i) => { const dx = m.x - moves[i].x; if (dx) facings.push([moves[i].t, dx > 0 ? 1 : -1]); });
   const facingKeys: Key[] = up ? [[0, 1]] : facings.length ? facings.flatMap(([t, f], i) => (i ? [[t, facings[i - 1][1]], [t, f]] : [[0, f], [t, f]]) as Key[]) : [[0, 1]];
-  const unitPx = (right - left) / (b - a);
   if (kind === 'figure') {
     const walker: Actor = {id: 'walker', rig: 'figure', at: X(moves[0].x), base, scale: (s.object_length ? s.object_length * unitPx / 70 : 1.4) * k,
       facing: facings[0]?.[1] === -1 ? -1 : 1, facings: facings.map(([t, f]) => ({t, facing: f as 1 | -1})), pose: [{t: 0, pose: 'stand'}], layer: 2};
@@ -209,8 +212,9 @@ export function motionOnLine(s: MotionSpec): Scene {
     else moves.slice(1).forEach((m, i) => { if (m.x !== moves[i].x) walker.pose!.push(...walking(moves[i].t, m.t)); });
     actors.push(walker);
   } else if (kind !== 'dot') {
-    const size = s.object_length ? s.object_length * unitPx : Math.min(OBJECTS[kind].length, 0.18 * (right - left)) * k;
-    props.push({id: 'object', type: 'object', name: kind, x: X(moves[0].x)[0], y: X(moves[0].x)[1], size, anchor: {actor: 'mover', joint: 'p'},
+    const drawn = kind === 'ruler' ? 'upright_ruler' : kind;       // the stage's ruler lies flat; this one falls upright
+    const size = s.object_length ? s.object_length * unitPx : Math.min(OBJECTS[drawn].length, 0.18 * (right - left)) * k;
+    props.push({id: 'object', type: 'object', name: drawn, x: X(moves[0].x)[0], y: X(moves[0].x)[1], size, anchor: {actor: 'mover', joint: 'p'},
       keys: {facing: facingKeys}, layer: 2});
   }
 

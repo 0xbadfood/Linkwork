@@ -911,6 +911,19 @@ test('dimensions: formulas, consistency, a deduced relation and a unit conversio
   assert.match(errors({mode: 'formula', quantity: 'speed', factors: [['velocty', 1]]}), /'velocty' is not a known quantity/);
 });
 
+test('motion_on_line: a ruler dropped between the fingers falls to scale beside an upright axis (reaction time)', () => {
+  const spec = {verb: 'motion_on_line', axis: {range: [-0.25, 0.35], unit: 'm', vertical: true}, object: 'ruler', object_length: 0.3,
+    accelerate: {x0: 0, v0: 0, a: -9.8, t: [0, 0.207]}, marks: [{x: 0, label: 'fingers'}]};
+  const {scene, errors} = compile(spec as any);
+  assert.deepEqual(errors, []);
+  const axis = scene!.props.find(p => p.id === 'axis') as any, ruler = scene!.props.find(p => p.id === 'object') as any;
+  const label = scene!.props.find(p => p.id === 'mark0-label') as any;
+  // 0.3 m of a 0.6 m axis drawn from top to bottom: half of it
+  const span = (axis.y1 - 30 * scene!.height / 1080) - (axis.y2 + 40 * scene!.height / 1080);
+  assert.ok(Math.abs(ruler.size - span / 2) < 1, `${ruler.size} vs ${span / 2}`);
+  assert.ok(label.x > axis.x1 + 44 / 300 * ruler.size, 'the label is clear of the ruler');
+});
+
 test('a verb whose numbers are the picture is never illustrative', () => {
   const digits = compile({verb: 'sig_figs', mode: 'count', numbers: ['0.0025'], illustrative: true} as any);
   assert.equal(digits.scene, undefined);

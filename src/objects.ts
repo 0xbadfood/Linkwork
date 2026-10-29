@@ -40,6 +40,8 @@ export const OBJECTS: Record<string, Def> = {
   sling: {about: 'a stone whirled on a string (circular motion), with its path and, optionally, its velocity arrow',
     length: 240, a: 'the angle of the string in degrees, counter-clockwise from the right', b: 'velocity arrow length as a share of the radius (0: none)', roles: ['connector', 'mover']},
   ball: {about: 'a ball', length: 40, roles: ['mover', 'roller', 'impactor']},
+  upright_ruler: {about: 'a ruler held upright, with centimetre marks (its length is its long side; its foot is its position): dropped between a friend\'s fingers to measure reaction time',
+    length: 300, roles: ['mover', 'measure'], height: 1},
   platform: {about: 'a railway platform beside the track (its length is its size)', length: 300, roles: ['ground', 'path']},
   road: {about: 'a stretch of road with a dashed centre line (its length is its size)', length: 300, roles: ['ground', 'path']},
   parking: {about: 'a parking bay between two kerbs, with a P sign (its length is its size)', length: 300, roles: ['ground', 'path']},
@@ -169,6 +171,13 @@ export function objectItems(o: ObjectSpec, m: Motion, id: string): Prop[] {
       const h = 100 * +(o.params?.height ?? 0.7);
       poly(box(-50, -h, 50, 0), {fill: 'faint', stroke: 'ink', width: W(4)});
       if (o.label) text([0, -h / 2], o.label, 32);
+      break;
+    }
+    case 'upright_ruler': {
+      // Upright, its foot at the position and just right of it (clear of an axis there): 30 centimetre marks, every fifth
+      // longer (a 30 cm school ruler at full size).
+      poly(box(12, -300, 44, 0), {fill: 'faint', stroke: 'ink', width: W(3)});
+      for (let i = 1; i < 30; i++) line([12, -10 * i], [12 + (i % 5 ? 9 : 18), -10 * i], {stroke: 'ink', width: W(i % 5 ? 1.5 : 2.5)});
       break;
     }
     case 'wedge': {
