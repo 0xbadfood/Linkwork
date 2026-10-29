@@ -1194,3 +1194,24 @@ test('stage: a mover along the ground is drawn big enough to see; a projectile s
   const drawn = cart.props.find((p: any) => p.id === 'o-cart') as any;
   assert.ok(drawn.size >= 0.07 * 1920, `the cart is drawn ${drawn.size} px wide (it was 86)`);
 });
+
+test('stage: every item\'s name is drawn, readable, inside the frame and kept in an illustrative scene', () => {
+  // Elastic Collisions (2026-10-30): balls drew no name, "equal mass m1" was crammed onto a small cart, a marker's
+  // "x = 0.10 m" ran off the left edge, and an illustrative scene dropped names with a digit (m1)
+  const names = (spec: object) => {
+    const scene = compile({verb: 'stage', ...spec} as any).scene!;
+    return new Map(scene.props.filter((p: any) => p.type === 'text' && p.id.startsWith('name-')).map((p: any) => [p.id.slice(5), p]));
+  };
+  const balls = names({width_m: 40, ground: 'grass', illustrative: true, items: [{id: 'n', object: 'ball', x: 6, label: 'fast neutron m1'},
+    {id: 'c', object: 'ball', x: 26, label: 'light nucleus'}], events: [{t: 0.5, item: 'n', kind: 'collide', with: 'c', speed: 3, elastic: true, after: 0}]});
+  assert.deepEqual([...balls.keys()], ['n', 'c']);
+  assert.ok(balls.get('n').y !== balls.get('c').y, 'two names on the ground are on opposite sides of it, so they never meet');
+  const carts = names({width_m: 40, items: [{id: 'a', object: 'cart', x: 6, label: 'equal mass m1'}, {id: 'b', object: 'cart', x: 26, label: 'B'}],
+    events: [{t: 0.5, item: 'a', kind: 'move', to: 20, duration: 4}]});
+  assert.ok(carts.has('a') && !carts.has('b'), 'a long name leaves the cart; a short one stays on it');
+  const marker = names({width_m: 4, items: [{id: 'm', object: 'marker', x: 0.1, label: 'x = 0.10 m'}, {id: 'k', object: 'block', x: 2, size: 0.5}]}).get('m');
+  assert.ok(marker.x - 0.3 * marker.size * marker.text.length >= 0, `the marker's name starts at ${marker.x} px, off the left edge`);
+  const drawn = compile({verb: 'stage', width_m: 40, items: [{id: 'n', object: 'ball', x: 6}, {id: 'c', object: 'ball', x: 26}],
+    events: [{t: 0.5, item: 'n', kind: 'collide', with: 'c', speed: 3, elastic: true, after: 0}]} as any).scene!.props.find((p: any) => p.id === 'o-n') as any;
+  assert.ok(drawn.size >= 0.045 * 1920, `a colliding ball is drawn ${drawn.size} px wide`);
+});

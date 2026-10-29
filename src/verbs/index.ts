@@ -182,8 +182,8 @@ const NAMES = /(?<![\w.])\d?[A-Z][₀-₉0-9]*(?![\w.])/g;
 /** The scene with its numbers hidden: no readouts, no axis numbers, no text with a figure in it (but the title), dials
  * and watches without their digits; no facts for the narration to quote. */
 export function illustrate(scene: Scene): Scene {
-  // annotate's labels (note…) are the planner's own words, such as R = 2f: they stay.
-  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && !p.id.startsWith('note') && /\d/.test(p.text.replace(NAMES, ''))))
+  // annotate's labels (note…) and a stage item's name (name-…) are the planner's own words, such as R = 2f or m1: they stay.
+  const props = scene.props.filter(p => p.type !== 'readout' && !(p.type === 'text' && p.id !== 'title' && !/^(note|name-)/.test(p.id) && /\d/.test(p.text.replace(NAMES, ''))))
     .map(p => (p.type === 'axes' ? {...p, numbers: false}
       : p.type === 'object' && ['speedometer', 'stopwatch'].includes(p.name) ? {...p, params: {...p.params, digits: 'none'}} : p));
   return {...scene, props, meta: {...scene.meta, facts: [], illustrative: true}};

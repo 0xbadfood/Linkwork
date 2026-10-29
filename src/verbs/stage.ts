@@ -76,8 +76,9 @@ const sizeOf = (i: StageItem): number => {
   if (i.object === 'bulb' && i.on && FIGURES.get(i.on)) return i.size ?? sizeOf(FIGURES.get(i.on)!) * 0.25;
   if (i.object === 'figure') return Math.max(size, 0.11 * WIDTH);
   // A mover along the ground (a cart, a car, a block) is drawn at least 8% of the stage: at 2% a cart crossing a
-  // 20 m floor was a speck (Kinetic Energy, 2026-10-30). A projectile keeps 2%, so its flight reads as a path.
-  return Math.max(size, roles.includes('launcher') ? 0.07 * WIDTH : roles.includes('mover') ? (LAUNCHED.has(i.id) || i.object === 'ball' ? 0.02 : 0.08) * WIDTH
+  // 20 m floor was a speck (Kinetic Energy, 2026-10-30). A projectile keeps 2%, so its flight reads as a path; a ball
+  // that rolls or collides is drawn 5% (at 2% a neutron meeting a nucleus on a 40 m stage was two dots, 2026-10-30).
+  return Math.max(size, roles.includes('launcher') ? 0.07 * WIDTH : roles.includes('mover') ? (LAUNCHED.has(i.id) ? 0.02 : i.object === 'ball' ? 0.05 : 0.08) * WIDTH
     : roles.includes('general') ? 0.06 * WIDTH : 0);
 };
 
@@ -343,6 +344,18 @@ export function stageErrors(s: StageSpec): string[] {
   return sim.errors;
 }
 
+/** Whether the item writes its own name. A cart, a block or a signpost writes a short name on itself, and a pulley,
+ * ruler or dial writes its own; any other name (a ball, a car and a cannon draw none), one too long or too small to read
+ * on the body, and a marker's, the stage writes beside the item (2026-10-30, Elastic Collisions: the balls' names were
+ * never drawn, and "equal mass m1" was crammed onto a small cart). */
+const ownsLabel = (item: StageItem, px: number, k: number): boolean => {
+  if (['pulley', 'ruler', 'speedometer', 'bulb', 'stopwatch'].includes(item.object)) return true;
+  const label = item.label ?? '', s = px / (OBJECTS[item.object]?.length ?? px);
+  const font = item.object === 'block' ? Math.min(32, 150 / Math.max(1, label.length)) : ['cart', 'signpost'].includes(item.object) ? 22 : 0;
+  const room = item.object === 'cart' ? 110 : item.object === 'signpost' ? 86 : 96;
+  return font > 0 && font * s >= 18 * k && 0.55 * font * label.length <= room;
+};
+
 export function stage(s: StageSpec): Scene {
   const Wpx = s.width ?? 1920, Hpx = s.height ?? 1080, k = Hpx / 1080;
   const W = s.width_m ?? 10, box: [number, number, number, number] = [0.05 * Wpx, 0.14 * Hpx, 0.95 * Wpx, 0.84 * Hpx];
@@ -367,6 +380,22 @@ export function stage(s: StageSpec): Scene {
       return [q.t, v * scale, 'linear'] as Key;
     });
   };
+  // Names the stage writes: 26 px, kept inside the frame, above the item (a marker's below its stone). Of two names on
+  // the ground the second goes below the ground line, so they don't run together when the items meet.
+  let tagged = 0;
+  for (const item of s.items) {
+    const size = sizeOf(item) * unit;
+    if (!item.label || ownsLabel(item, size, k)) continue;
+    const path = paths.get(item.id)!, [x, y] = P(path[0].x, path[0].y), font = 26 * k, half = 0.3 * font * item.label.length;
+    const below = item.object === 'marker' || (!item.on && rolesOf(item).includes('mover') && tagged++ % 2 === 1);
+    const top = (item.object === 'figure' ? 1 : OBJECTS[item.object]?.height ?? 1) * size;
+    // over an item with a velocity or other arrow, the name sits clear of the arrow and its letter
+    const arrowed = [...(s.velocity ?? []), ...(s.arrows ?? [])].some(a => a.item === item.id);
+    const dx = Math.min(Math.max(x, half + 24 * k), Wpx - half - 24 * k) - x;
+    const dy = below ? 36 * k : arrowed ? -Math.max(top, 0.5 * size) - 60 * k : -top - 14 * k;
+    props.push({id: `name-${item.id}`, type: 'text', x: x + dx, y: y + dy, text: item.label, size: font, align: 'middle', weight: 700, layer: 4,
+      ...(path.length > 1 ? {anchor: {actor: `d-${item.id}`, joint: 'p', offset: [dx, dy] as Vec}} : {})});
+  }
   for (const item of s.items) {
     const path = paths.get(item.id)!, size = sizeOf(item) * unit;
     if (item.object === 'figure') {
@@ -419,7 +448,7 @@ export function stage(s: StageSpec): Scene {
     }
     if (item.object === 'speedometer' && item.follows) keyed.a = speedKeys(item.follows, String(item.params?.unit ?? 'm/s') === 'km/h' ? 3.6 : 1);
     const base = {id: `o-${item.id}`, type: 'object' as const, name: item.object, size, facing: item.facing ?? 1, a: item.a, b: item.b,
-      label: item.label, params: item.params, layer: has(item, 'mover') ? 3 : 2};
+      label: ownsLabel(item, size, k) ? item.label : undefined, params: item.params, layer: has(item, 'mover') ? 3 : 2};
     if (path.length === 1) {
       const [x, y] = P(path[0].x, path[0].y);
       props.push({...base, x, y, angle: path[0].angle, ...(Object.keys(keyed).length ? {keys: keyed} : {})});
