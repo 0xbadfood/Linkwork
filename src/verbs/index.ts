@@ -24,13 +24,15 @@ import {sigFigsErrors, sigFigsScene, type SigFigsSpec} from './sig-figs.ts';
 import {angleErrors, angleMeasure, type AngleSpec} from './angle-measure.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
-import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
-  type AreaSpec, type DomainSpec, type ExtremaSpec, type SecantSpec, type VectorSpec} from './calculus.ts';
+import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent,
+  type AreaSpec, type DomainSpec, type ExtremaSpec, type SecantSpec} from './calculus.ts';
+import {vectorAdd, vectorErrors, type VectorSpec} from './vectors.ts';
+import {planeMotion, planeMotionErrors, type PlaneMotionSpec} from './plane-motion.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
-  | DimensionsSpec | SigFigsSpec | AngleSpec;
+  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -55,7 +57,7 @@ export const VERBS: Record<string, Verb<any>> = {
   area_under: {errors: areaErrors, compile: areaUnder,
     about: 'the area under a curve, swept and measured, then Riemann sums closing in on it'} as Verb<AreaSpec>,
   vector_add: {errors: vectorErrors, compile: vectorAdd,
-    about: 'adding vectors head to tail, with components and the magnitude of the sum'} as Verb<VectorSpec>,
+    about: 'vectors drawn to scale: adding (head to tail or parallelogram), subtracting, multiplying by a number, equal vectors, resolving into components with unit vectors î and ĵ, and adding by components'} as Verb<VectorSpec>,
   graph: {errors: graphErrors, compile: graph,
     about: "a science or maths graph: curves from a formula or the book's data, a tracer with readouts, a tangent, a shaded area, marked points"} as Verb<GraphSpec>,
   motion_on_line: {errors: motionErrors, compile: motionOnLine,
@@ -90,6 +92,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "a house's wiring: the 220 V mains on live (red) and neutral (black) wires through the meter, main fuse and distribution box to separate 15 A and 5 A circuits with their fuses; appliances in parallel with their own switches, currents I = P/V added per circuit; the earth wire (green) from metal bodies to a plate in the ground; overloading, a short circuit or a live wire touching a metal body, and the fuse melting"} as Verb<DomesticSpec>,
   dimensions: {errors: dimensionsErrors, compile: dimensionsScene,
     about: 'dimensions of physical quantities, computed: a dimensional formula built factor by factor ([M L T⁻²] for force), an equation checked term by term for consistency, a relation deduced by matching powers (a pendulum\'s period T = k √(l/g)), and a value converted between unit systems (1 J = 10⁷ erg)'} as Verb<DimensionsSpec>,
+  plane_motion: {errors: planeMotionErrors, compile: planeMotion,
+    about: 'motion in a plane, computed: the position vector, velocity along the tangent, acceleration and velocity components of a mover on its path (constant acceleration, x(t) and y(t), or a circle); Δr/Δt turning into the tangent velocity as Δt shrinks; uniform circular motion with Δv pointing to the centre (a = v²/R)'} as Verb<PlaneMotionSpec>,
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,

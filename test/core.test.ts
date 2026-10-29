@@ -924,6 +924,35 @@ test('motion_on_line: a ruler dropped between the fingers falls to scale beside 
   assert.ok(label.x > axis.x1 + 44 / 300 * ruler.size, 'the label is clear of the ruler');
 });
 
+test('vector_add: the book\'s rain and wind, resolving, subtracting and multiplying are computed', () => {
+  const facts = (spec: object) => (compile({verb: 'vector_add', ...spec} as any).scene!.meta!.facts as string[]).join(' | ');
+  // NCERT Class 11 Example 3.1: rain 35 m/s down, wind 12 m/s east: 37 m/s at about 19° to the vertical
+  const rain = facts({a: {magnitude: 35, angle: -90}, b: {magnitude: 12, angle: 0}, names: ['vr', 'vw'], unit: 'm/s'});
+  assert.match(rain, /\|vr \+ vw\| = 37 m\/s/); assert.match(rain, /makes 18\.92° with vr/);
+  assert.match(facts({mode: 'resolve', a: {magnitude: 5, angle: 37}, names: ['A', 'B']}), /Ax = 3\.99 \| Ay = 3\.01/);
+  assert.match(facts({mode: 'subtract', a: [4, 1], b: [1, 3], names: ['A', 'B']}), /A − B = \(3, −2\)/);
+  assert.match(facts({mode: 'scale', a: [3, 4], factors: [-1], names: ['A', 'B']}), /\|−A\| = 5/);
+  assert.match(facts({mode: 'components', a: [3, 1], b: [1, 3], names: ['A', 'B']}), /Rx = 4 \| Ry = 4/);
+  assert.match(compile({verb: 'vector_add', mode: 'add', a: [1, 1]} as any).errors.join(' '), /needs b/);
+  assert.match(compile({verb: 'vector_add', a: [9, 9], b: [1, 1], x: [0, 5]} as any).errors.join(' '), /outside the window/);
+  // a vector on screen is drawn to scale: equal units across and up
+  const sc = compile({verb: 'vector_add', a: [4, 1], b: [1, 3]} as any).scene!, p = sc.planes![0];
+  assert.ok(Math.abs((p.box[2] - p.box[0]) / (p.x[1] - p.x[0]) - (p.box[3] - p.box[1]) / (p.y[1] - p.y[0])) < 1e-6);
+});
+
+test('plane_motion: velocity along the tangent, constant acceleration and uniform circular motion, from the book', () => {
+  const facts = (spec: object) => (compile({verb: 'plane_motion', ...spec} as any).scene!.meta!.facts as string[]).join(' | ');
+  // NCERT Example 3.3: r = 3.0t î + 2.0t² ĵ: v = 3.0 î + 4.0 ĵ at t = 1.0 s, speed 5 m/s
+  assert.match(facts({formula: {x: '3*t', y: '2*t^2', t: [0, 2]}, show: ['limit'], at: 1}), /at t = 1 s the velocity is \(3, 4\) m\/s, speed 5 m\/s/);
+  // NCERT Example 3.4: from the origin with v0 = 10 ĵ and a = 8.0 î + 2.0 ĵ; at t = 2 s, x = 16 m, y = 24 m
+  assert.match(facts({accelerate: {v0: [0, 10], a: [8, 2], t: [0, 2]}}), /r = \(16, 24\) m, v = \(16, 14\) m\/s/);
+  // NCERT Example 3.8: an insect in a 12 cm groove, 7 turns in 100 s: ω = 0.44 rad/s, v = 5.3 cm/s, a = 2.3 cm/s²
+  const insect = facts({circle: {radius: 12, speed: 12 * 2 * Math.PI * 7 / 100}, unit: 'cm', show: ['delta_v']});
+  assert.match(insect, /ω = 0\.44 rad\/s/); assert.match(insect, /a = v²\/R = 2\.32 cm\/s²/); assert.match(insect, /ν = 0\.07 per second/);
+  assert.match(compile({verb: 'plane_motion', circle: {radius: 1, speed: 1}, accelerate: {v0: [1, 0], a: [0, 0], t: [0, 1]}} as any).errors.join(' '), /exactly one path/);
+  assert.match(compile({verb: 'plane_motion', accelerate: {v0: [1, 0], a: [0, 0], t: [0, 1]}, show: ['delta_v']} as any).errors.join(' '), /delta_v is for a circle/);
+});
+
 test('a verb whose numbers are the picture is never illustrative', () => {
   const digits = compile({verb: 'sig_figs', mode: 'count', numbers: ['0.0025'], illustrative: true} as any);
   assert.equal(digits.scene, undefined);

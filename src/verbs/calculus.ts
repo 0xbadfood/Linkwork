@@ -1,6 +1,6 @@
 // Maths on a plane: domain and range (walls on the x-axis where f is undefined, the curve's shadow on the y-axis),
 // maxima and minima (a tangent rod on a hinge tied to the curve, level exactly at each), a secant turning into the
-// tangent, the area under a curve with Riemann sums, and adding vectors. Every number shown is computed from the
+// tangent, and the area under a curve with Riemann sums (vectors: vectors.ts). Every number shown is computed from the
 // expression or measured from the drawing.
 import {derivative, dfOf, exprErrors, fOf, inTime, show, tree} from '../expr.ts';
 import {claimErrors, criticalPoints, definedIntervals, integrate, parseClaim, riemann, toScene, type Plane} from '../plane.ts';
@@ -372,48 +372,4 @@ export function areaUnder(s: AreaSpec): Scene {
   });
   if (s.riemann?.length) props.push(ptext('more', px, py(0.67), 'More rectangles, closer to the exact area.', 28 * k, {style: {fill: 'muted'}, show: [t - 1.8 + 0.5, 1e9]}));
   return scene(s, W, H, t + 1.5, plane, props, [sweep], {verb: 'area_under', integral: round(exact, 8), riemann: sums});
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-export type VectorSpec = Common & {verb: 'vector_add'; a: Vec; b: Vec; x?: [number, number]; y?: [number, number]; step?: [number, number]};
-
-export function vectorErrors(s: VectorSpec): string[] {
-  const e: string[] = [];
-  const ok = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(n => typeof n === 'number' && Number.isFinite(n));
-  if (!ok(s.a) || !ok(s.b)) return ['vector_add: a and b are [x, y] pairs of numbers'];
-  const [x0, x1] = s.x ?? [-1, 8], [y0, y1] = s.y ?? [-1, 6];
-  for (const [name, p] of [['a', s.a], ['a + b', [s.a[0] + s.b[0], s.a[1] + s.b[1]]], ['b', s.b]] as const)
-    if (p[0] < x0 || p[0] > x1 || p[1] < y0 || p[1] > y1) e.push(`vector_add: ${name} = (${p.join(', ')}) is outside the window; widen x or y`);
-  return e;
-}
-
-export function vectorAdd(s: VectorSpec): Scene {
-  const {W, H, k, plane, axes, px, title, py} = layout({...s, expr: '0', x: s.x ?? [-1, 8], y: s.y ?? [-1, 6]});
-  const ptext = panel(W, k);
-  const [ax, ay] = s.a, [bx, by] = s.b, rx = ax + bx, ry = ay + by;
-  const mag = Math.hypot(rx, ry);
-  const arrow = (id: string, x1: number, y1: number, x2: number, y2: number, stroke: string, from: number, extra: Partial<Prop> = {}): Prop =>
-    ({id, type: 'arrow', plane: 'p', x1, y1, x2, y2, draw: 0, keys: {draw: [[from, 0], [from + 1.2, 1, 'inOut']]}, style: {stroke, width: 6 * k}, head: 22 * k, show: [from, 1e9], fade: 0.01, ...extra} as Prop);
-  const label = (id: string, x: number, y: number, t: string, fill: string, from: number) =>
-    text(id, toScene(plane, [x, y])[0], toScene(plane, [x, y])[1], t, 34 * k, {weight: 700, align: 'middle', style: {fill}, show: [from + 0.8, 1e9]});
-  const nrm = (dx: number, dy: number, d = 0.35): Vec => { const l = Math.hypot(dx, dy) || 1; return [-dy / l * d, dx / l * d]; };
-  const [nax, nay] = nrm(ax, ay), [nbx, nby] = nrm(bx, by), [nrx, nry] = nrm(rx, ry);
-  const fmt = (v: number) => n2(v, Number.isInteger(v) ? 0 : 2);
-  const props: Prop[] = [axes,
-    arrow('ghost-b', 0, 0, bx, by, 'cool', 5.4, {style: {stroke: 'cool', width: 3 * k, dash: [8 * k, 8 * k], opacity: 0.6}}),
-    arrow('ghost-a', bx, by, rx, ry, 'accent', 5.4, {style: {stroke: 'accent', width: 3 * k, dash: [8 * k, 8 * k], opacity: 0.6}}),
-    arrow('a', 0, 0, ax, ay, 'accent', 1),
-    arrow('b', ax, ay, rx, ry, 'cool', 2.4),
-    arrow('r', 0, 0, rx, ry, 'ink', 3.9),
-    label('la', ax / 2 + nax, ay / 2 + nay, 'a', 'accent', 1), label('lb', ax + bx / 2 + nbx, ay + by / 2 + nby, 'b', 'cool', 2.4),
-    label('lr', rx / 2 - nrx, ry / 2 - nry, 'a + b', 'ink', 3.9),
-    ...title,
-    ptext('ta', px, py(0.26), `a = (${fmt(ax)}, ${fmt(ay)})`, 36 * k, {style: {fill: 'accent'}, show: [1, 1e9]}),
-    ptext('tb', px, py(0.33), `b = (${fmt(bx)}, ${fmt(by)})`, 36 * k, {style: {fill: 'cool'}, show: [2.4, 1e9]}),
-    ptext('tr', px, py(0.42), `a + b = (${fmt(ax)} + ${fmt(bx)}, ${fmt(ay)} + ${fmt(by)}) = (${fmt(rx)}, ${fmt(ry)})`, 32 * k, {weight: 700, show: [3.9, 1e9]}),
-    ptext('tm', px, py(0.5), `|a + b| = √(${fmt(rx)}² + ${fmt(ry)}²) = ${n2(mag, 2)}`, 32 * k, {show: [4.6, 1e9]}),
-    ptext('tail', px, py(0.6), 'Head to tail: b starts where a ends.', 28 * k, {style: {fill: 'muted'}, show: [2.4, 1e9]}),
-    ptext('order', px, py(0.66), 'Either order gives the same a + b.', 28 * k, {style: {fill: 'muted'}, show: [5.6, 1e9]}),
-  ];
-  return scene(s, W, H, 8.5, plane, props, [], {verb: 'vector_add', sum: [rx, ry], magnitude: round(mag, 6)});
 }

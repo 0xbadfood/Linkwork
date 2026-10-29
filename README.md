@@ -36,7 +36,10 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `extrema`: a tangent rod on a hinge tied to the curve; it is level, slope 0, exactly at each maximum and minimum.
 - `secant_to_tangent`: Q slides into P and the slope of PQ approaches f′(a).
 - `area_under`: the area swept and measured, then Riemann sums closing in on the exact integral.
-- `vector_add`: two vectors head to tail, the sum, its components and its length.
+- `vector_add`: vectors to scale: adding (head to tail or parallelogram), subtracting, multiplying by a number, equal
+  vectors, resolving into components with î and ĵ, and adding by components.
+- `plane_motion`: a mover in a plane with its position vector, tangent velocity, acceleration and velocity components
+  (constant acceleration, x(t) and y(t), or a circle); Δr/Δt becoming the velocity; uniform circular motion with Δv.
 - `graph` (trial): any quantity against another, from a formula in the axis's own variable or the book's data; a tracer
   with readouts, a tangent with its slope, a shaded area, marked points (v–t, Boyle's law, periodic trends, heating curves).
 
