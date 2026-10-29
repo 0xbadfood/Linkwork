@@ -1089,3 +1089,18 @@ test('angle_measure: θ = s/r and Ω = A/r², counted from the drawing\'s measur
   assert.match(errors({kind: 'plane', radius: 1, arc: 7}), /up to the whole circle \(2πr = 6\.28 m\)/);
   assert.match(errors({kind: 'plane', area: 1}), /area is for kind solid/);
 });
+
+test('forces: arrows start at the body, the net stays clear of them, and one line of forces makes no triangle', () => {
+  // Laws of Motion C1 (2026-10-29): N ran through "1 kg", the net ran down the weight, and a balanced N and W drew a
+  // stray "triangle" stroke between two panels
+  const scene = compile({verb: 'forces', mass: 2, surface: 'floor', show: ['net'], forces: [{name: 'W', kind: 'weight'},
+    {name: 'N', kind: 'normal'}, {name: 'F', kind: 'applied', magnitude: 6, direction: 'right'}]} as any).scene!;
+  const by = (id: string) => scene.props.find((p: any) => p.id === id) as any;
+  const body = by('body'), side = body.size;
+  for (const id of ['F0', 'F1', 'F2']) assert.ok(Math.hypot(by(id).x1 - body.x, by(id).y1 - (body.y - 0.35 * side)) > 0.3 * side, `${id} starts at the edge`);
+  const net = by('net'), W = by('F0');
+  assert.ok(net.y1 < body.y - 0.35 * side && net.y2 < body.y - 0.35 * side, 'a sideways net is drawn above the centre, off the weight');
+  assert.ok(Math.min(net.x1, net.x2) > W.x1, 'and right of the weight');
+  assert.match(compile({verb: 'forces', surface: 'floor', illustrative: true, show: ['triangle'], forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal'}]} as any).errors.join(' '), /along one line.*leave 'triangle' out/);
+  assert.deepEqual(compile({verb: 'forces', body: 'point', show: ['triangle'], forces: [{name: 'T2', kind: 'tension', magnitude: 60, direction: 'down'}, {name: 'F', magnitude: 50, direction: 'right'}, {name: 'T1', kind: 'tension'}], a: [0, 0]} as any).errors, []);
+});

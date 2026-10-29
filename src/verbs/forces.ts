@@ -136,6 +136,10 @@ export function forcesErrors(spec: ForcesSpec): string[] {
   const {forces, errors} = solve(s);
   if (errors.length) return errors;
   if (!forces.some(x => x.size > 1e-9)) e.push('forces: every force is zero');
+  // head to tail, forces along one line lie on a line, not a triangle: a stray stroke beside the body (2026-10-29)
+  const live = forces.filter(x => x.size > 1e-9);
+  if (s.show?.includes('triangle') && live.every(x => Math.abs(x.u[0] * live[0].u[1] - x.u[1] * live[0].u[0]) < 1e-6))
+    e.push("forces: these forces all lie along one line, so head to tail they make no triangle; leave 'triangle' out of show (use 'net')");
   if (forces.some(x => x.size > 0 && x.size < 0.02 * Math.max(...forces.map(y => y.size)))) {
     const tiny = forces.find(x => x.size > 0 && x.size < 0.02 * Math.max(...forces.map(y => y.size)))!;
     e.push(`forces: ${tiny.name} is under 2% of the largest force and would not show; leave it out or change the numbers`);
@@ -166,9 +170,11 @@ export function forces(spec: ForcesSpec): Scene {
   const split = show.has('triangle'), bw = box[2] - box[0], bh = box[3] - box[1];
   const region = split ? [box[0], box[1], box[0] + 0.58 * bw, box[3]] : [box[0], box[1], box[2], box[3]];
   const C: P2 = [(region[0] + region[2]) / 2, (region[1] + region[3]) / 2], room = Math.min(region[2] - region[0], region[3] - region[1]);
-  const big = Math.max(...fs.map(x => x.size), Math.hypot(...net)), L = 0.4 * room / big;     // pixels per newton
-  const sc = (u: P2, size: number, from: P2 = C): P2 => [from[0] + u[0] * size * L, from[1] - u[1] * size * L];
   const body = s.body ?? 'block', side = body === 'point' ? 0 : body === 'ball' ? 0.16 * room : 0.2 * room;
+  const [hx, hy] = body === 'car' ? [0.8 * side, 0.37 * side] : body === 'block' ? [0.5 * side, 0.35 * side] : [side / 2, side / 2];
+  // pixels per newton: the longest arrow, from the body's edge, ends inside the region with room for its name
+  const big = Math.max(...fs.map(x => x.size), Math.hypot(...net)), L = (0.42 * room - Math.max(hx, hy, 12 * k)) / big;
+  const sc = (u: P2, size: number, from: P2 = C): P2 => [from[0] + u[0] * size * L, from[1] - u[1] * size * L];
   // the surface under the body, through its contact point
   const nrm = unit('normal', theta), along = unit('up_slope', theta), lift = side * (body === 'car' ? 0.37 : body === 'block' ? 0.35 : 0.5), contact: P2 = [C[0] - nrm[0] * lift, C[1] + nrm[1] * lift];
   if (s.surface === 'floor' || s.surface === 'incline') {
@@ -189,12 +195,17 @@ export function forces(spec: ForcesSpec): Scene {
     const end = sc(x.u, big * 1.25);
     props.push({id: `rope${i}`, type: 'line', x1: C[0], y1: C[1], x2: end[0], y2: end[1], style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 6 * k]}} as Prop);
   }
+  // how far the body reaches from its centre along u: arrows start at its edge, so none runs over the mass written on
+  // it (Laws of Motion C1, 2026-10-29: N through "1 kg"); a tension starts at the centre, where its rope is tied
+  const edge = (u: P2): number => body === 'point' ? 12 * k : body === 'ball' ? side / 2 + 4 * k
+    : Math.min(hx / Math.max(Math.abs(u[0] * along[0] + u[1] * along[1]), 1e-9), hy / Math.max(Math.abs(u[0] * nrm[0] + u[1] * nrm[1]), 1e-9)) + 4 * k;
+  const foot = (u: P2): P2 => [C[0] + u[0] * edge(u), C[1] - u[1] * edge(u)];
   // the forces one by one, each named at its head
   const t0 = 0.6, step = 0.9;
   fs.forEach((x, i) => {
     if (x.size < 1e-9) return;
-    const at = t0 + step * i, tip = sc(x.u, x.size), name = sc(x.u, x.size + 34 * k / L);
-    props.push(arrow(`F${i}`, C, tip, COLOURS[x.kind], at), label(`lF${i}`, name, x.name, COLOURS[x.kind], at));
+    const from = x.kind === 'tension' ? C : foot(x.u), at = t0 + step * i, tip = sc(x.u, x.size, from), name = sc(x.u, x.size + 34 * k / L, from);
+    props.push(arrow(`F${i}`, from, tip, COLOURS[x.kind], at), label(`lF${i}`, name, x.name, COLOURS[x.kind], at));
     const how = x.kind === 'weight' && m && !(s.forces ?? [])[i].magnitude ? `${x.name === 'mg' ? '' : ' = mg'} = ${f(m)} × ${f(s.g ?? 9.8)}` : '';
     line(`v${i}`, `${x.name}${how} = ${f(x.size)} N${x.solved ? ' (solved)' : ''}${x.flipped ? ', pointing the other way' : ''}`, at, {style: {fill: COLOURS[x.kind]}});
     facts.push(`${x.name} = ${f(x.size)} N${x.solved ? ', solved by the second law' : ''}`);
@@ -222,9 +233,11 @@ export function forces(spec: ForcesSpec): Scene {
   row += 6 * k;
   if (show.has('net') || rest) {
     if (!rest) {
-      // beside the body, not over the force it may run along (a lift's N); named beside its middle
-      const u: P2 = [net[0] / size, net[1] / size], d = side * 0.6 + 60 * k, o: P2 = [C[0] + u[1] * d, C[1] + u[0] * d], tip = sc(u, size, o);
-      const mid: P2 = [(o[0] + tip[0]) / 2 + Math.abs(u[1]) * 40 * k, (o[1] + tip[1]) / 2 - Math.abs(u[0]) * 30 * k];
+      // from beyond the body's edge, shifted to one side: clear of the forces at its centre (a horizontal net drawn
+      // below the body ran down the weight, Laws of Motion C1 2026-10-29) and of one it runs along (a lift's N)
+      const u: P2 = [net[0] / size, net[1] / size], d = 60 * k, e0 = edge(u) + 24 * k;
+      const o: P2 = [C[0] + u[0] * e0 + Math.abs(u[1]) * d, C[1] - u[1] * e0 - Math.abs(u[0]) * d], tip = sc(u, size, o);
+      const mid: P2 = [(o[0] + tip[0]) / 2 + Math.abs(u[1]) * 44 * k, (o[1] + tip[1]) / 2 - Math.abs(u[0]) * 46 * k];
       props.push(arrow('net', o, tip, 'ink', next, 7, {style: {stroke: 'ink', width: 7 * k, dash: [14 * k, 8 * k]}}), label('lnet', mid, 'net', 'ink', next));
     }
     line('netw', rest ? 'The forces add to zero: no acceleration (at rest, or moving at a steady velocity)' : 'The net force is not zero: the body accelerates along it', next, {weight: 700});
