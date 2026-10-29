@@ -819,3 +819,28 @@ test('magnetic_field: computed field lines of a wire, loop, solenoid and bar mag
   assert.match(errors({source: 'loop', turns: 60}), /turns is 2 to 16 for a solenoid, 1 to 50/);
   assert.match(errors({source: 'wire', trace: true}), /trace .* is for a bar_magnet/);
 });
+
+test('magnetic_force: I × B on a rod, Fleming\'s left-hand rule from any two directions, a charge curving, F ∝ sin θ', async () => {
+  const {fleming} = await import('../src/verbs/magnetic-force.ts');
+  assert.deepEqual(fleming({field: 'down', current: 'east'}), {current: 'east', field: 'down', force: 'north'});
+  assert.equal(fleming({current: 'east', force: 'north'})!.field, 'down');
+  assert.equal(fleming({field: 'down', force: 'north'})!.current, 'east');
+  assert.equal(fleming({field: 'up', current: 'up'}), null);
+  // NCERT Exercise: an alpha particle (positive) moving west is deflected north: the field is upward
+  assert.equal(fleming({current: 'west', force: 'north'})!.field, 'up');
+  // an electron beam moving north is a current flowing south
+  const beam = compile({verb: 'magnetic_force', scene: 'rule', current: 'north', charge: 'negative', force: 'east'} as any);
+  assert.deepEqual(beam.errors, []);
+  assert.match((beam.scene!.meta as any).facts.join(' '), /field is down, the current south and the force east/);
+  // the rod: current out of the page, field up, pushed to the left (−x); reversed current, to the right
+  const rod = compile({verb: 'magnetic_force', scene: 'rod', reverse: 'current'} as any).scene!;
+  const xs = (rod.props.find(p => p.id === 'rod') as any).keys.x, cx = (rod.props.find(p => p.id === 'rod') as any).x;
+  assert.ok(xs[2][1] < cx && xs.at(-1)[1] > cx);
+  const facts = (compile({verb: 'magnetic_force', scene: 'angle'} as any).scene!.meta as any).facts.join(' ');
+  assert.match(facts, /at 45° the force is 71%/);
+  const errors = (spec: object) => compile({verb: 'magnetic_force', ...spec} as any).errors.join(' | ');
+  assert.match(errors({scene: 'rule', field: 'up'}), /give two of current, field and force/);
+  assert.match(errors({scene: 'rule', field: 'up', current: 'down'}), /parallel or opposite/);
+  assert.match(errors({scene: 'rod', current: 'east'}), /rod: current is out or in/);
+  assert.match(errors({scene: 'angle', angles: [120]}), /0 to 90 degrees/);
+});

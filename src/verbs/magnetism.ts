@@ -164,7 +164,7 @@ export function magneticField(s: FieldSpec): Scene {
     const nRight = s.north !== 'left', [x0, y0] = P([-geo.L / 2, geo.R]), wpx = geo.L * sc, hpx = 2 * geo.R * sc;
     props.push({id: 'magnet-n', type: 'rect', x: round(nRight ? x0 + wpx / 2 : x0, 2), y: y0, w: round(wpx / 2, 2), h: round(hpx, 2), style: {fill: RED, opacity: 0.8}, layer: 1},
       {id: 'magnet-s', type: 'rect', x: round(nRight ? x0 : x0 + wpx / 2, 2), y: y0, w: round(wpx / 2, 2), h: round(hpx, 2), style: {fill: '#3b7bff', opacity: 0.8}, layer: 1});
-    text('pole-n', 'N', P([(nRight ? 1 : -1) * geo.L / 4, 0]), 'paper', 44); text('pole-s', 'S', P([(nRight ? -1 : 1) * geo.L / 4, 0]), 'paper', 44);
+    text('pole-n', 'N', [P([(nRight ? 1 : -1) * geo.L / 4, 0])[0], P([0, 0])[1] + 15 * k], 'ink', 44); text('pole-s', 'S', [P([(nRight ? -1 : 1) * geo.L / 4, 0])[0], P([0, 0])[1] + 15 * k], 'ink', 44);
     anchors.north = P([(nRight ? 1 : -1) * geo.L / 2, 0]); anchors.south = P([(nRight ? -1 : 1) * geo.L / 2, 0]); anchors.magnet = P([0, 0]);
   }
   if (src === 'wire' && view === 'end') {
