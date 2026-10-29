@@ -39,6 +39,7 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `vector_add`: vectors to scale: adding (head to tail or parallelogram), subtracting, multiplying by a number, equal
   vectors, resolving into components with î and ĵ, and adding by components.
 - `plane_motion`: a mover in a plane with its position vector, tangent velocity, acceleration and velocity components
+- `forces`: a free-body diagram drawn to scale, unknown forces solved by the second law (equilibrium or a given acceleration), components, net force and the closed force triangle; friction building up to slipping under a growing push or a tilting plane
   (constant acceleration, x(t) and y(t), or a circle); Δr/Δt becoming the velocity; uniform circular motion with Δv.
 - `graph` (trial): any quantity against another, from a formula in the axis's own variable or the book's data; a tracer
   with readouts, a tangent with its slope, a shaded area, marked points (v–t, Boyle's law, periodic trends, heating curves).

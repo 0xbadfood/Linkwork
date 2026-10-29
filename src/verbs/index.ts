@@ -28,11 +28,12 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
   type AreaSpec, type DomainSpec, type ExtremaSpec, type SecantSpec} from './calculus.ts';
 import {vectorAdd, vectorErrors, type VectorSpec} from './vectors.ts';
 import {planeMotion, planeMotionErrors, type PlaneMotionSpec} from './plane-motion.ts';
+import {forces, forcesErrors, type ForcesSpec} from './forces.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
-  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec;
+  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -94,6 +95,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'dimensions of physical quantities, computed: a dimensional formula built factor by factor ([M L T⁻²] for force), an equation checked term by term for consistency, a relation deduced by matching powers (a pendulum\'s period T = k √(l/g)), and a value converted between unit systems (1 J = 10⁷ erg)'} as Verb<DimensionsSpec>,
   plane_motion: {errors: planeMotionErrors, compile: planeMotion,
     about: 'motion in a plane, computed: the position vector, velocity along the tangent, acceleration and velocity components of a mover on its path (constant acceleration, x(t) and y(t), or a circle); Δr/Δt turning into the tangent velocity as Δt shrinks; uniform circular motion with Δv pointing to the centre (a = v²/R)'} as Verb<PlaneMotionSpec>,
+  forces: {errors: forcesErrors, compile: forces,
+    about: "forces on a body, computed: a free-body diagram of a block, ball, car or point on a floor, an incline or in the air, its weight, normal force, tension, friction and pushes drawn to scale; unknown forces solved by the second law (equilibrium, or a given acceleration); components along and across a slope, the net force and a = F/m, the forces head to tail closing a triangle when they balance; friction at work: a growing push or a tilting plane, static friction up to µs N, then slipping with µk N"} as Verb<ForcesSpec>,
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,

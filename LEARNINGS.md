@@ -69,3 +69,8 @@ caught or a reviewer saw while building the examples and the first pilot film (h
 18. **Every point clip is checked against its text.** Spell technical words normally ("semilunar", "nanometres");
     the voice handles them. If the speech recogniser mishears a word (it heard "Samaluna"), the voice is not the
     problem.
+19. **An illustrative scene keeps only words: say the result in a sentence without digits too.** `illustrate()` drops
+    every text with a digit, and "Δt → 0" has one. A construction whose every line carries numbers (plane_motion's
+    Δv steps) was left unlabelled; name arrows in letters (r′, Δv) and add a words-only line beside the numeric one.
+20. **Scale an arrow by a unit vector times its size, never the raw vector times its size.** forces' net arrow was
+    first drawn |F|² long and ran off the frame; render every new verb's frames before trusting `check`.

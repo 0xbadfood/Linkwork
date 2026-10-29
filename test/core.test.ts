@@ -994,6 +994,39 @@ test('plane_motion delta_v: both triangles, named, beside each other, in a half-
   assert.ok(lim.props.some(q => q.type === 'text' && /Δr\/Δt becomes the velocity v/.test((q as any).text)));
 });
 
+test('forces: free-body diagrams solved by the second law, from the book', () => {
+  // 2026-10-29: Class 11 Laws of Motion had no verb for the forces on a body
+  const facts = (spec: object) => (compile({verb: 'forces', ...spec} as any).scene!.meta!.facts as string[]).join(' | ');
+  // Example 4.4 (Fig. 4.8): point P of the rope, 60 N down, 50 N across: T1 = 78 N
+  assert.match(facts({body: 'point', forces: [{name: 'T2', kind: 'tension', magnitude: 60, direction: 'down'}, {name: 'F', magnitude: 50, direction: 'right'}, {name: 'T1', kind: 'tension'}], a: [0, 0]}), /T1 = 78\.10 N, solved/);
+  // Exercise 4.15: 70 kg in a lift, g = 10: up with 5 m/s² the scale reads 1050 N, down with 5 m/s² 350 N
+  const lift = (ay: number) => facts({mass: 70, g: 10, surface: 'floor', forces: [{name: 'mg', kind: 'weight'}, {name: 'N', kind: 'normal'}], a: [0, ay]});
+  assert.match(lift(5), /N = 1050 N/); assert.match(lift(-5), /N = 350 N/);
+  // a block at rest on a 15° slope: friction mg sin θ up the slope, N = mg cos θ
+  const slope = facts({mass: 4, surface: 'incline', angle: 15, forces: [{name: 'mg', kind: 'weight'}, {name: 'N', kind: 'normal'}, {name: 'f', kind: 'friction', direction: 'up_slope'}], a: [0, 0]});
+  assert.match(slope, /N = 37\.86 N/); assert.match(slope, /f = 10\.15 N/); assert.match(slope, /net force is zero/);
+  // Example 4.10: a banked road at its optimum speed needs no friction: N alone gives a = g tan θ towards the centre
+  assert.match(facts({body: 'car', mass: 1000, surface: 'incline', angle: 15, forces: [{name: 'mg', kind: 'weight'}, {name: 'N', kind: 'normal'}], a: [-9.8 * Math.tan(15 * Math.PI / 180), 0]}), /N = 10146 N/);
+  // without a, the normal force is solved and the net force gives a = F/m
+  assert.match(facts({mass: 2, surface: 'floor', forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal'}, {name: 'F', kind: 'applied', magnitude: 6, direction: 'right'}], show: ['net']}), /net force is 6 N; a = 3 m\/s²/);
+  // friction at work: a push slips the block at µs N; a tilted plane at tan θ = µs (Example 4.6: 15°)
+  assert.match(facts({mass: 5, ramp: {kind: 'push', mu_s: 0.5, mu_k: 0.4, to: 40}}), /slips when the push passes 24\.50 N/);
+  assert.match(facts({mass: 4, ramp: {kind: 'tilt', mu_s: Math.tan(15 * Math.PI / 180)}}), /θ = 15°/);
+  const err = (spec: object) => compile({verb: 'forces', ...spec} as any).errors.join(' ');
+  assert.match(err({forces: [{name: 'A'}, {name: 'B', direction: 'up'}, {name: 'C', direction: 0}, {name: 'D', direction: 90}], a: [0, 0]}), /unknown in size and direction, so every other force needs its magnitude/);
+  assert.match(err({mass: 1, forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal', magnitude: 9.8}], a: [0, 2]}), /add to .* but m a is/);
+  assert.match(err({forces: [{name: 'A', direction: 'up'}, {name: 'B', direction: 'down'}, {name: 'C', magnitude: 3, direction: 0}], a: [0, 0]}), /parallel/);
+  assert.match(err({mass: 1, forces: [{name: 'W', kind: 'weight'}, {name: 'T', kind: 'tension', direction: 90}]}), /T has no magnitude.*give a/);
+  assert.match(err({mass: 1, ramp: {kind: 'push', mu_s: 0.5, to: 10}, forces: [{name: 'W', kind: 'weight'}]}), /leave forces out/);
+  assert.match(err({forces: [{name: 'f', kind: 'friction', magnitude: 1, direction: 'up_slope'}]}), /surface is incline/);
+  // drawn inside the frame, in a narrow part too
+  for (const spec of [{body: 'car', mass: 1000, surface: 'incline', angle: 15, forces: [{name: 'mg', kind: 'weight'}, {name: 'N', kind: 'normal'}, {name: 'f', kind: 'friction', direction: 'down_slope'}], a: [-10, 0], show: ['net', 'components']},
+    {mass: 4, ramp: {kind: 'tilt', mu_s: 0.27, mu_k: 0.2}}, {mass: 5, ramp: {kind: 'push', mu_s: 0.5, mu_k: 0.4, to: 40}}]) {
+    assert.deepEqual(check(compile({verb: 'forces', ...spec} as any).scene!, {every: 3}), []);
+    assert.deepEqual(check(compile({compound: true, parts: [{id: 'a', box: [0, 0, 960, 1080], spec: {verb: 'forces', ...spec}}]} as any).scene!, {every: 3}), []);
+  }
+});
+
 test('stage: in a scene where nothing moves, every item is big enough to see', () => {
   // 2026-10-29, Scalars and Vectors: a 1 m block and a marker on a 30 m stage were specks under their labels
   const still = compile({verb: 'stage', width_m: 30, ground: 'floor', items: [{id: 'b', object: 'block', x: 10}, {id: 'm', object: 'marker', x: 20}]} as any);
