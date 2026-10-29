@@ -1111,3 +1111,12 @@ test('forces: arrows start at the body, the net stays clear of them, and one lin
   assert.match(compile({verb: 'forces', surface: 'floor', illustrative: true, show: ['triangle'], forces: [{name: 'W', kind: 'weight'}, {name: 'N', kind: 'normal'}]} as any).errors.join(' '), /along one line.*leave 'triangle' out/);
   assert.deepEqual(compile({verb: 'forces', body: 'point', show: ['triangle'], forces: [{name: 'T2', kind: 'tension', magnitude: 60, direction: 'down'}, {name: 'F', magnitude: 50, direction: 'right'}, {name: 'T1', kind: 'tension'}], a: [0, 0]} as any).errors, []);
 });
+
+test('annotate: a label near a drawing\'s right edge reads leftwards, clear of the panel and its wrapped title', () => {
+  // Circular Motion C6 (2026-10-30): "straight without inward force" ran out of the circle into the panel's title
+  const scene = compile({verb: 'plane_motion', title: 'Ground view of a turning car', circle: {radius: 1, speed: 1, turns: 1}, show: ['velocity', 'acceleration'],
+    annotate: [{text: 'straight without inward force', at: [1.2, 1.1], colour: 'muted'}], illustrative: true} as any).scene!;
+  const label = scene.props.find((p: any) => p.id === 'note0-label') as any, box = (scene.planes![0] as any).box;
+  assert.equal(label.align, 'end');
+  assert.ok(label.x <= box[2], 'it ends inside the drawing');
+});

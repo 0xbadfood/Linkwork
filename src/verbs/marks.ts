@@ -7,6 +7,7 @@
 import {toScene, type Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
 import {round, type Vec} from '../vec.ts';
+import {wrapText} from '../svg.ts';
 
 /** `to`: a second point, making the mark a measuring line from `at` to it, with the text at its middle (f, R, aperture). */
 export type Mark = {text?: string; at: string | [number, number]; to?: string | [number, number]; point?: boolean; t?: number; colour?: string};
@@ -68,7 +69,9 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
   const placed: [number, number, number, number][] = scene.props.filter(p => p.type === 'text' && !p.id.startsWith('note')).map(p => {
     const t = p as unknown as {x: number; y: number; text: string; size?: number; align?: string; width?: number};
     const size = t.size ?? 32, w = Math.min(t.width ?? Infinity, String(t.text).length * size * 0.56), x0 = t.align === 'end' ? t.x - w : t.align === 'middle' ? t.x - w / 2 : t.x;
-    return [x0, t.y - size * 0.6, x0 + w, t.y + size * 0.6] as [number, number, number, number];
+    // a wrapped text (a panel's title) covers all its lines: a label once sat on a title's second line (C6, 2026-10-30)
+    const lines = t.width ? wrapText(String(t.text), size, t.width).length : 1;
+    return [x0, t.y - size * 0.6, x0 + w, t.y + size * 0.6 + (lines - 1) * 1.25 * size] as [number, number, number, number];
   });
   const clear = (x: number, y: number, text: string, align: 'start' | 'middle' | 'end'): number => {
     const w = text.length * 30 * k * 0.58, h = 36 * k, x0 = align === 'start' ? x : align === 'end' ? x - w : x - w / 2;
@@ -115,7 +118,9 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     const fill = m.colour ?? 'accent', show: [number, number] = [m.t ?? 0.5, 1e9], [x, y] = [round(at[0], 2), round(at[1], 2)];
     if (m.point) props.push({id: `note${i}-point`, type: 'circle', x, y, r: 9 * k, show, fade: 0.3, style: {fill}, layer: 8});
     if (m.text) {
-      const right = x > 0.85 * scene.width;   // near the right edge the label reads leftwards
+      // near the right edge the label reads leftwards; so does one that would run out of a drawing into its panel
+      const box = planes.length === 1 ? (planes[0] as Plane).box : undefined;
+      const right = x > 0.85 * scene.width || (!!box && x < box[2] && x + 14 * k + m.text.length * 30 * k * 0.58 > box[2] + 20 * k);
       // Kept inside the frame: a label near an edge reads inwards, and never above the top or below the bottom.
       const lx = right ? x - 14 * k : Math.min(x + 14 * k, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
       props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(0.14 * scene.height, clear(lx, Math.max(0.14 * scene.height, y - 16 * k), m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
