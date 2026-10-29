@@ -788,3 +788,34 @@ test('energy_use: the book\'s refrigerator bill, a cycling compressor, and the c
   assert.match(errors({appliances: [{name: 'fan', watts: 75, duty: 1.5}]}), /duty is the fraction/);
   assert.match(errors({appliances: [{name: 'fan', watts: 75}], fuse: 5}), /a fuse needs volts/);
 });
+
+test('magnetic_field: computed field lines of a wire, loop, solenoid and bar magnet; the right-hand rule; Oersted\'s compass', async () => {
+  const {fieldAt, fieldLines} = await import('../src/verbs/magnetism.ts');
+  // a current out of the page: anticlockwise field, falling as 1/r
+  const [bx, by] = fieldAt([{x: 0, y: 0, I: 1}], [1, 0]);
+  assert.ok(Math.abs(bx) < 1e-9 && by > 0);
+  assert.ok(Math.abs(Math.hypot(...fieldAt([{x: 0, y: 0, I: 1}], [2, 0])) * 2 - by) < 1e-9);
+  // field lines round a wire close on themselves (circles), and a larger current draws more of them
+  const circles = (I: number) => fieldLines([{x: 0, y: 0, I}], [[0.35, 0], [3.8, 0]], 0.35, [4, 3]);
+  const one = circles(1);
+  assert.ok(one.length >= 5);
+  for (const l of one) { const r = l.map(p => Math.hypot(...p)); assert.ok(Math.max(...r) - Math.min(...r) < 0.02, 'a circle'); }
+  assert.ok(circles(2).length > one.length);
+  // a solenoid's field inside is along its axis, from S to N; outside at the middle it runs back
+  const sol = (compile({verb: 'magnetic_field', source: 'solenoid', north: 'right'} as any));
+  assert.deepEqual(sol.errors, []);
+  assert.ok(sol.scene!.props.some(p => (p as any).text === 'N' && (p as any).x > 960 * 0.6));
+  // Oersted: with no current the needle points north (up); with current it turns
+  const oe = compile({verb: 'magnetic_field', source: 'wire', key: 'closes', compasses: 1} as any).scene!;
+  const n = oe.props.find(p => p.id === 'compass0-n') as any, c = oe.props.find(p => p.id === 'compass0-case') as any;
+  assert.ok(Math.abs(n.x2 - c.x) < 0.5 && n.y2 < c.y, 'north before the current');
+  assert.ok(n.keys.x2.at(-1)[1] < c.x - 5, 'west after: a current out of the page, compass north of the wire');
+  const facts = (compile({verb: 'magnetic_field', source: 'wire', direction: 'in'} as any).scene!.meta as any).facts.join(' ');
+  assert.match(facts, /clockwise as seen here \(right-hand thumb rule\)/);
+  const errors = (spec: object) => compile({verb: 'magnetic_field', ...spec} as any).errors.join(' | ');
+  assert.match(errors({source: 'coil'}), /source is bar_magnet, wire, loop, solenoid or uniform/);
+  assert.match(errors({source: 'wire', direction: 'up'}), /direction is out or in here/);
+  assert.match(errors({source: 'bar_magnet', key: 'closes'}), /a bar_magnet has no current or key/);
+  assert.match(errors({source: 'loop', turns: 60}), /turns is 2 to 16 for a solenoid, 1 to 50/);
+  assert.match(errors({source: 'wire', trace: true}), /trace .* is for a bar_magnet/);
+});

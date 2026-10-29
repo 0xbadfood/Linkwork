@@ -16,6 +16,7 @@ import {atmosphere, atmosphereErrors, type AtmosphereSpec} from './atmosphere.ts
 import {scattering, scatteringErrors, type ScatteringSpec} from './scattering.ts';
 import {circuit, circuitErrors, type CircuitSpec} from './circuit.ts';
 import {energyUseErrors, energyUseScene, type EnergyUseSpec} from './energy-use.ts';
+import {fieldErrors, magneticField, type FieldSpec} from './magnetism.ts';
 import {rayDiagram, rayDiagramErrors, refraction, refractionErrors, type RaySpec, type RefractionSpec} from './optics.ts';
 import {numberLine, numberLineErrors, type NumberLineSpec} from './number-line.ts';
 import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors, secantErrors, secantToTangent, vectorAdd, vectorErrors,
@@ -23,7 +24,7 @@ import {areaErrors, areaUnder, domainErrors, domainRange, extrema, extremaErrors
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec;
+  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -75,6 +76,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "an electric circuit with the book's symbols, solved by Ohm's law: a battery of cells, plug key and ammeter; resistors, bulbs, nichrome wires (R = ρl/A) and rheostats in series and in parallel groups; voltmeters across items, every branch current, power and bulbs glowing by it; charges moving faster where the current is larger; a list of cell counts shown in turn (Activity 11.1)"} as Verb<CircuitSpec>,
   energy_use: {errors: energyUseErrors, compile: energyUseScene,
     about: 'electrical energy used at home: appliances by rated power and hours of use, E = P × t counted on an energy meter in kWh (1 kWh = 3.6 × 10⁶ J), the bill at a rate per unit, a cycling appliance (a refrigerator) by its duty, and the current I = P/V set against a fuse'} as Verb<EnergyUseSpec>,
+  magnetic_field: {errors: fieldErrors, compile: magneticField,
+    about: "magnetic fields, computed: a bar magnet's field lines (N to S outside, S to N inside), iron filings and compasses, a compass traced along a line; a straight wire's concentric circles (right-hand thumb rule), a wire in the page with the field out of and into the page; a loop and a solenoid (like a bar magnet, uniform inside, an electromagnet with a core); a compass deflected when the key is plugged in or the current reversed; a uniform field"} as Verb<FieldSpec>,
 };
 
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */
