@@ -150,6 +150,8 @@ export function compile(spec: {verb: string; illustrative?: boolean} | CompoundS
   const verb = VERBS[spec?.verb];
   if (!verb) return {errors: [`unknown verb ${JSON.stringify(spec?.verb)}; known: ${Object.keys(VERBS).join(', ')}`]};
   if (spec.illustrative !== undefined && typeof spec.illustrative !== 'boolean') return {errors: [`${spec.verb}: illustrative is true or false`]};
+  if (spec.illustrative && CARDS[spec.verb]?.numeric)
+    return {errors: [`${spec.verb}: its numbers are the picture, so it is never illustrative (that hides every number): use the numbers the narration says`]};
   const notes = (spec as {annotate?: Mark[]}).annotate;
   const errors = [...verb.errors(spec), ...marksErrors(notes).map(e => `${spec.verb}: ${e}`)];
   if (errors.length) return {errors};

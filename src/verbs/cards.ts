@@ -29,6 +29,9 @@ export type Card = {
   anchors?: string;
   /** Offered for its subjects whatever the concept is about (the general props: a thinker, a stopwatch, a speedometer). */
   always?: boolean;
+  /** Its numbers are the picture (digits marked significant, powers of M, L and T): it is never illustrative, which
+   * would hide them all (2026-10-29: three sig_figs scenes showed only the underlines under blank digits). */
+  numeric?: boolean;
 };
 
 const window = {x: '[low, high] x window', y: '[low, high] y window', step: 'optional [x step, y step] for the grid'};
@@ -399,6 +402,7 @@ export const CARDS: Record<string, Card> = {
       panel: 'false: no side panel', seconds: '4 to 20 (default 10)', title: 'short title'},
     anchors: 'each row by its id (f0, left, r0, eqM, solved, uL...), verdict',
     example: {verb: 'dimensions', title: 'Period of a pendulum', mode: 'deduce', quantity: 'period', depends: ['length', 'mass', 'g']},
+    numeric: true,
     status: 'trial',
   },
   sig_figs: {
@@ -414,6 +418,7 @@ export const CARDS: Record<string, Card> = {
       panel: 'false: no side panel', seconds: '4 to 20 (default 10)', title: 'short title'},
     anchors: 'n0, n1, ... (each number), result',
     example: {verb: 'sig_figs', title: 'Dividing measurements', mode: 'divide', numbers: ['4.237', '2.51'], units: ['g', 'cm³'], unit: 'g cm⁻³'},
+    numeric: true,
     status: 'trial',
   },
   angle_measure: {

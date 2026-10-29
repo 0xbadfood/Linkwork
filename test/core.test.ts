@@ -911,6 +911,14 @@ test('dimensions: formulas, consistency, a deduced relation and a unit conversio
   assert.match(errors({mode: 'formula', quantity: 'speed', factors: [['velocty', 1]]}), /'velocty' is not a known quantity/);
 });
 
+test('a verb whose numbers are the picture is never illustrative', () => {
+  const digits = compile({verb: 'sig_figs', mode: 'count', numbers: ['0.0025'], illustrative: true} as any);
+  assert.equal(digits.scene, undefined);
+  assert.match(digits.errors.join(' '), /never illustrative/);
+  assert.match(compile({verb: 'dimensions', mode: 'formula', quantity: 'force', factors: [['mass', 1], ['acceleration', 1]], illustrative: true} as any).errors.join(' '), /never illustrative/);
+  assert.deepEqual(compile({verb: 'sig_figs', mode: 'count', numbers: ['0.0025']} as any).errors, []);
+});
+
 test('sig_figs: the book\'s rules for significant figures, operations and rounding', async () => {
   // 2026-10-29, Class 11 Units and Measurement (keph1-01 C3–C4)
   const {sigCount, roundSig, operate} = await import('../src/verbs/sig-figs.ts');
