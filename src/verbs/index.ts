@@ -31,11 +31,14 @@ import {planeMotion, planeMotionErrors, type PlaneMotionSpec} from './plane-moti
 import {forces, forcesErrors, type ForcesSpec} from './forces.ts';
 import {work, workErrors, type WorkSpec} from './work.ts';
 import {energy, energyErrors, type EnergySpec} from './energy.ts';
+import {centreOfMass, comErrors, type ComSpec} from './com.ts';
+import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
+import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
-  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec;
+  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -103,6 +106,12 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'work done by a constant force, computed: a body pulled or pushed through a displacement d at θ to the motion, with kinetic friction; W = F d cos θ (positive, zero or negative), −f d for friction, none for N and mg; bars of the net work done and the kinetic energy grow together (the work-energy theorem); the final speed, time and power'} as Verb<WorkSpec>,
   energy: {errors: energyErrors, compile: energy,
     about: 'mechanical energy, computed: a ball dropped, a block or ball down a slope (with friction: heat; or a straight track and a curve: the same speed by either path), a pendulum swinging, a block running into a spring or let go from one; live bars of kinetic, potential (mgh or ½kx²), heat and total energy'} as Verb<EnergySpec>,
+  centre_of_mass: {errors: comErrors, compile: centreOfMass,
+    about: 'the centre of mass, computed: point masses on a line or in a plane (X = Σmx / Σm, nearer the heavier); uniform rods, rectangles, discs, rings and triangles (symmetry lines or medians meeting at the CM) and laminas made of several of them; a projectile breaking up in flight, its pieces flying apart while their CM keeps to the parabola'} as Verb<ComSpec>,
+  moments: {errors: momentsErrors, compile: moments,
+    about: 'turning effects on a beam, computed: weights and pushes on a see-saw, lever or metre rule on a pivot, clockwise and anticlockwise moments balanced (the principle of moments) with one unknown force or distance solved, or the beam tipping; a beam on two supports with both reactions solved; a lever\'s mechanical advantage; a couple turning a free rod'} as Verb<MomentsSpec>,
+  rotation: {errors: rotationErrors, compile: rotation,
+    about: 'a rigid body turning about a fixed axis, computed: a disc, ring, wheel, sphere or rod seen end-on, I from the book\'s formulas, ω and θ under a constant α or a torque (τ = r F sin φ, α = τ / I), particles sharing ω with v = ωr, angular momentum and rotational kinetic energy, the work τθ and power τω; two masses sliding along a spinning rod with L = Iω conserved'} as Verb<RotationSpec>,
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,

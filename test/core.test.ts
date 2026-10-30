@@ -1215,3 +1215,59 @@ test('stage: every item\'s name is drawn, readable, inside the frame and kept in
     events: [{t: 0.5, item: 'n', kind: 'collide', with: 'c', speed: 3, elastic: true, after: 0}]} as any).scene!.props.find((p: any) => p.id === 'o-n') as any;
   assert.ok(drawn.size >= 0.045 * 1920, `a colliding ball is drawn ${drawn.size} px wide`);
 });
+
+test('vector_add cross: the parallelogram\'s area, out of the page anticlockwise, reversed order reverses it', () => {
+  const r = compile({verb: 'vector_add', mode: 'cross', a: [3, 0], b: [1, 2]} as any);
+  assert.equal((r.scene!.meta as any).cross, 6);
+  assert.ok((r.scene!.meta as any).facts.some((x: string) => /out of the page/.test(x)));
+  assert.equal((compile({verb: 'vector_add', mode: 'cross', a: [1, 2], b: [3, 0]} as any).scene!.meta as any).cross, -6);
+  assert.match(compile({verb: 'vector_add', mode: 'cross', a: [1, 2]} as any).errors.join(), /cross needs b/);
+});
+
+test('centre_of_mass reproduces the book: Example 6.1 particles, the L-shaped lamina, a burst keeps to the parabola', () => {
+  // Example 6.1: 100 g, 150 g, 200 g at the corners of a 0.5 m equilateral triangle
+  const tri = compile({verb: 'centre_of_mass', masses: [{m: 100, x: 0, y: 0}, {m: 150, x: 0.5, y: 0}, {m: 200, x: 0.25, y: 0.25 * Math.sqrt(3)}]} as any).scene!;
+  const [X, Y] = (tri.meta as any).cm;
+  assert.ok(Math.abs(X - 5 / 18) < 1e-6 && Math.abs(Y - Math.sqrt(3) / 9) < 1e-6, `CM (${X}, ${Y})`);
+  // Example 6.3: three 1 m squares in an L: (5/6, 5/6) m
+  const L = compile({verb: 'centre_of_mass', bodies: [{shape: 'rectangle', at: [0.5, 0.5]}, {shape: 'rectangle', at: [1.5, 0.5]}, {shape: 'rectangle', at: [0.5, 1.5]}]} as any).scene!;
+  assert.ok((L.meta as any).cm.every((v: number) => Math.abs(v - 5 / 6) < 1e-6), `L-shape CM ${(L.meta as any).cm}`);
+  // a burst at the top: piece 2's velocity from momentum; the CM stays on the parabola
+  const b = compile({verb: 'centre_of_mass', explode: {v0: 30, angle: 60, pieces: [1, 2], v1: [0, 10]}} as any).scene!;
+  const facts = (b.meta as any).facts.join(' | ');
+  assert.match(facts, /piece 2 \(2 kg\) just after: \(22\.50, −5\) m\/s/);
+  const err = (spec: object) => compile({verb: 'centre_of_mass', ...spec} as any).errors.join(' ');
+  assert.match(err({masses: [{m: 1, x: 0}], bodies: [{shape: 'disc'}]}), /exactly one/);
+  assert.match(err({bodies: [{shape: 'rod'}, {shape: 'disc'}]}), /needs m for every body/);
+  assert.match(err({explode: {v0: 10, angle: 45, pieces: [1, 1], v1: [0, 0], at: 9}}), /time in flight/);
+});
+
+test('moments reproduces the book: reactions on two knife edges, a see-saw balanced, a lever\'s advantage, tipping', () => {
+  const facts = (spec: object) => (compile({verb: 'moments', ...spec} as any).scene!.meta as any).facts.join(' | ');
+  // Example 6.6 (g = 9.8): a 70 cm, 4 kg bar on knife edges 10 cm from each end, 6 kg at 30 cm: R1 ≈ 55 N, R2 ≈ 43 N
+  assert.match(facts({length: 0.7, supports: [0.1, 0.6], beam_mass: 4, forces: [{name: 'load', mass: 6, x: 0.3}]}), /support 1 .* = 54\.88 N.*support 2 .* = 43\.12 N/);
+  assert.match(facts({length: 4, pivot: 2, forces: [{name: 'W1', mass: 30, x: 0.5}, {name: 'W2', mass: 45, x: '?'}]}), /W2 = 3 m from the left end/);
+  assert.match(facts({length: 1.2, pivot: 0.2, forces: [{name: 'load', magnitude: 600, x: 0}, {name: 'effort', magnitude: '?', x: 1.2}], effort: 'effort', load: 'load'}),
+    /mechanical advantage = 5.*effort = 120 N/);
+  const tipped = compile({verb: 'moments', length: 2, pivot: 1, forces: [{name: 'A', mass: 2, x: 0.2}, {name: 'B', mass: 1, x: 1.9}]} as any).scene!;
+  assert.ok(tipped.props.find((p: any) => p.id === 'beam')!.keys, 'an unbalanced beam tips');
+  const err = (spec: object) => compile({verb: 'moments', ...spec} as any).errors.join(' ');
+  assert.match(err({length: 1.2, pivot: 0.2, forces: [{name: 'load', magnitude: 600, x: 0, dir: 'up'}, {name: 'effort', magnitude: '?', x: 1.2}]}), /turns the beam the same way/);
+  assert.match(err({length: 1, forces: [{name: 'a', magnitude: '?', x: 0.2}, {name: 'b', magnitude: 1, x: '?'}]}), /one thing at a time/);
+  assert.match(err({length: 1, supports: [0.4, 0.5], forces: [{name: 'a', magnitude: 10, x: 0}]}), /tips off/);
+  assert.equal(err({couple: {magnitude: 10, d: 0.5}}), '');
+});
+
+test('rotation reproduces the book: a flywheel pulled by a cord, and angular momentum conserved as masses slide in', () => {
+  // Example 6.13: 20 kg, 20 cm flywheel, 25 N pull: I = 0.4 kg m², α = 12.5 rad/s²; 2 m of cord (θ = 10 rad): 50 J
+  const fw = (compile({verb: 'rotation', body: 'disc', mass: 20, r: 0.2, torque: {F: 25}, t: Math.sqrt(20 / 12.5)} as any).scene!.meta as any).facts.join(' | ');
+  assert.match(fw, /I = 0\.40 kg m²/); assert.match(fw, /α = 12\.50 rad\/s²/); assert.match(fw, /τθ = 50 J/); assert.match(fw, /ω = 15\.81 rad\/s/);
+  const sl = (compile({verb: 'rotation', body: 'rod', length: 2, mass: 1, omega0: 2, slide: {m: 1, r1: 0.9, r2: 0.3}} as any).scene!.meta as any).facts.join(' | ');
+  // I = 1/3 + 2 r²: 1.953 → 0.513 kg m²; ω₂ = I₁ω₁ / I₂
+  assert.match(sl, /ω before = 2 rad\/s, after = 7\.61 rad\/s/);
+  const err = (spec: object) => compile({verb: 'rotation', ...spec} as any).errors.join(' ');
+  assert.match(err({body: 'disc', mass: 1}), /something must turn it/);
+  assert.match(err({body: 'disc', mass: 1, omega0: 2, alpha: -1, t: 5}), /it stops after 2 s/);
+  assert.match(err({body: 'disc', mass: 1, omega0: 2, slide: {m: 1, r1: 0.4, r2: 0.1}}), /set body rod/);
+  assert.match(err({body: 'disc', axis: 'end', mass: 1, omega0: 1}), /axis end is for a rod/);
+});

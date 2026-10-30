@@ -37,11 +37,15 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `secant_to_tangent`: Q slides into P and the slope of PQ approaches f′(a).
 - `area_under`: the area swept and measured, then Riemann sums closing in on the exact integral.
 - `vector_add`: vectors to scale: adding (head to tail or parallelogram), subtracting, multiplying by a number, equal
-  vectors, resolving into components with î and ĵ, and adding by components.
+  vectors, resolving into components with î and ĵ, adding by components, the scalar product a·b and the vector
+  product a × b (the parallelogram's area, ⊙ or ⊗ by the right-hand rule).
 - `plane_motion`: a mover in a plane with its position vector, tangent velocity, acceleration and velocity components
 - `forces`: a free-body diagram drawn to scale, unknown forces solved by the second law (equilibrium or a given acceleration), components, net force and the closed force triangle; friction building up to slipping under a growing push or a tilting plane
 - `work`: work done by a constant force on a moving body: W = F d cos θ (positive, zero or negative), −f d for friction, the net work and kinetic energy growing together (the work-energy theorem), final speed and power
 - `energy`: mechanical energy as a body moves (a drop, a slope with or without friction, two tracks from one height, a pendulum, a block into a spring): live bars of kinetic, potential, heat and total energy, every speed and compression computed
+- `centre_of_mass`: the CM of point masses (X = Σmx / Σm), of uniform rods, rectangles, discs, rings and triangles (symmetry lines or medians) and laminas built of them; a projectile bursting in flight, its CM keeping to the parabola
+- `moments`: a beam on a pivot or two supports: clockwise and anticlockwise moments balanced (one unknown force or distance solved) or tipping, both support reactions, a lever's mechanical advantage, a couple turning a free rod
+- `rotation`: a rigid body turning about a fixed axis: I from the book's formulas, ω and θ under α or a torque (α = τ / I), v = ωr on particles, L = Iω, ½Iω², work τθ and power τω; masses sliding along a spinning rod with L conserved
   (constant acceleration, x(t) and y(t), or a circle); Δr/Δt becoming the velocity; uniform circular motion with Δv.
 - `graph` (trial): any quantity against another, from a formula in the axis's own variable or the book's data; a tracer
   with readouts, a tangent with its slope, a shaded area, marked points (v–t, Boyle's law, periodic trends, heating curves).

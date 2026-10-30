@@ -82,3 +82,8 @@ caught or a reviewer saw while building the examples and the first pilot film (h
   captions, label sizes) must hold at 960 × 1080 too, and the header test compiles the frame() verbs that way. (2026-10-30)
 - A mover drawn to scale on a stage wide enough for its journey is a speck (a 1 m cart on a 20 m floor, 4% of the frame).
   Draw a ground mover at least 8% of the stage, as a textbook figure would; a projectile stays small so its path reads. (2026-10-30)
+- An item's name is the planner's own words, like an annotation: the stage writes names a body can't hold (a ball draws
+  none, a long name crammed onto a small cart) beside the item, inside the frame, and `illustrate()` keeps them even with
+  a digit (m1). Two movers' names go on opposite sides of the ground so they never run together. (2026-10-30)
+- A solved unknown stays a name until the moment it is solved: printing the moment sums with its value first gave the
+  answer away before the narration reached it. A force on a tipping beam stays vertical, riding with its point. (2026-10-30)

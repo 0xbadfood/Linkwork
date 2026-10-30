@@ -11,7 +11,7 @@ import {n2, panel, scene, text} from './calculus.ts';
 
 /** A vector by components [x, y], or by magnitude and direction (degrees anticlockwise from +x). */
 export type V = [number, number] | {magnitude: number; angle: number};
-export const MODES = ['add', 'subtract', 'scale', 'unit', 'equal', 'resolve', 'components', 'dot'] as const;
+export const MODES = ['add', 'subtract', 'scale', 'unit', 'equal', 'resolve', 'components', 'dot', 'cross'] as const;
 export type VectorSpec = {verb: 'vector_add'; mode?: (typeof MODES)[number]; a: V; b?: V; method?: 'triangle' | 'parallelogram';
   factors?: number[]; at?: [number, number][]; names?: [string, string]; unit?: string; x?: [number, number]; y?: [number, number];
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
@@ -51,6 +51,7 @@ function points(s: VectorSpec): [number, number][] {
     case 'scale': return [[0, 0], a, ...(s.factors ?? [2, -1]).map(k => [k * a[0], k * a[1]] as [number, number])];
     case 'unit': { const m = Math.hypot(...a) || 1; return [[0, 0], a, [a[0] / m, a[1] / m]]; }
     case 'dot': { const q = (a[0] * b[0] + a[1] * b[1]) / ((a[0] * a[0] + a[1] * a[1]) || 1); return [[0, 0], a, b, [q * a[0], q * a[1]]]; }
+    case 'cross': return [[0, 0], a, b, sum];
     case 'equal': return [[0, 0], a, ...(s.at ?? [[2, 1]]).flatMap(p => [p, [p[0] + a[0], p[1] + a[1]]] as [number, number][])];
     case 'resolve': return [[0, 0], a, [a[0], 0], [0, a[1]]];
     case 'components': return [[0, 0], a, b, sum, [a[0], 0], [0, a[1]], [b[0], 0], [0, b[1]]];
@@ -74,7 +75,7 @@ export function vectorErrors(s: VectorSpec): string[] {
   const e: string[] = [], mode = s.mode ?? 'add';
   if (!MODES.includes(mode)) return [`vector_add: mode is one of ${MODES.join(', ')}`];
   if (!okV(s.a)) return ['vector_add: a is [x, y] or {magnitude, angle} (angle in degrees from +x)'];
-  const needsB = ['add', 'subtract', 'components', 'dot'].includes(mode);
+  const needsB = ['add', 'subtract', 'components', 'dot', 'cross'].includes(mode);
   if (needsB && !okV(s.b)) e.push(`vector_add: ${mode} needs b as [x, y] or {magnitude, angle}`);
   if (s.method !== undefined && !['triangle', 'parallelogram'].includes(s.method)) e.push('vector_add: method is triangle or parallelogram');
   if (s.factors !== undefined && (!Array.isArray(s.factors) || !s.factors.length || s.factors.length > 3 || !s.factors.every(isNum)))
@@ -246,6 +247,41 @@ export function vectorAdd(s: VectorSpec): Scene {
     return scene(s, W, H, 7.4, plane, props, [], {verb: 'vector_add', facts, dot: round(dot, 6)});
   }
 
+  if (mode === 'cross') {
+    // A × B = AB sin θ n̂: its size is the area of the parallelogram on A and B; it points out of the page when B is
+    // anticlockwise from A (curl the right hand's fingers from A to B, the thumb gives n̂), into it the other way. For
+    // vectors in the page, A × B = (AxBy − AyBx) k̂ (System of Particles and Rotational Motion, Class 11, 2026-10-30).
+    const z = a[0] * b[1] - a[1] * b[0], turn = (((deg(...b) - deg(...a)) % 360 + 540) % 360 - 180), theta = Math.abs(turn);
+    const out = z > 1e-9, none = Math.abs(z) < 1e-9, fill = none ? 'muted' : out ? 'good' : 'bad';
+    props.push({id: 'para', type: 'polyline', plane: 'p', points: [[0, 0], a, [a[0] + b[0], a[1] + b[1]], b], closed: true,
+      style: {fill, stroke: fill, width: 2 * k, opacity: 0.25}, show: [3, 1e9], fade: 0.6} as Prop,
+      dashed('pa', a, [a[0] + b[0], a[1] + b[1]], 3), dashed('pb', b, [a[0] + b[0], a[1] + b[1]], 3));
+    props.push(arrow('a', [0, 0], a, 'accent', 0.6), arrow('b', [0, 0], b, 'cool', 1.4),
+      label('la', [0, 0], a, A, 'accent', 0.6, -1), label('lb', [0, 0], b, B, 'cool', 1.4, 1),
+      arc('th', 0.18 * Math.max(span, 1) * 0.6, deg(...a), deg(...a) + turn, 2.2, 'ink'));
+    const mid = (deg(...a) + turn / 2) * DEG, rr = 0.3 * Math.max(span, 1) * 0.6;
+    const [tx, ty] = toScene(plane, [rr * Math.cos(mid), rr * Math.sin(mid)]);
+    props.push(text('lth', tx, ty + 10 * k, 'θ', 32 * k, {weight: 700, align: 'middle', show: [2.4, 1e9]}));
+    // the product at the parallelogram's middle: ⊙ (towards you) or ⊗ (away), with its name
+    if (!none) {
+      const [cx, cy] = toScene(plane, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]), r = 22 * k;
+      props.push({id: 'n', type: 'circle', x: cx, y: cy, r, style: {fill: 'paper', stroke: fill, width: 4 * k}, show: [4.2, 1e9], fade: 0.3} as Prop);
+      if (out) props.push({id: 'n-dot', type: 'circle', x: cx, y: cy, r: 6 * k, style: {fill}, show: [4.2, 1e9], fade: 0.3} as Prop);
+      else for (const [i, d] of [[1, 1], [1, -1]].entries()) props.push({id: `n-x${i}`, type: 'line', x1: cx - 0.7 * r * d[0], y1: cy - 0.7 * r * d[1],
+        x2: cx + 0.7 * r * d[0], y2: cy + 0.7 * r * d[1], style: {stroke: fill, width: 4 * k}, show: [4.2, 1e9], fade: 0.3} as Prop);
+      props.push(text('ln', cx, cy + r + 34 * k, `${A} × ${B}`, 30 * k, {weight: 700, align: 'middle', style: {fill}, show: [4.4, 1e9]}));
+    }
+    line('l1', `${given(A, s.a)};  ${given(B, s.b!)}`, 0.6);
+    line('l2', `|${A} × ${B}| = ${A} ${B} sin θ: the area of the parallelogram on ${A} and ${B}`, 3, {style: {fill}});
+    line('l3', none ? `θ = ${f(theta)}°: sin θ = 0, so ${A} × ${B} = 0 (parallel vectors)` : `Curl the right hand's fingers from ${A} to ${B}: the thumb points ${out ? 'out of the page (⊙)' : 'into the page (⊗)'}`, 4.2, {style: {fill}});
+    line('l4', `θ = ${f(theta)}°;  |${A} × ${B}| = ${f(magA)} × ${f(magB)} × sin ${f(theta)}° = ${f(Math.abs(z))}${s.unit ? ` ${s.unit}²` : ''}`, 5, {weight: 700});
+    if (!polar(s.a) && !polar(s.b!)) line('l5', `By components: (${A}x ${B}y − ${A}y ${B}x) k̂ = (${f(a[0])} × ${f(b[1])} − ${f(a[1])} × ${f(b[0])}) k̂ = ${f(z)} k̂`, 5.6);
+    line('l6', `A vector, perpendicular to both. ${B} × ${A} = −${A} × ${B}: the order matters.`, 6.2, {style: {fill: 'muted'}});
+    facts.push(`|${A} × ${B}| = ${A}${B} sin θ = ${f(Math.abs(z))}`, `angle from ${A} to ${B} = ${f(theta)}° (${turn >= 0 ? 'anticlockwise' : 'clockwise'})`,
+      none ? `${A} × ${B} = 0` : `${A} × ${B} points ${out ? 'out of the page (+k̂)' : 'into the page (−k̂)'}`, `${A} × ${B} = ${f(z)} k̂`,
+      `${B} × ${A} = ${f(-z)} k̂`, `area of the parallelogram on ${A} and ${B} = ${f(Math.abs(z))}`);
+    return scene(s, W, H, 7.6, plane, props, [], {verb: 'vector_add', facts, cross: round(z, 6)});
+  }
   if (mode === 'equal') {
     const tails = s.at ?? [[2, 1]];
     props.push(arrow('a', [0, 0], a, 'accent', 0.6), label('la', [0, 0], a, A, 'accent', 0.6, 1));
