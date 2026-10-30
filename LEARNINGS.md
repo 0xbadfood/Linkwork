@@ -87,3 +87,5 @@ caught or a reviewer saw while building the examples and the first pilot film (h
   a digit (m1). Two movers' names go on opposite sides of the ground so they never run together. (2026-10-30)
 - A solved unknown stays a name until the moment it is solved: printing the moment sums with its value first gave the
   answer away before the narration reached it. A force on a tipping beam stays vertical, riding with its point. (2026-10-30)
+- A field named like a common scene field takes its place: gravity_law's `height` (km above the surface) became the
+  scene's pixel height and drew the graph at 3200 px. Name a physical field so it can't clash (`altitude`, `depth`).

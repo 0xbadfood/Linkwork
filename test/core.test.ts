@@ -1252,6 +1252,37 @@ test('centre_of_mass reproduces the book: Example 6.1 particles, the L-shaped la
   assert.match(err({bodies: [{shape: 'rectangle'}, {shape: 'rectangle', at: [2, 0]}], gravity: 'uniform'}), /for one body/);
 });
 
+test('orbit reproduces the book: equal areas, T² ∝ a³, Newton\'s cannon, a satellite\'s speed, period and energies', () => {
+  const meta = (spec: object) => compile({verb: 'orbit', ...spec} as any).scene!.meta as any;
+  const kep = meta({kind: 'kepler', e: 0.5, show: ['areas', 'speeds']});
+  assert.ok(Math.abs(kep.areas[0] - kep.areas[1]) < 0.002 * kep.areas[0], `areas ${kep.areas}`);
+  assert.ok(Math.abs(kep.ratio - 3) < 1e-9);                           // vP / vA = (1 + e) / (1 − e)
+  assert.ok(meta({kind: 'periods', planets: [{name: 'Earth', a: 1}, {name: 'Mars', a: 1.524}]}).ratios.every((r: number) => Math.abs(r - 1) < 1e-9));
+  const cannon = meta({kind: 'launch', speeds: [6, 7.91, 9.5, 11.2]});
+  assert.ok(Math.abs(cannon.v1 - 7.91) < 0.01 && Math.abs(cannon.ve - 11.18) < 0.01, `v1 ${cannon.v1}, ve ${cannon.ve}`);
+  assert.deepEqual(cannon.kinds, ['falls back', 'circular orbit', 'elliptical orbit', 'escapes']);
+  // a satellite 400 km up: about 7.67 km/s, 92 minutes; E = −KE, PE = −2 KE
+  const sat = compile({verb: 'orbit', kind: 'satellite', h: 400, m: 400, show: ['energy']} as any).scene!.meta as any;
+  assert.ok(Math.abs(sat.v - 7.67) < 0.01 && Math.abs(sat.T * 60 - 92.4) < 0.2, `v ${sat.v}, T ${sat.T}`);
+  assert.match(sat.facts.join(' | '), /KE = 1\.18 × 10¹⁰ J \| PE = −2\.35 × 10¹⁰ J \| total energy E = −1\.18 × 10¹⁰ J/);
+  // geostationary: 35 900 km up turns once a day
+  assert.ok(Math.abs(meta({kind: 'satellite', h: 35900}).T - 24) < 0.2);
+  const err = (spec: object) => compile({verb: 'orbit', ...spec} as any).errors.join(' ');
+  assert.match(err({kind: 'kepler', e: 1.2}), /eccentricity/);
+  assert.match(err({kind: 'launch', speeds: []}), /1 to 5 launch speeds/);
+  assert.match(err({kind: 'warp'}), /kind is one of/);
+});
+
+test('gravity_law: F = G m1 m2 / r², a quarter at twice the distance; g inside and outside the Earth', () => {
+  const law = compile({verb: 'gravity_law', m1: 100, m2: 50, rs: [1, 2]} as any).scene!.meta as any;
+  assert.ok(Math.abs(law.F[0] - 6.67e-11 * 5000) < 1e-15 && Math.abs(law.F[0] / law.F[1] - 4) < 1e-9);
+  const g = (compile({verb: 'gravity_law', profile: true, altitude: 3200, depth: 2000} as any).scene!.meta as any).facts.join(' | ');
+  assert.match(g, /g at height 3200 km = 4\.35 m\/s² \| g at depth 2000 km = 6\.73 m\/s²/);
+  const err = (spec: object) => compile({verb: 'gravity_law', ...spec} as any).errors.join(' ');
+  assert.match(err({m1: 1, m2: 1, rs: [2, 1]}), /each farther than the last/);
+  assert.match(err({profile: true, depth: 9000}), /depth is at most the radius/);
+});
+
 test('a name too long says its length and the limit, so a planner can shorten it', () => {
   // C9 of keph1-06 (2026-10-30): "name is short" alone, and the planner lengthened the names four tries running
   const err = (spec: object) => compile(spec as any).errors.join(' ');
@@ -1289,4 +1320,11 @@ test('rotation reproduces the book: a flywheel pulled by a cord, and angular mom
   assert.match(err({body: 'disc', mass: 1, omega0: 2, alpha: -1, t: 5}), /it stops after 2 s/);
   assert.match(err({body: 'disc', mass: 1, omega0: 2, slide: {m: 1, r1: 0.4, r2: 0.1}}), /set body rod/);
   assert.match(err({body: 'disc', axis: 'end', mass: 1, omega0: 1}), /axis end is for a rod/);
+});
+
+test("no verb's own field shares a name with a scene's size or style (width, height, fps, theme)", async () => {
+  // 2026-10-30: gravity_law's height in km became the scene's pixel height
+  const {CARDS} = await import('../src/verbs/cards.ts');
+  for (const [name, card] of Object.entries(CARDS))
+    for (const field of ['width', 'height', 'fps', 'theme']) assert.ok(!(field in (card.fields ?? {})), `${name} has a field named ${field}`);
 });

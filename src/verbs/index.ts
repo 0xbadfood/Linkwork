@@ -32,13 +32,14 @@ import {forces, forcesErrors, type ForcesSpec} from './forces.ts';
 import {work, workErrors, type WorkSpec} from './work.ts';
 import {energy, energyErrors, type EnergySpec} from './energy.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
+import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
-  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec;
+  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -112,6 +113,10 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'turning effects on a beam, computed: weights and pushes on a see-saw, lever or metre rule on a pivot, clockwise and anticlockwise moments balanced (the principle of moments) with one unknown force or distance solved, or the beam tipping; a beam on two supports with both reactions solved; a lever\'s mechanical advantage; a couple turning a free rod'} as Verb<MomentsSpec>,
   rotation: {errors: rotationErrors, compile: rotation,
     about: 'a rigid body turning about a fixed axis, computed: a disc, ring, wheel, sphere or rod seen end-on, I from the book\'s formulas, ω and θ under a constant α or a torque (τ = r F sin φ, α = τ / I), particles sharing ω with v = ωr, angular momentum and rotational kinetic energy, the work τθ and power τω; two masses sliding along a spinning rod with L = Iω conserved'} as Verb<RotationSpec>,
+  orbit: {errors: orbitErrors, compile: orbit,
+    about: 'orbits under gravity, computed: a planet on its Kepler ellipse with the Sun at a focus, sweeping equal areas in equal times, fastest at perihelion; several planets with T² / a³ the same; Newton\'s cannon, launch speeds that fall back, circle (v₁ = √(GM/R)), go round an ellipse or escape (vₑ = √(2GM/R)); a satellite in a circular orbit with its speed, period and energies (E = −GMm / 2r)'} as Verb<OrbitSpec>,
+  gravity_law: {errors: gravityLawErrors, compile: gravityLaw,
+    about: 'Newton\'s law of gravitation, computed: two masses pulling each other equally, F = G m₁ m₂ / r², moved apart step by step (twice the distance, a quarter of the force); or g against distance from a planet\'s centre, growing as r inside and falling as 1 / r² outside, at a given height or depth'} as Verb<GravityLawSpec>,
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,
