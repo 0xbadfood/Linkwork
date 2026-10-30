@@ -16,7 +16,7 @@ import {n2} from './calculus.ts';
 
 type P2 = [number, number];
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const num = (v: number) => (v !== 0 && (Math.abs(v) < 1e-3 || Math.abs(v) >= 1e5) ? sci(v) : n2(+v.toPrecision(3), Math.max(0, 2 - Math.floor(Math.log10(Math.abs(v) || 1)))));
+export const num = (v: number) => (v !== 0 && (Math.abs(v) < 1e-3 || Math.abs(v) >= 1e5) ? sci(v) : n2(+v.toPrecision(3), Math.max(0, 2 - Math.floor(Math.log10(Math.abs(v) || 1)))));
 const deg = (v: number) => `${n2(+v.toPrecision(4), 1)} °C`;
 const lookup = <T>(table: Record<string, T>, name: unknown) => (typeof name === 'string' ? table[name.toLowerCase()] : undefined);
 const heads = (table: Record<string, unknown>) => Object.keys(table).join(', ');
@@ -29,7 +29,7 @@ export const CONDUCTIVITY: Record<string, number> = {silver: 406, copper: 385, a
 const R_GAS = 8.31, SIGMA = 5.67e-8, WIEN = 2.9e-3;
 
 /** A pair of axes with names; returns the box's mapping from the 0–1 square. */
-function axes(c: ReturnType<typeof kit>, x0: number, y0: number, x1: number, y1: number, xn: string, yn: string) {
+export function axes(c: ReturnType<typeof kit>, x0: number, y0: number, x1: number, y1: number, xn: string, yn: string) {
   const {k, seg, label} = c;
   seg('axx', x0, y1, x1, y1, {stroke: 'ink', width: 3 * k}); seg('axy', x0, y0, x0, y1, {stroke: 'ink', width: 3 * k});
   label('axxn', x1, y1 + 38 * k, xn, {align: 'end', style: {fill: 'muted'}});
@@ -37,7 +37,7 @@ function axes(c: ReturnType<typeof kit>, x0: number, y0: number, x1: number, y1:
   return (u: number, v: number): P2 => [x0 + u * (x1 - x0), y1 - v * (y1 - y0)];
 }
 /** A polyline drawing itself on between two times. */
-const curve = (id: string, points: P2[], stroke: string, k: number, from = 0.3, to = 2.2, extra: Record<string, unknown> = {}): Prop =>
+export const curve = (id: string, points: P2[], stroke: string, k: number, from = 0.3, to = 2.2, extra: Record<string, unknown> = {}): Prop =>
   ({id, type: 'polyline', points, style: {stroke, width: 4 * k, ...(extra.dash ? {dash: extra.dash} : {})}, layer: 4, draw: 1, keys: {draw: [[from, 0], [to, 1, 'linear']]}} as unknown as Prop);
 /** A heat-coloured strip: cold blue to hot red, u(x) from 0 to 1. */
 function ramp(c: ReturnType<typeof kit>, id: string, x: number, y: number, w: number, h: number, u: (f: number) => number, extra: Partial<Prop> = {}) {

@@ -1510,3 +1510,25 @@ test('a mark at a large disc is written beside it, not across it', () => {
   assert.ok(ball, 'the radiating body is a filled disc');
   for (const p of r.scene.props.filter((q: any) => q.id.endsWith('-label'))) assert.ok(p.x >= ball.x + ball.r, `${p.text} starts at ${p.x}, inside the disc`);
 });
+
+test('thermodynamics verbs reproduce the book: 1 g of water boiling, the heater, the formulas', () => {
+  const meta = (s: unknown) => { const r: any = compile(s as never); assert.ok(r.scene, String(r.errors)); assert.deepEqual(check(r.scene), [], JSON.stringify(s)); return r.scene.meta; };
+  const near = (a: number, b: number, tol = 0.002) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${a} is not ${b}`);
+  const water = meta({verb: 'gas_process', kind: 'first_law', Q: 2256, P: 1.013e5, dV: 1670e-6});   // §11.5
+  near(water.W, 169.2); near(water.U, 2086.8);
+  near(meta({verb: 'gas_process', kind: 'first_law', Q: 100, W: 75}).U, 25);                         // Exercise 11.7, per second
+  const iso = meta({verb: 'gas_process', kind: 'isothermal', mu: 2, T: 300, V1: 0.01, V2: 0.03});
+  near(iso.W, 2 * 8.31 * 300 * Math.log(3)); assert.equal(iso.dU, 0); near(iso.Q, iso.W);
+  const adi = meta({verb: 'gas_process', kind: 'adiabatic', T: 300, V1: 0.01, V2: 0.02, gamma: 1.4});
+  near(adi.T2, 300 * 0.5 ** 0.4); near(adi.Q + 1, 1, 1e-6); near(adi.P2, adi.P1 * 0.5 ** 1.4);
+  const bar = meta({verb: 'gas_process', kind: 'isobaric', T: 300, V1: 0.01, V2: 0.02});
+  near(bar.W, bar.P1 * 0.01); near(bar.T2, 600); near(bar.Q, bar.W + bar.dU);
+  assert.equal(meta({verb: 'gas_process', kind: 'isochoric', T: 300, V1: 0.01, T2: 450}).W, 0);
+  const cmp = meta({verb: 'gas_process', kind: 'compare', T: 300, V1: 0.01, V2: 0.02}); assert.ok(cmp.Pa2 < cmp.P2);
+  near(meta({verb: 'heat_engine', kind: 'engine', Q1: 100, Q2: 60}).eta, 0.4);
+  near(meta({verb: 'heat_engine', kind: 'refrigerator', Q2: 300, W: 100}).alpha, 3);
+  const car = meta({verb: 'heat_engine', kind: 'carnot', T1: 500, T2: 300}); near(car.eta, 0.4); near(car.ratio, 500 / 300);
+  const fixed = (k: string) => meta({verb: 'gas_process', kind: k, T: 300, V1: 0.01, V2: 0.02, window: {V: 0.05, P: 3e5}}).scale;
+  assert.deepEqual(fixed('isothermal'), fixed('adiabatic'));
+  assert.ok((compile({verb: 'gas_process', kind: 'isothermal', T: 300, V1: 0.01, V2: 0.02, window: {V: 0.015, P: 3e5}} as never) as any).errors.length);
+});

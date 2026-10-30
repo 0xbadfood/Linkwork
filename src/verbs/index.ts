@@ -36,6 +36,7 @@ import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, t
 import {elastic, elasticErrors, type ElasticSpec} from './elastic.ts';
 import {fluidFlow, fluidFlowErrors, fluidPressure, fluidPressureErrors, surfaceErrors, surfaceTension, type FluidFlowSpec, type FluidPressureSpec, type SurfaceSpec} from './fluids.ts';
 import {exchangeErrors, expansionErrors, heatExchange, heatTransfer, temperature, temperatureErrors, thermalExpansion, transferErrors, type ExchangeSpec, type ExpansionSpec, type TemperatureSpec, type TransferSpec} from './thermal.ts';
+import {gasProcess, gasProcessErrors, heatEngine, heatEngineErrors} from './thermodynamics.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
@@ -137,6 +138,10 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'heat taken in and given up, computed from Table 10.3: the same heat raising substances by different amounts, Q = msΔT; a hot body in a calorimeter, heat lost = heat gained, solving a specific heat, a final temperature or a latent heat; ice to steam, temperature against heat with flats where Q = mL'},
   heat_transfer: {errors: transferErrors, compile: heatTransfer,
     about: "how heat moves, computed: conduction along bars end to end in the steady state, H = KAΔT/L, junction temperature; convection in a pot, a sea or land breeze, a pumped loop, with particles riding the current; radiation, H = eσA(T⁴ − Ts⁴); Wien's law on blackbody curves; Newton's law of cooling"},
+  gas_process: {errors: gasProcessErrors, compile: gasProcess,
+    about: 'a gas under a piston and its path on a P–V graph, with the work as the area under it: isothermal, adiabatic, isobaric, isochoric, an isotherm against an adiabat; the first law as heat in, internal energy and work. Every number computed'},
+  heat_engine: {errors: heatEngineErrors, compile: heatEngine,
+    about: 'reservoirs and a working body with arrows as wide as the heats: an engine, η = 1 − Q₂/Q₁; a refrigerator, α = Q₂/W; the Carnot cycle on P–V, its four steps, η = 1 − T₂/T₁'},
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,
