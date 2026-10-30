@@ -1240,6 +1240,16 @@ test('centre_of_mass reproduces the book: Example 6.1 particles, the L-shaped la
   assert.match(err({masses: [{m: 1, x: 0}], bodies: [{shape: 'disc'}]}), /exactly one/);
   assert.match(err({bodies: [{shape: 'rod'}, {shape: 'disc'}]}), /needs m for every body/);
   assert.match(err({explode: {v0: 10, angle: 45, pieces: [1, 1], v1: [0, 0], at: 9}}), /time in flight/);
+  // the centre of gravity: one point however the body is turned; below the CM where g weakens upwards
+  const turned = compile({verb: 'centre_of_mass', bodies: [{shape: 'triangle', vertices: [[0, 0], [2, 0], [0.6, 1.5]]}], turns: [0, 60, 150]} as any).scene!;
+  assert.equal(turned.props.filter(p => /^plumb/.test(p.id)).length, 3);
+  const uni = compile({verb: 'centre_of_mass', bodies: [{shape: 'rectangle', w: 1, h: 2}], gravity: 'uniform'} as any).scene!;
+  assert.ok(!(uni.meta as any).cg && (uni.meta as any).facts.join(' ').includes('centre of gravity at the centre of mass'));
+  const vary = compile({verb: 'centre_of_mass', bodies: [{shape: 'rod', length: 3, angle: 90}], gravity: 'varying'} as any).scene!;
+  const [cgx, cgy] = (vary.meta as any).cg, [cmx, cmy] = (vary.meta as any).cm;
+  assert.ok(Math.abs(cgx - cmx) < 1e-6 && cgy < cmy - 0.1, `CG (${cgx}, ${cgy}) below CM (${cmx}, ${cmy})`);
+  assert.match(err({bodies: [{shape: 'disc'}], turns: [0, 90]}), /looks the same turned/);
+  assert.match(err({bodies: [{shape: 'rectangle'}, {shape: 'rectangle', at: [2, 0]}], gravity: 'uniform'}), /for one body/);
 });
 
 test('moments reproduces the book: reactions on two knife edges, a see-saw balanced, a lever\'s advantage, tipping', () => {

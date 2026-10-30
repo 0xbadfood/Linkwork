@@ -5,6 +5,9 @@
 //   medians) meeting at its CM; several (an L-shaped lamina of squares) each show their own CM, then the combined one;
 // - explode: a projectile breaks into two pieces in flight; the pieces fly apart (momentum conserved: the second
 //   piece's velocity is computed) while their CM keeps to the unbroken parabola, until a piece lands.
+// One body also takes turns (the same body at several orientations, its CG = CM point and the plumb line through it on
+// each: one point however it is turned) or gravity: 'uniform' (equal weight arrows; CG at the CM) or 'varying' (g
+// weaker higher up, exaggerated: the weights' centre, the CG, sits below the CM; 2026-10-30, C9 of keph1-06).
 import type {Actor, Prop, Scene} from '../scene.ts';
 import type {Plane} from '../plane.ts';
 import {toScene} from '../plane.ts';
@@ -18,6 +21,7 @@ export const COM_SHAPES = ['rod', 'rectangle', 'disc', 'ring', 'triangle'] as co
 type Body = {shape: (typeof COM_SHAPES)[number]; at?: P2; length?: number; angle?: number; w?: number; h?: number; r?: number; vertices?: P2[]; m?: number; label?: string};
 export type ComSpec = {verb: 'centre_of_mass'; masses?: {m: number; x: number; y?: number; label?: string}[]; bodies?: Body[];
   explode?: {v0: number; angle: number; g?: number; at?: number; pieces: [number, number]; v1: P2};
+  turns?: number[]; gravity?: 'uniform' | 'varying';
   unit?: string; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const DEG = Math.PI / 180;
@@ -81,7 +85,15 @@ export function comErrors(s: ComSpec): string[] {
     // without masses, mass goes with area: only for flat sheets of one material
     if (s.bodies.length > 1 && s.bodies.some(b => b.m === undefined) && s.bodies.some(b => ['rod', 'ring'].includes(b.shape)))
       e.push('centre_of_mass: a rod or ring with other bodies needs m for every body (without m, mass is taken as area, for flat sheets of one material)');
+    if ((s.turns !== undefined || s.gravity !== undefined) && s.bodies.length !== 1) e.push('centre_of_mass: turns and gravity are for one body');
   }
+  if ((s.turns !== undefined || s.gravity !== undefined) && !s.bodies) e.push('centre_of_mass: turns and gravity go with bodies (one body)');
+  if (s.turns !== undefined) {
+    if (!(Array.isArray(s.turns) && s.turns.length >= 2 && s.turns.length <= 4 && s.turns.every(isNum))) e.push('centre_of_mass: turns is 2 to 4 angles in degrees, the first usually 0');
+    if (s.bodies?.some(b => b.shape === 'disc' || b.shape === 'ring')) e.push('centre_of_mass: a disc or ring looks the same turned; use turns with a rod, rectangle or triangle');
+    if (s.gravity === 'varying') e.push("centre_of_mass: turns go with a uniform field (gravity 'uniform' or left out); in a varying field the CG moves in the body as it turns");
+  }
+  if (s.gravity !== undefined && !['uniform', 'varying'].includes(s.gravity)) e.push("centre_of_mass: gravity is 'uniform' or 'varying'");
   if (s.explode) {
     const x = s.explode;
     if (!(isNum(x.v0) && x.v0 > 0) || !(isNum(x.angle) && x.angle > 0 && x.angle < 90)) e.push('centre_of_mass: explode needs v0 (m/s, above 0) and angle (degrees, 0 to 90)');
@@ -154,6 +166,8 @@ export function centreOfMass(s: ComSpec): Scene {
     end = 6;
     return scene(s, W, H, end + 1.2, plane, props, actors, {verb: 'centre_of_mass', facts, cm: [round(X, 6), round(Y, 6)]});
   }
+
+  if (s.bodies && (s.turns || s.gravity)) return gravityScene(s, W, H, k, fr, props, facts, line);
 
   if (s.bodies) {
     const bs = s.bodies.map(bodyOf), Ms = s.bodies.map((b, i) => b.m ?? bs[i].size), M = Ms.reduce((a, b) => a + b, 0);
@@ -237,4 +251,114 @@ export function centreOfMass(s: ComSpec): Scene {
   facts.push(`breaks at t = ${f(fl.tb)} s`, `piece 1 (${f(m1)} kg) just after: (${f(e.v1[0])}, ${f(e.v1[1])}) m/s`, `piece 2 (${f(m2)} kg) just after: (${f(fl.v2[0])}, ${f(fl.v2[1])}) m/s (momentum conserved)`,
     `first piece lands at t = ${f(fl.T)} s`, `CM at that moment (${f(fl.at(fl.T).cm[0])}, ${f(fl.at(fl.T).cm[1])}) m, on the unbroken parabola`, `unbroken range = ${f(e.v0 ** 2 * Math.sin(2 * e.angle * DEG) / g)} m`);
   return scene(s, W, H, end + 2.4, plane, props, actors, {verb: 'centre_of_mass', facts});
+}
+
+const turn = (p: P2, c: P2, deg: number): P2 => {
+  const a = deg * DEG, dx = p[0] - c[0], dy = p[1] - c[1];
+  return [c[0] + dx * Math.cos(a) - dy * Math.sin(a), c[1] + dx * Math.sin(a) + dy * Math.cos(a)];
+};
+
+/** Sample points of a body's mass, evenly spread (a grid over a lamina; along a rod or ring). */
+function samples(b: Body, g: {c: P2; pts: P2[]}): P2[] {
+  const n = 48, out: P2[] = [];
+  if (b.shape === 'rod') for (let i = 0; i <= n; i++) out.push([g.pts[0][0] + (g.pts[1][0] - g.pts[0][0]) * i / n, g.pts[0][1] + (g.pts[1][1] - g.pts[0][1]) * i / n]);
+  else if (b.shape === 'ring') for (let i = 0; i < n * 2; i++) out.push([g.c[0] + (b.r ?? 1) * Math.cos(Math.PI * i / n), g.c[1] + (b.r ?? 1) * Math.sin(Math.PI * i / n)]);
+  else {
+    const xs = g.pts.map(p => p[0]), ys = g.pts.map(p => p[1]), [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const inside = (q: P2) => b.shape === 'disc' ? Math.hypot(q[0] - g.c[0], q[1] - g.c[1]) <= (b.r ?? 1)
+      : g.pts.reduce((c, p, i) => { const r = g.pts[(i + 1) % g.pts.length]; return ((p[1] > q[1]) !== (r[1] > q[1])) && q[0] < (r[0] - p[0]) * (q[1] - p[1]) / (r[1] - p[1]) + p[0] ? !c : c; }, false);
+    for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) { const q: P2 = [x0 + (x1 - x0) * (i + 0.5) / (n + 1), y0 + (y1 - y0) * (j + 0.5) / (n + 1)]; if (inside(q)) out.push(q); }
+  }
+  return out;
+}
+
+/** One body's centre of gravity: turned through several orientations (one CG = CM point, the plumb line through it on
+ * each), or in a uniform or a varying field (weight arrows; with g weaker higher up the CG sits below the CM). */
+function gravityScene(s: ComSpec, W: number, H: number, k: number, fr: ReturnType<typeof frame>, props: Prop[], facts: string[],
+  line: (id: string, t: string, when: number, extra?: Partial<Prop>) => void): Scene {
+  const b = s.bodies![0], g0 = bodyOf(b), box = fr.box, u = s.unit ?? 'm';
+  const xs = g0.pts.map(p => p[0]), ys = g0.pts.map(p => p[1]);
+  const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), b.shape === 'disc' || b.shape === 'ring' ? 2 * (b.r ?? 1) : 0, 1e-6);
+  const turns = s.turns ?? [0], gap = 1.3 * size;
+  // copy i sits gap to the right of the last, turned about its own CM
+  const copies = turns.map((a, i) => { const dx = i * gap - g0.c[0], c: P2 = [i * gap, 0];
+    return {a, c, pts: g0.pts.map(p => turn([p[0] + dx, p[1] - g0.c[1]], c, a))}; });
+  const all = copies.flatMap(c => [...c.pts, [c.c[0], c.c[1] - 0.75 * size] as P2, [c.c[0], c.c[1] + 0.75 * size] as P2,
+    ...(s.turns ? [] : [[Math.max(...c.pts.map(p => p[0]), c.c[0] + (b.r ?? 0)) + 0.9 * size, c.c[1]] as P2])]);
+  const win = fit(all, box[2] - box[0], box[3] - box[1]);
+  const plane: Plane = {id: 'p', x: win.x, y: win.y, box}, per = (win.x[1] - win.x[0]) / (box[2] - box[0]);
+  const fill = {fill: 'faint', stroke: 'ink', width: 3 * k};
+  // a point's ring and dot; its name at lx, ly (scene), joined to the point by a thin leader
+  const pin = (id: string, c: P2, name: string, when: number, colour: string, lx: number, ly: number, align: 'start' | 'middle' = 'start') => {
+    const [x, y] = toScene(plane, c);
+    props.push({id, type: 'circle', x, y, r: 15 * k, style: {fill: 'paper', stroke: colour, width: 4 * k}, show: [when, 1e9], fade: 0.3, layer: 5} as Prop,
+      {id: `${id}-dot`, type: 'circle', x, y, r: 5 * k, style: {fill: colour}, show: [when, 1e9], fade: 0.3, layer: 5} as Prop,
+      text(`l${id}`, lx, ly, name, 28 * k, {weight: 700, align, style: {fill: colour}, show: [when, 1e9], fade: 0.3, layer: 6}));
+    if (align === 'start') props.push({id: `${id}-lead`, type: 'line', x1: x + 15 * k, y1: y, x2: lx - 8 * k, y2: ly - 9 * k, style: {stroke: colour, width: 1.5 * k}, show: [when, 1e9], fade: 0.3, layer: 4} as Prop);
+  };
+  const right = toScene(plane, [Math.max(...copies[0].pts.map(p => p[0]), b.shape === 'disc' || b.shape === 'ring' ? copies[0].c[0] + (b.r ?? 1) : -1e9), 0])[0] + 40 * k;
+  for (const [i, c] of copies.entries()) {
+    const when = 0.4 + 1.1 * i;
+    if (b.shape === 'rod') props.push({id: `b${i}`, type: 'line', plane: 'p', x1: c.pts[0][0], y1: c.pts[0][1], x2: c.pts[1][0], y2: c.pts[1][1], style: {stroke: 'ink', width: 14 * k}, show: [when, 1e9], fade: 0.3, layer: 1} as Prop);
+    else if (b.shape === 'disc' || b.shape === 'ring') props.push({id: `b${i}`, type: 'circle', plane: 'p', x: c.c[0], y: c.c[1], r: (b.r ?? 1) / per,
+      style: b.shape === 'ring' ? {stroke: 'ink', width: 10 * k} : fill, show: [when, 1e9], fade: 0.3, layer: 1} as Prop);
+    else props.push({id: `b${i}`, type: 'polyline', plane: 'p', points: c.pts, closed: true, style: fill, show: [when, 1e9], fade: 0.3, layer: 1} as Prop);
+    if (s.turns) {
+      // the plumb line: the total weight acts along the vertical through the one point
+      props.push({id: `plumb${i}`, type: 'line', plane: 'p', x1: c.c[0], y1: c.c[1] + 0.7 * size, x2: c.c[0], y2: c.c[1] - 0.7 * size,
+        style: {stroke: 'accent', width: 2.5 * k, dash: [8 * k, 7 * k]}, show: [when + 0.4, 1e9], fade: 0.3, layer: 2} as Prop);
+      const [bx, by] = toScene(plane, [c.c[0], c.c[1] - 0.7 * size]);
+      pin(`cg${i}`, c.c, 'CG = CM', when + 0.4, 'accent', bx, by + 36 * k, 'middle');
+      if (!s.illustrative && c.a) props.push(text(`lt${i}`, bx, by + 70 * k, `turned ${f(c.a)}°`, 24 * k, {align: 'middle', style: {fill: 'muted'}, show: [when, 1e9]}));
+    }
+  }
+  const T = 0.4 + 1.1 * copies.length;
+  if (s.turns) {
+    line('l1', 'The same body, turned', 0.4);
+    line('l2', 'Each part weighs mᵢg; about one point their torques cancel, however the body is turned', 1.6);
+    line('l3', 'That point is the centre of gravity: the total weight acts through it', T, {weight: 700, style: {fill: 'accent'}});
+    line('l4', 'In a uniform field it is the centre of mass: one point, the same in every orientation', T + 0.8, {style: {fill: 'muted'}});
+    facts.push(`centre of gravity = centre of mass at the body's centre, in every one of ${turns.length} orientations`);
+    return scene(s, W, H, T + 3, plane, props, [], {verb: 'centre_of_mass', facts, cm: [round(g0.c[0], 6), round(g0.c[1], 6)]});
+  }
+  // gravity: weight arrows on a few parts, g weaker higher up when varying (top at 25% of the bottom: exaggerated)
+  const c = copies[0], body: Body = {...b}, pts = samples(body, {c: g0.c, pts: g0.pts}).map(p => [p[0] - g0.c[0], p[1] - g0.c[1]] as P2);
+  const ylo = Math.min(...pts.map(p => p[1])), yhi = Math.max(...pts.map(p => p[1]));
+  const gOf = (y: number) => s.gravity === 'varying' ? 1 - 0.75 * (y - ylo) / Math.max(yhi - ylo, 1e-9) : 1;
+  const wsum = pts.reduce((a, p) => a + gOf(p[1]), 0);
+  const cg: P2 = [pts.reduce((a, p) => a + gOf(p[1]) * p[0], 0) / wsum, pts.reduce((a, p) => a + gOf(p[1]) * p[1], 0) / wsum];
+  const shown = (b.shape === 'rod' ? [0.1, 0.3, 0.5, 0.7, 0.9] : [0.15, 0.5, 0.85]).flatMap(fy => (b.shape === 'rod' ? [0] : [0.2, 0.5, 0.8]).map(fx => {
+    if (b.shape === 'rod') return pts[Math.round(fy * (pts.length - 1))];
+    const ty = ylo + fy * (yhi - ylo), row = pts.filter(p => Math.abs(p[1] - ty) < (yhi - ylo) / 40);
+    if (!row.length) return undefined;
+    const rx0 = Math.min(...row.map(p => p[0])), rx1 = Math.max(...row.map(p => p[0]));
+    return [rx0 + fx * (rx1 - rx0), ty] as P2;
+  })).filter((p): p is P2 => !!p);
+  const len = 0.2 * size, wx = c.c[0] + (right + 170 * k - toScene(plane, c.c)[0]) * per;
+  const ox = b.shape === 'rod' ? -0.08 * size : 0; // a rod's arrows beside it, not hidden along it
+  shown.forEach((p, i) => props.push({id: `w${i}`, type: 'arrow', plane: 'p', x1: c.c[0] + p[0] + ox, y1: c.c[1] + p[1], x2: c.c[0] + p[0] + ox, y2: c.c[1] + p[1] - len * gOf(p[1]),
+    head: 12 * k, style: {stroke: 'cool', width: 3 * k}, show: [1.2 + 0.08 * i, 1e9], fade: 0.3, layer: 3} as Prop));
+  const [, cy] = toScene(plane, c.c);
+  pin('cm', c.c, s.gravity === 'varying' ? 'CM' : 'CG = CM', 2.6, 'accent', right, cy - 20 * k);
+  if (s.gravity === 'varying') { const [, gy] = toScene(plane, [0, c.c[1] + cg[1]]); pin('cg', [c.c[0] + cg[0], c.c[1] + cg[1]], 'CG', 3.6, 'bad', right, Math.max(gy + 40 * k, cy + 30 * k)); }
+  const ga = c.c[1] + (s.gravity === 'varying' ? cg[1] : 0);
+  props.push({id: 'W', type: 'arrow', plane: 'p', x1: wx, y1: ga, x2: wx, y2: ga - 0.5 * size, head: 16 * k,
+    style: {stroke: s.gravity === 'varying' ? 'bad' : 'accent', width: 5 * k}, show: [s.gravity === 'varying' ? 4 : 3, 1e9], fade: 0.3, layer: 4} as Prop,
+    {id: 'Wlink', type: 'line', plane: 'p', x1: c.c[0] + (s.gravity === 'varying' ? cg[0] : 0), y1: ga, x2: wx, y2: ga, style: {stroke: 'muted', width: 2 * k, dash: [6 * k, 6 * k]},
+      show: [s.gravity === 'varying' ? 4 : 3, 1e9], fade: 0.3, layer: 2} as Prop);
+  { const [x, y] = toScene(plane, [wx, ga - 0.5 * size]);
+    props.push(text('lW', x + 16 * k, y + 10 * k, 'total weight', 26 * k, {weight: 700, style: {fill: s.gravity === 'varying' ? 'bad' : 'accent'}, show: [s.gravity === 'varying' ? 4 : 3, 1e9]})); }
+  if (s.gravity === 'varying') {
+    line('l1', 'Where g is weaker higher up, the upper parts weigh less per kilogram', 1.2);
+    line('l2', 'The centre of mass weights each part by its mass', 2.6, {style: {fill: 'accent'}});
+    line('l3', 'The centre of gravity weights each part by its weight: it sits nearer the stronger field', 3.6, {weight: 700, style: {fill: 'bad'}});
+    line('l4', 'Exaggerated here: on Earth g barely changes across a body, so CG and CM are one point', 4.8, {style: {fill: 'muted'}});
+    facts.push(`g at the body's top is 25% of g at its foot (exaggerated)`, `centre of gravity ${f(Math.abs(cg[1]))} ${u} below the centre of mass`);
+  } else {
+    line('l1', 'In a uniform field every kilogram weighs the same: equal, parallel weights', 1.2);
+    line('l2', 'Their torques about the centre of mass cancel, so the total weight acts there', 2.6, {weight: 700});
+    line('l3', 'The centre of gravity is the centre of mass', 3.4, {weight: 700, style: {fill: 'accent'}});
+    facts.push('uniform field: centre of gravity at the centre of mass');
+  }
+  return scene(s, W, H, 6.4, plane, props, [], {verb: 'centre_of_mass', facts, cm: [round(g0.c[0], 6), round(g0.c[1], 6)], ...(s.gravity === 'varying' ? {cg: [round(g0.c[0] + cg[0], 6), round(g0.c[1] + cg[1], 6)]} : {})});
 }
