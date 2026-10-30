@@ -6,6 +6,7 @@
 // the way the larger moment turns it; with two supports it solves both reactions. A lever names its effort and load:
 // mechanical advantage = load / effort = effort arm / load arm. A couple: two equal, opposite, parallel forces on a free
 // rod, no net force, so it turns without moving off: its moment F d is the same about every point.
+import {nameError} from './names.ts';
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
@@ -74,7 +75,7 @@ export function momentsErrors(s: MomentsSpec): string[] {
   let unknowns = 0;
   for (const [i, q] of s.forces.entries()) {
     const at = `moments: forces ${i + 1}`;
-    if (!(typeof q?.name === 'string' && q.name.length >= 1 && q.name.length <= 12)) e.push(`${at}: name is short (W, F, effort, 2 kg)`);
+    const bad = nameError(`${at}: name`, q?.name, 16, 'W, F, effort, 2 kg, child A'); if (bad) e.push(bad);
     if (q.magnitude === '?' || q.x === '?') unknowns++;
     if (q.magnitude !== '?' && !((isNum(q.magnitude) && q.magnitude > 0) !== (isNum(q.mass) && q.mass > 0))) e.push(`${at}: give magnitude (N) or mass (kg, its weight mg), one of them; or magnitude: '?' to solve for it`);
     if (q.magnitude === '?' && q.mass !== undefined) e.push(`${at}: an unknown force has no mass`);

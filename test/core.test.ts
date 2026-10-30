@@ -1252,6 +1252,15 @@ test('centre_of_mass reproduces the book: Example 6.1 particles, the L-shaped la
   assert.match(err({bodies: [{shape: 'rectangle'}, {shape: 'rectangle', at: [2, 0]}], gravity: 'uniform'}), /for one body/);
 });
 
+test('a name too long says its length and the limit, so a planner can shorten it', () => {
+  // C9 of keph1-06 (2026-10-30): "name is short" alone, and the planner lengthened the names four tries running
+  const err = (spec: object) => compile(spec as any).errors.join(' ');
+  assert.equal(err({verb: 'moments', length: 1, forces: [{name: 'heavier child', mass: 30, x: 0.2}, {name: 'lighter child', mass: 20, x: 0.9}]}), '');
+  assert.match(err({verb: 'moments', length: 1, forces: [{name: 'heavier child on the seesaw', mass: 30, x: 0.2}]}), /has 27 characters, at most 16/);
+  assert.match(err({verb: 'work', mass: 2, force: {name: 'pull force', magnitude: 10}, d: 5}), /has 10 characters, at most 4/);
+  assert.match(err({verb: 'vector_add', mode: 'add', a: [1, 0], b: [0, 1], names: ['Alpha', 'B']}), /has 5 characters, at most 3/);
+});
+
 test('moments reproduces the book: reactions on two knife edges, a see-saw balanced, a lever\'s advantage, tipping', () => {
   const facts = (spec: object) => (compile({verb: 'moments', ...spec} as any).scene!.meta as any).facts.join(' | ');
   // Example 6.6 (g = 9.8): a 70 cm, 4 kg bar on knife edges 10 cm from each end, 6 kg at 30 cm: R1 ≈ 55 N, R2 ≈ 43 N

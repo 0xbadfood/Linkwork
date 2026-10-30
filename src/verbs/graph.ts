@@ -2,6 +2,7 @@
 // book's data (a line, a smooth curve that keeps the data's shape, or dots), drawn on in turn. A tracer runs along a
 // curve with readouts measured from the drawing; a tangent, a shaded area and marked points are optional. Every value
 // the narration may quote is computed here and listed in meta.facts.
+import {nameError} from './names.ts';
 import {derivative, evaluate, exprErrors, show, tree} from '../expr.ts';
 import {integrate, toScene, type Plane} from '../plane.ts';
 import type {Actor, BaseKey, Prop, Scene} from '../scene.ts';
@@ -90,7 +91,7 @@ export function graphErrors(s: GraphSpec): string[] {
   for (const k of ['x', 'y'] as const) {
     const a = s[k];
     if (!a || typeof a.name !== 'string' || !a.name.trim()) { e.push(`graph: ${k} needs a name, e.g. {"name": "t", "unit": "s", "range": [0, 10]}`); continue; }
-    if (axisName(a).length > 20) e.push(`graph: ${k} "${axisName(a)}" is too long for an axis label (20 characters)`);
+    if (axisName(a).length > 20) e.push(nameError(`graph: ${k}`, axisName(a), 20, 'time t (s)')!);
     if (!Array.isArray(a.range) || !isNum(a.range[0]) || !isNum(a.range[1]) || !(a.range[0] < a.range[1])) { e.push(`graph: ${k}.range is [low, high]`); continue; }
     if (a.step !== undefined && !(isNum(a.step) && a.step > 0)) e.push(`graph: ${k}.step must be positive`);
     else if ((a.range[1] - a.range[0]) / stepOf(a) > 16) e.push(`graph: ${k}.step gives more than 16 ticks; use a larger step`);
@@ -109,7 +110,7 @@ export function graphErrors(s: GraphSpec): string[] {
   s.series.forEach((ser, i) => {
     const where = `graph: series ${i + 1}`;
     if (typeof ser?.label !== 'string' || !ser.label.trim()) e.push(`${where} needs a label`);
-    else if (ser.label.length > 32) e.push(`${where}: label is too long (32 characters)`);
+    else if (ser.label.length > 32) e.push(nameError(`${where}: label`, ser.label, 32, 'v–t of car A')!);
     if ('expr' in ser === 'points' in ser) { e.push(`${where} has either expr (a formula in ${v}) or points (the book's data)`); return; }
     if ('expr' in ser) {
       if (!oneLetter) { e.push(`${where}: a formula needs the x axis named by one letter (t, V, T…), not "${v}"`); return; }

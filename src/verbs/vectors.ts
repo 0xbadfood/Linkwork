@@ -3,6 +3,7 @@
 // different places, resolving into components along x and y with the unit vectors, and adding by components. Every
 // number shown is computed from the vectors as given, by magnitude and angle or by components (user, 2026-10-29:
 // Class 11 Motion in a Plane needed all of these; the verb only added two vectors head to tail).
+import {nameError} from './names.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
@@ -84,8 +85,8 @@ export function vectorErrors(s: VectorSpec): string[] {
   else if (s.factors?.includes(1)) e.push("vector_add: a factor of 1 draws a again; for the unit vector â = a / |a| use mode 'unit'");
   if (s.at !== undefined && (!Array.isArray(s.at) || !s.at.length || s.at.length > 3 || !s.at.every(p => Array.isArray(p) && p.length === 2 && p.every(isNum))))
     e.push('vector_add: at is 1 to 3 tail points [x, y] for copies of a');
-  if (s.names !== undefined && (!Array.isArray(s.names) || s.names.length !== 2 || !s.names.every(n => typeof n === 'string' && n.length >= 1 && n.length <= 3)))
-    e.push("vector_add: names is two short names, such as ['A', 'B']");
+  if (s.names !== undefined && (!Array.isArray(s.names) || s.names.length !== 2)) e.push("vector_add: names is two short names, such as ['A', 'B']");
+  else if (s.names) for (const [i, n] of s.names.entries()) { const bad = nameError(`vector_add: names ${i + 1}`, n, 3, "A, B, F₁"); if (bad) e.push(bad); }
   if (e.length) return e;
   const [ax, ay] = xy(s.a);
   if (Math.hypot(ax, ay) < 1e-9 && mode !== 'add') e.push('vector_add: a has zero length');

@@ -5,6 +5,7 @@
 // −f d for friction, none for N and mg (across the motion). Two bars grow as it moves, the work done on it so far and its
 // kinetic energy, so the work-energy theorem (net work = ΔK) is seen, with or without numbers. Without d, it slides until
 // it stops (a braking cyclist, Example 5.2). Power (W / t, and F v cos θ at the end) when asked.
+import {nameError} from './names.ts';
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
@@ -60,7 +61,7 @@ export function workErrors(s: WorkSpec): string[] {
     if (!(isNum(s.force?.magnitude) && s.force.magnitude > 0)) e.push('work: force.magnitude is in N, above 0');
     if (s.force?.angle !== undefined && !(isNum(s.force.angle) && s.force.angle >= 0 && s.force.angle <= 180))
       e.push('work: force.angle is 0 to 180 degrees from the direction of motion (0 along it, 90 across it, 180 against it)');
-    if (s.force?.name !== undefined && !(typeof s.force.name === 'string' && s.force.name.length >= 1 && s.force.name.length <= 4)) e.push('work: force.name is short (F, P, T)');
+    if (s.force?.name !== undefined) { const bad = nameError('work: force.name', s.force.name, 4, 'F, P, T'); if (bad) e.push(bad); }
   }
   if (s.friction !== undefined) {
     const fr = s.friction;

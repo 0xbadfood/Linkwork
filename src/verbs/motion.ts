@@ -10,6 +10,7 @@
 //   ball thrown straight up from a 25 m building, which stage cannot throw).
 // scale_compare: an object of length L shown against distances D, drawn to scale. It first appears large enough to
 //   recognise, then shrinks to its true size against the distance while the ratio L/D is shown: when is it a point?
+import {nameError} from './names.ts';
 import type {Key} from '../keys.ts';
 import {OBJECTS} from '../objects.ts';
 import {toScene, type Plane} from '../plane.ts';
@@ -78,7 +79,7 @@ export function motionErrors(s: MotionSpec): string[] {
   if (s.building !== undefined) {
     const floor = s.ground ?? Math.max(a, 0);
     if (!isNum(s.building?.top) || s.building.top <= floor || s.building.top > b) e.push(`motion_on_line: building.top must be above the ground (${floor}) and on the axis`);
-    if (s.building?.label !== undefined && (typeof s.building.label !== 'string' || s.building.label.length > 24)) e.push('motion_on_line: building.label is short text (24 characters)');
+    if (s.building?.label !== undefined) { const bad = nameError('motion_on_line: building.label', s.building.label, 24, 'a tower, the school'); if (bad) e.push(bad); }
   }
   if (s.every !== undefined && !(isNum(s.every) && s.every > 0)) e.push('motion_on_line: every is a positive number of seconds');
   if (s.accelerate !== undefined) {
