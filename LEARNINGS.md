@@ -103,3 +103,5 @@ caught or a reviewer saw while building the examples and the first pilot film (h
   named points (meta.anchors), and set anchorsOnly when the plane is a shape, not a scale.
 - A two-name field whose order is the physics ([springs back, stays deformed]) gets a guard on the order, not only the
   card's wording: the plan once named ['body', 'spring'] and the screen called the spring plastic.
+- One term of a sum can dwarf the rest (P is 2 × 10⁵ Pa beside ½ρv² of 500): bars of the sum start from a cut-off base,
+  marked with a break and said in the panel, or the trade between the terms is invisible (fluid_flow bernoulli).

@@ -1419,3 +1419,50 @@ test('elastic films: names the right way round, marks at named points, side-by-s
   const sag = (i: number) => { const c = both.scene!.parts![i].scene.meta as any; return c.anchors.centre[1] - c.anchors.left[1]; };
   assert.ok(Math.abs(sag(1) / sag(0) - 2e11 / 7e10) < 0.01, `${sag(0)} ${sag(1)}`);
 });
+
+test('fluids reproduce the book: the ocean window, syringes, car lift, spirit, spray, wing, sliding block, copper ball, film, drops, capillary', () => {
+  const meta = (spec: object) => { const r = compile(spec as any); assert.deepEqual(r.errors, []); return {...r.scene!.meta as any, all: (r.scene!.meta as any).facts.join(' | ')}; };
+  const near = (a: number, b: number, tol: number, what: string) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
+  // Ex. 9.4: 1000 m of sea water (g = 10): gauge 1.03 × 10⁷ Pa, the 20 cm window takes 4.12 × 10⁵ N
+  const sea = meta({verb: 'fluid_pressure', kind: 'depth', liquid: 'sea water', depth: 1000, g: 10, window: 0.04});
+  near(sea.gauge[0], 1.03e7, 1, 'gauge'); assert.match(sea.all, /F = 4\.12 × 10⁵ N/);
+  // Ex. 9.5: syringes 1 cm and 3 cm, 10 N: 90 N; pushed 6 cm, the large one moves 0.67 cm
+  const syr = meta({verb: 'fluid_pressure', kind: 'hydraulic', d1: 0.01, d2: 0.03, F1: 10, push: 0.06});
+  near(syr.F2, 90, 1e-9, 'F2'); near(syr.rise, 0.0067, 0.0001, 'rise');
+  // Ex. 9.6: a 1350 kg car on a 15 cm piston, 5 cm piston: F1 = 1470 N, about 1.9 × 10⁵ Pa
+  const lift = meta({verb: 'fluid_pressure', kind: 'hydraulic', d1: 0.1, d2: 0.3, load: 1350});
+  near(lift.F1, 1470, 1, 'F1'); near(lift.P, 1.87e5, 0.01e5, 'P');
+  // Ex. 9.9 of the exercises: 10 cm of water balances 12.5 cm of spirit: specific gravity 0.8; the barometer's 76 cm
+  near(meta({verb: 'fluid_pressure', kind: 'manometer', left: {liquid: 'water', h: 0.1}, right: {h: 0.125}}).rho[1], 800, 1e-9, 'spirit');
+  near(meta({verb: 'fluid_pressure', kind: 'barometer'}).h, 0.76, 0.005, 'mercury column');
+  // Exercise 9.16: 8 cm², 40 holes of 1 mm, 1.5 m/min: 0.64 m/s
+  near(meta({verb: 'fluid_flow', kind: 'continuity', A1: 8e-4, d2: 0.001, outlets: 40, v1: 1.5 / 60}).v2, 0.64, 0.005, 'spray');
+  // Bernoulli: the sum is the same at both sections
+  const b = meta({verb: 'fluid_flow', kind: 'bernoulli', d1: 0.04, d2: 0.02, v1: 1, h1: 0, h2: 1, P1: 2e5});
+  near(b.P2 + 0.5 * 1000 * b.v2 ** 2 + 1000 * 9.8, 2e5 + 500, 1e-6, 'Bernoulli sum');
+  // Ex. 9.7: 3.3 × 10⁵ kg on 500 m² at 960 km/h: ΔP ≈ 6.5 × 10³ Pa, the air about 8 % faster above
+  const wing = meta({verb: 'fluid_flow', kind: 'lift', body: 'wing', mass: 3.3e5, area: 500, v: 960 / 3.6, rho: 1.2});
+  near(wing.dP, 6468, 1, 'ΔP'); assert.match(wing.all, /0\.0758/);
+  // Ex. 9.8: 0.010 kg pulls a 0.10 m² block at 0.085 m/s over 0.30 mm: η = 3.46 × 10⁻³ Pa s
+  near(meta({verb: 'fluid_flow', kind: 'layers', hang: 0.01, area: 0.1, v: 0.085, gap: 3e-4}).eta, 3.46e-3, 0.01e-3, 'η block');
+  // Ex. 9.9: copper ball, 2.0 mm, 6.5 cm/s in oil of 1.5 × 10³ kg/m³: η = 9.9 × 10⁻¹ Pa s
+  near(meta({verb: 'fluid_flow', kind: 'stokes', material: 'copper', a: 0.002, rho: 1500, vt: 0.065}).eta, 0.99, 0.005, 'η oil');
+  near(meta({verb: 'fluid_flow', kind: 'torricelli', h: 0.8}).v ?? 0, Math.sqrt(2 * 9.8 * 0.8), 1e-9, 'efflux');
+  // Exercise 9.17: 1.5 × 10⁻² N on a 30 cm slider: S = 2.5 × 10⁻² N/m
+  near(meta({verb: 'surface_tension', kind: 'film', l: 0.3, weight: 0.015}).S, 0.025, 1e-12, 'S');
+  // Exercises 9.19, 9.20: mercury drop 3.00 mm, 310 Pa (inside 1.0131 × 10⁵ Pa); soap bubble 5.00 mm, 20 Pa
+  const hg = meta({verb: 'surface_tension', kind: 'drop', liquid: 'mercury', r: 0.003, Pa: 1.01e5});
+  near(hg.dP, 310, 0.5, 'drop'); assert.match(hg.all, /1\.0131 × 10⁵/);
+  near(meta({verb: 'surface_tension', kind: 'drop', shape: 'bubble', liquid: 'soap solution', r: 0.005}).dP, 20, 1e-9, 'bubble');
+  // §9.6.5: water in a tube of radius 0.05 cm rises 2.98 cm; mercury falls
+  near(meta({verb: 'surface_tension', kind: 'capillary', liquid: 'water', a: 5e-4}).h[0], 0.0298, 0.0001, 'rise');
+  assert.ok(meta({verb: 'surface_tension', kind: 'capillary', liquid: 'mercury', a: 5e-4}).h[0] < 0);
+  const err = (spec: object) => compile(spec as any).errors.join(' ');
+  assert.match(err({verb: 'fluid_pressure', kind: 'hydraulic', d1: 0.3, d2: 0.1, F1: 10}), /piston 1 is the small one/);
+  assert.match(err({verb: 'fluid_pressure', kind: 'depth', liquid: 'lava', depth: 2}), /liquid is one the book uses/);
+  assert.match(err({verb: 'fluid_pressure', kind: 'manometer', left: {liquid: 'water'}, right: {liquid: 'mercury'}}), /one is solved|left out is solved/);
+  assert.match(err({verb: 'fluid_flow', kind: 'lift', body: 'kite'}), /body is 'ball'/);
+  assert.match(err({verb: 'fluid_flow', kind: 'stokes', material: 'aluminium', a: 0.001, rho: 13600, eta: 1}), /denser than the liquid/);
+  assert.match(err({verb: 'surface_tension', kind: 'drop', r: 2, liquid: 'water'}), /r is the radius/);
+  assert.match(err({verb: 'fluid_pressure', kind: 'depth', liquid: 'water', depth: 2, annotate: [{text: 'deep', at: [0.5, 0.5]}]}), /named points only/);
+});

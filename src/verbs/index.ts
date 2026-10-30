@@ -34,13 +34,15 @@ import {energy, energyErrors, type EnergySpec} from './energy.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
 import {elastic, elasticErrors, type ElasticSpec} from './elastic.ts';
+import {fluidFlow, fluidFlowErrors, fluidPressure, fluidPressureErrors, surfaceErrors, surfaceTension, type FluidFlowSpec, type FluidPressureSpec, type SurfaceSpec} from './fluids.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
 export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
-  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec;
+  | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
+  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -120,6 +122,12 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'Newton\'s law of gravitation, computed: two masses pulling each other equally, F = G m₁ m₂ / r², moved apart step by step (twice the distance, a quarter of the force); or g against distance from a planet\'s centre, growing as r inside and falling as 1 / r² outside, at a given height or depth'} as Verb<GravityLawSpec>,
   elastic: {errors: elasticErrors, compile: elastic,
     about: 'solids under stress, computed from the book\'s moduli and drawn larger than real: a wire (or wires end to end) stretched by a load, ΔL = FL / AY, thinning by Poisson\'s ratio, storing ½ F ΔL; a rod pressed shorter; a block sheared by a tangential force, θ ≈ Δx / L = (F/A) / G; a body squeezed on every side in a fluid, ΔV/V = p / B; a metal\'s stress-strain curve traced beside its wire (proportional limit, yield point, ultimate strength, fracture, permanent set) or a rubber-like one; a beam sagging under a central load, δ = W l³ / (4 b d³ Y), flat and on its edge; elastic and plastic: a spring springs back, putty stays stretched'} as Verb<ElasticSpec>,
+  fluid_pressure: {errors: fluidPressureErrors, compile: fluidPressure,
+    about: 'a liquid at rest, computed: pressure growing with depth, P = Pa + ρgh, at marked points and pushing on the walls at right angles, the force on a window from the gauge pressure; vessels of different shapes joined at the bottom filling to one level (hydrostatic paradox); a barometer column h = Pa / ρg; a U-tube manometer reading a gas\'s gauge pressure, or two liquids balanced on mercury, ρ₁h₁ = ρ₂h₂; a hydraulic lift, F₂ = F₁ A₂ / A₁, the large piston moving A₁ / A₂ as far'} as Verb<FluidPressureSpec>,
+  fluid_flow: {errors: fluidFlowErrors, compile: fluidFlow,
+    about: 'a liquid in motion, computed: a pipe narrowing with particles riding its streamlines faster where they crowd, A₁v₁ = A₂v₂; Bernoulli, P + ½ρv² + ρgh the same at two sections (bars of the three terms); a jet from a hole, v = √(2gh), landing where its parabola meets the ground; streamlines past a ball, a spinning ball (Magnus effect) or a wing, with the lift; liquid layers between a fixed and a moving plate, or in a pipe, η = (F/A) / (v/l); a sphere falling through a liquid to its terminal velocity, vt = 2a²(ρ − σ)g / 9η'} as Verb<FluidFlowSpec>,
+  surface_tension: {errors: surfaceErrors, compile: surfaceTension,
+    about: 'surface tension, computed: molecules inside a liquid and at its surface (the net inward pull); a soap film on a U-shaped wire pulling a slider, S = F / 2l; a drop on a surface with its angle of contact and the three tensions (wetting or not); the excess pressure in a drop, an air cavity or a soap bubble, 2S/r or 4S/r; a liquid rising (or falling) in narrow tubes, h = 2S cos θ / ρga'} as Verb<SurfaceSpec>,
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,
