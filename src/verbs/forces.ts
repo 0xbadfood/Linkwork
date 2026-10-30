@@ -209,7 +209,7 @@ export function forces(spec: ForcesSpec): Scene {
   // cylinder's push C ran down the block's weight W, its name on W's shaft)
   const same = (i: number) => fs.map((y, j) => j).filter(j => fs[j].size > 1e-9 && Math.hypot(fs[j].u[0] - fs[i].u[0], fs[j].u[1] - fs[i].u[1]) < 1e-6);
   const apart = (i: number, p: P2): P2 => {
-    const g = same(i), d = (g.indexOf(i) - (g.length - 1) / 2) * 40 * k, u = fs[i].u;
+    const g = same(i), d = (g.indexOf(i) - (g.length - 1) / 2) * 72 * k, u = fs[i].u;
     return [p[0] + u[1] * d, p[1] + u[0] * d];
   };
   fs.forEach((x, i) => {

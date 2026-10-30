@@ -105,3 +105,7 @@ caught or a reviewer saw while building the examples and the first pilot film (h
   card's wording: the plan once named ['body', 'spring'] and the screen called the spring plastic.
 - One term of a sum can dwarf the rest (P is 2 × 10⁵ Pa beside ½ρv² of 500): bars of the sum start from a cut-off base,
   marked with a break and said in the panel, or the trade between the terms is invisible (fluid_flow bernoulli).
+
+## A true value can draw nothing
+
+Water on glass has an angle of contact near 0°, so the true picture is a bare line with no drop and no θ. When a true value makes the picture empty, open it up to the smallest readable size and say so on the panel, in the words "drawn larger than it is". The same goes for wording written with one case in mind: "the narrower the tube, the higher" was on screen over mercury falling.

@@ -1420,6 +1420,19 @@ test('elastic films: names the right way round, marks at named points, side-by-s
   assert.ok(Math.abs(sag(1) / sag(0) - 2e11 / 7e10) < 0.01, `${sag(0)} ${sag(1)}`);
 });
 
+test('surface_tension pictures tell the truth at their edges: a near-zero angle is opened up and says so, a fall is a fall, a drop can grow', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const text = (spec: any) => JSON.stringify(compile(spec).scene);
+  const flat = text({verb: 'surface_tension', kind: 'contact', liquid: 'water', surface: 'glass', illustrative: true});
+  assert.ok(flat.includes('drawn larger than it is'));
+  assert.ok(!text({verb: 'surface_tension', kind: 'contact', liquid: 'mercury', theta: 140, illustrative: true}).includes('drawn larger'));
+  const fall = text({verb: 'surface_tension', kind: 'capillary', liquid: 'mercury', theta: 140, a: 0.0005, illustrative: true});
+  assert.ok(fall.includes('further it falls') && !fall.includes('higher'));
+  assert.ok(text({verb: 'surface_tension', kind: 'capillary', liquid: 'water', a: 0.0005, illustrative: true}).includes('higher it rises'));
+  const grown = text({verb: 'surface_tension', kind: 'drop', liquid: 'water', r: 0.002, expand: true, illustrative: true});
+  assert.ok(grown.includes('r + Δr') && grown.includes('"grown"'));
+});
+
 test('fluids reproduce the book: the ocean window, syringes, car lift, spirit, spray, wing, sliding block, copper ball, film, drops, capillary', () => {
   const meta = (spec: object) => { const r = compile(spec as any); assert.deepEqual(r.errors, []); return {...r.scene!.meta as any, all: (r.scene!.meta as any).facts.join(' | ')}; };
   const near = (a: number, b: number, tol: number, what: string) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);

@@ -673,8 +673,9 @@ export function fluidFlow(s: FluidFlowSpec): Scene {
 // ───────────────────────────── surface_tension ─────────────────────────────
 export const SURFACE_KINDS = ['molecules', 'film', 'contact', 'drop', 'capillary'] as const;
 export type SurfaceSpec = Common & {verb: 'surface_tension'; kind: (typeof SURFACE_KINDS)[number]; liquid?: string; rho?: number; S?: number; g?: number;
-  l?: number; F?: number; weight?: number; d?: number; theta?: number; surface?: string; shape?: 'drop' | 'cavity' | 'bubble'; r?: number;
+  l?: number; F?: number; weight?: number; d?: number; theta?: number; surface?: string; shape?: 'drop' | 'cavity' | 'bubble'; r?: number; expand?: boolean;
   depth?: number; Pa?: number; a?: number; radii?: number[]; compare?: string[]};
+const MIN_DRAWN_ANGLE = 22;
 const SURFACES: Record<string, number> = {glass: 0, 'clean glass': 0, plastic: 30, wax: 107, 'lotus leaf': 160, 'waxed paper': 107};
 
 export function surfaceErrors(s: SurfaceSpec): string[] {
@@ -763,11 +764,13 @@ export function surfaceTension(s: SurfaceSpec): Scene {
   }
 
   if (s.kind === 'contact') {
-    const theta = s.theta ?? (s.surface ? SURFACES[s.surface.toLowerCase()] : undefined) ?? L.glass ?? 0, th = theta * Math.PI / 180;
+    const theta = s.theta ?? (s.surface ? SURFACES[s.surface.toLowerCase()] : undefined) ?? L.glass ?? 0;
+    // water on glass is near 0°: a true angle draws no drop and no θ (Fluids C8 showed a bare line), so the picture opens it up and says so
+    const opened = theta < MIN_DRAWN_ANGLE, th = Math.max(theta, MIN_DRAWN_ANGLE) * Math.PI / 180;
     const surfY = by0 + 0.62 * bh, cx = bx0 + 0.42 * bw, R = 0.24 * bw;
     // the drop as a circular cap meeting the surface at θ (a puddle with a small θ, a bead past 90°)
     // a circle of radius rc whose centre sits rc cos θ below the solid's surface: it meets the surface at θ
-    const thd = Math.max(th, 6 * Math.PI / 180), rc = Math.min(0.45 * bh / (1 - Math.cos(thd)), 0.3 * bw / (thd < Math.PI / 2 ? Math.sin(thd) : 1), R * 4), cyc = surfY + rc * Math.cos(thd);
+    const thd = th, rc = Math.min(0.45 * bh / (1 - Math.cos(thd)), 0.3 * bw / (thd < Math.PI / 2 ? Math.sin(thd) : 1), R * 4), cyc = surfY + rc * Math.cos(thd);
     const capPts: P2[] = [];
     for (let i = 0; i <= 40; i++) { const a = -Math.PI / 2 - thd + 2 * thd * i / 40; capPts.push([cx + rc * Math.cos(a), cyc + rc * Math.sin(a)]); }
     rect('solid', bx0, surfY, bw, 40 * k, {fill: 'faint', stroke: 'ink', width: 2 * k});
@@ -788,7 +791,8 @@ export function surfaceTension(s: SurfaceSpec): Scene {
     line('l1', `${s.liquid ?? 'A liquid'} on ${s.surface ?? (s.theta === undefined ? 'glass' : 'a solid')}: angle of contact θ${ill ? '' : ` = ${num(theta)}°`}`, 0.3, {weight: 700});
     line('l2', 'At the edge three surface tensions balance: S_la cos θ + S_sl = S_sa', 1.8, {style: {fill: 'cool'}});
     line('l3', wets ? 'θ acute (S_sl < S_la): the liquid is drawn to the solid and spreads: it wets it' : 'θ obtuse (S_sl > S_la): the liquid keeps to itself and forms drops: it does not wet the solid', 2.6, {style: {fill: wets ? 'good' : 'bad'}});
-    facts.push(`angle of contact θ = ${num(theta)}° (${wets ? 'acute: wets the surface, spreads' : 'obtuse: does not wet, forms drops'})`, 'S_la cos θ + S_sl = S_sa at the line of contact');
+    if (opened) line('l4', 'The angle is drawn larger than it is, so that it can be seen', 3.2, {style: {fill: 'muted'}});
+    facts.push(`angle of contact θ = ${num(theta)}° (${opened ? 'drawn opened up; ' : ''}${wets ? 'acute: wets the surface, spreads' : 'obtuse: does not wet, forms drops'})`, 'S_la cos θ + S_sl = S_sa at the line of contact');
     return c.end('surface_tension', 5, {theta});
   }
 
@@ -799,7 +803,7 @@ export function surfaceTension(s: SurfaceSpec): Scene {
     if (shape === 'cavity') rect('liquid', bx0, by0, bw, by1 - by0, {fill, opacity: 0.3}, {layer: 0});
     props.push({id: 'body', type: 'circle', x: cx, y: cy, r: R, style: {fill: shape === 'drop' ? fill : 'paper', opacity: shape === 'drop' ? 0.5 : shape === 'bubble' ? 0.08 : 1, stroke: 'ink', width: 3 * k}, layer: 2} as Prop);
     if (two) props.push({id: 'inner', type: 'circle', x: cx, y: cy, r: R - 12 * k, style: {stroke: 'cool', width: 3 * k}, layer: 2} as Prop);
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 8 && !s.expand; i++) {
       const a = i * Math.PI / 4;
       arrow(`in${i}`, cx + (R + 70 * k) * Math.cos(a), cy + (R + 70 * k) * Math.sin(a), cx + (R + 6 * k) * Math.cos(a), cy + (R + 6 * k) * Math.sin(a), 'muted', {show: [0.8, 1e9], fade: 0.3});
       arrow(`out${i}`, cx + (R - 80 * k) * Math.cos(a + 0.4), cy + (R - 80 * k) * Math.sin(a + 0.4), cx + (R - 16 * k) * Math.cos(a + 0.4), cy + (R - 16 * k) * Math.sin(a + 0.4), 'accent', {show: [1.6, 1e9], fade: 0.3});
@@ -808,6 +812,13 @@ export function surfaceTension(s: SurfaceSpec): Scene {
     label('lout', cx + R + 90 * k, cy - R, 'Pₒ', {style: {fill: 'muted'}, show: [0.8, 1e9]});
     label('lr', cx + 10 * k, cy - R / 2, 'r', {style: {fill: 'muted'}}); seg('rdim', cx, cy, cx, cy - R, {stroke: 'muted', width: 2 * k, dash: [6 * k, 6 * k]});
     Object.assign(anchors, {centre: [cx, cy], surface: [cx + R, cy], outside: [cx + R + 90 * k, cy - R]});
+    // the derivation's small expansion: the same drop grown by Δr, its new surface dashed
+    if (s.expand) {
+      const dR = 26 * k;
+      props.push({id: 'grown', type: 'circle', x: cx, y: cy, r: R + dR, style: {stroke: 'cool', width: 3 * k, dash: [10 * k, 8 * k]}, layer: 3, show: [2, 1e9], fade: 0.4} as Prop);
+      label('ldr', cx + (R + dR) * Math.SQRT1_2 + 14 * k, cy + (R + dR) * Math.SQRT1_2 + 14 * k, 'r + Δr', {style: {fill: 'cool'}, show: [2, 1e9]});
+      anchors.grown = [cx + (R + dR) * Math.SQRT1_2, cy + (R + dR) * Math.SQRT1_2];
+    }
     const what = {drop: 'A liquid drop in air', cavity: 'An air cavity inside a liquid', bubble: 'A soap bubble: a film with two surfaces'}[shape];
     line('l1', what, 0.3, {weight: 700});
     line('l2', 'The curved surface pulls inward, so the pressure inside is higher (the concave side)', 1.6, {style: {fill: 'accent'}});
@@ -827,8 +838,9 @@ export function surfaceTension(s: SurfaceSpec): Scene {
   seg('surf', bx0, surf, bx1, surf, {stroke: 'ink', width: 2 * k});
   const amax = Math.max(...radii);
   radii.forEach((a, i) => {
-    const x = bx0 + (radii.length === 1 ? 0.45 : radii.length === 2 ? 0.15 + 0.45 * i : 0.12 + 0.32 * i) * bw, w = 24 * k + 70 * k * a / amax, top = by0 + 0.04 * bh, botT = Math.min(by1 - 0.06 * bh, surf + 0.22 * bh);
-    const lvl = surf - hs[i] * sc;
+    const x = bx0 + (radii.length === 1 ? 0.45 : radii.length === 2 ? 0.15 + 0.45 * i : 0.12 + 0.32 * i) * bw, w = 24 * k + 70 * k * a / amax, top = by0 + 0.04 * bh, lvl = surf - hs[i] * sc;
+    // the tube reaches past the level inside it, however far the liquid falls
+    const botT = Math.min(by1 - 0.06 * bh, Math.max(surf, lvl) + 0.22 * bh);
     rect(`col${i}`, x - w / 2, Math.min(lvl, surf), w, Math.abs(surf - lvl) + 0.001, {fill, opacity: 0.6}, {layer: 2,
       keys: {y: [[0.8, surf], [2.6, Math.min(lvl, surf), 'out']], h: [[0.8, 0.001], [2.6, Math.abs(surf - lvl) + 0.001, 'out']]} as never});
     if (cos < 0) rect(`gap${i}`, x - w / 2, surf, w, lvl - surf, {fill: 'paper'}, {layer: 2, keys: {h: [[0.8, 0.001], [2.6, lvl - surf, 'out']]} as never});
@@ -844,8 +856,8 @@ export function surfaceTension(s: SurfaceSpec): Scene {
   anchors.surface = [bx0 + 0.9 * bw, surf];
   line('l1', `A narrow tube in ${liq.toLowerCase()}: the liquid ${cos >= 0 ? 'rises' : 'falls'} in it`, 0.3, {weight: 700});
   line('l2', cos >= 0 ? 'θ acute: a concave meniscus, the pressure under it less than Pa' : 'θ obtuse: a convex meniscus, the liquid pushed down', 2.6, {style: {fill: 'cool'}});
-  line('l3', ill ? 'h = 2S cos θ / ρga: the narrower the tube, the higher' : `h = 2S cos θ / ρga = ${hs.map(h => len(Math.abs(h))).join(', ')}`, 2.8, {weight: 700, style: {fill: 'accent'}});
-  if (radii.length > 1) line('l4', 'Halve the radius, double the rise', 3.4, {style: {fill: 'muted'}});
+  line('l3', ill ? `h = 2S cos θ / ρga: the narrower the tube, the ${cos >= 0 ? 'higher it rises' : 'further it falls'}` : `h = 2S cos θ / ρga = ${hs.map(h => len(Math.abs(h))).join(', ')}`, 2.8, {weight: 700, style: {fill: 'accent'}});
+  if (radii.length > 1) line('l4', `Halve the radius, double the ${cos >= 0 ? 'rise' : 'fall'}`, 3.4, {style: {fill: 'muted'}});
   facts.push(...radii.map((a, i) => `tube radius ${len(a)}: ${hs[i] >= 0 ? 'rise' : 'fall'} h = 2S cos θ/(ρga) = ${len(Math.abs(hs[i]))}`), `S = ${num(S)} N/m, θ = ${num(theta)}°, ρ = ${num(rho)} kg/m³`);
   void round;
   return c.end('surface_tension', 5.4, {h: hs});
