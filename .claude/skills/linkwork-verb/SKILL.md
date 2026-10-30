@@ -84,3 +84,17 @@ Read `src/verbs/cards.ts` and `src/verbs/index.ts`.
 - Add any rule a mistake taught to `LEARNINGS.md`.
 - Commit with the reason (what could not be drawn, and how it failed).
 - Licences: no dependency that isn't MIT, BSD or Apache-2.0.
+
+## Build it so a student can drive it
+
+A verb may become a play (`src/play/plays.ts`): a student moves its inputs and predicts the result. Design for that from the start, even when the film needs only one value:
+
+- **Inputs are physical quantities.** Take speed and angle, not a finished path. Each control maps onto a field, and the verb computes the rest.
+- **Offer one fixed scale.** If a drawing fits itself to the frame, a changing value looks unchanged. Fitting is a fine default for a film, but give an option that holds the window (`x`/`y` on `plane_motion`, `window` on `ray_diagram`). A value compared across settings must share one scale, including bars and arrows sized against their own largest value.
+- **Keep the picture true.** Enlarged growth, stretched heights and fixed-height bars can suit a film if the panel says so, but they rule out a play. Where the truth can't be drawn, the verb is not playable. Say so rather than faking it.
+- **Don't give the answer away early.** The first frames show the set-up and the result arrives later, so a student can predict first. Keep a static result behind `show` or an option (`hide_path`).
+- **Publish what a test can measure.** Name anchors for the points that carry the physics (`profile_junction`), so a play's probe can compare drawn length with the real quantity.
+- **State the domain.** Find where the picture holds and where the physics changes (an object at F has no image), and refuse or note what lies outside it. A play's range stays inside.
+- **Stay fast and self-contained.** Compile runs on every slider move in a browser: pure code, no Node APIs at compile time, no heavy loops.
+
+A play must pass `test/plays.test.ts`: one scale across the range, a clean `check()`, and every challenge winnable. Worth adding a play when moving the input teaches something a student would guess wrong.

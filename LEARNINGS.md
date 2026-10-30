@@ -113,3 +113,7 @@ Water on glass has an angle of contact near 0°, so the true picture is a bare l
 ## Check the direction of a cycle against the words beside it
 
 The first convection pot circulated both cells downward through the middle while its own arrow said hot water rises there. Numbers are tested against the book, but a loop's sense isn't a number: read a frame of any cycle against its caption before committing.
+
+## A picture that fits itself hides the physics
+
+Capillary rise looked right in every film, yet a single tube's column stays the same height whatever the radius: the drawing refits to the frame. Nobody notices until a student moves a slider. Fitting suits one still picture; comparing settings needs one fixed scale, so a verb should offer both and a test should measure drawn length against the real quantity across the range.
