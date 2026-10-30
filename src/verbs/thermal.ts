@@ -454,7 +454,7 @@ export function heatTransfer(s: TransferSpec): Scene {
     label('lH', x0 + 0.5 * Lp, ybar + h / 2 - 12 * k, 'H', {align: 'middle', style: {fill: 'ink'}, show: [2.6, 1e9]});
     Tj.forEach((T, i) => { if (i === 0 || i === bars.length || !ill) label(`T${i}`, xs[i], ybar + h + 36 * k, ill ? (i === 0 ? 'hot end' : 'cold end') : `${n2(+T.toFixed(1), 1)}°`, {align: i === 0 ? 'start' : i === bars.length ? 'end' : 'middle', style: {fill: colour(u(T))}, show: [i === 0 || i === bars.length ? 0.4 : 2.6, 1e9]}); });
     Object.assign(anchors, {hot: [xs[0], ybar + h / 2], cold: [xs[bars.length], ybar + h / 2], profile: G((xs[0] + xs[1]) / 2, (Tj[0] + Tj[1]) / 2)});
-    if (bars.length > 1) anchors.junction = [xs[1], ybar + h / 2];
+    if (bars.length > 1) Object.assign(anchors, {junction: [xs[1], ybar + h / 2], profile_hot: G(xs[0], Tj[0]), profile_junction: G(xs[1], Tj[1])});
     line('l1', 'In the steady state the same heat current passes every section', 0.3, {weight: 700});
     line('l2', 'H = K A (T₁ − T₂) / L', 1.2, {style: {fill: 'cool'}});
     line('l3', bars.length > 1 ? 'The poorer conductor takes the steeper drop' : 'The temperature falls evenly along the bar', 2.6, {style: {fill: 'accent'}});

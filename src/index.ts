@@ -19,3 +19,4 @@ export * from './expr.ts';
 export * from './plane.ts';
 export * from './verbs/calculus.ts';
 export {compose, composeErrors, type CompoundSpec, type Link, type PartSpec, type Signal} from './compose.ts';
+export * from './play/plays.ts';

@@ -7,6 +7,6 @@
   "exports": {".": "./src/index.ts"},
   "bin": {"linkwork": "./src/cli.ts"},
   "engines": {"node": ">=23.6"},
-  "scripts": {"test": "node --test test/core.test.ts test/maths.test.ts", "typecheck": "tsc --noEmit"},
+  "scripts": {"test": "node --test test/core.test.ts test/maths.test.ts test/plays.test.ts", "typecheck": "tsc --noEmit"},
   "devDependencies": {"typescript": "5.9.2", "@types/node": "24.3.0"}
 }

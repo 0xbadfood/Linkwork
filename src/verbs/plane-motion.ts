@@ -19,7 +19,10 @@ export type PlaneMotionSpec = {verb: 'plane_motion';
   formula?: {x: string; y: string; t: [number, number]};
   circle?: {radius: number; speed: number; turns?: number};
   show?: (typeof SHOWS)[number][]; at?: number; dt?: number; unit?: string;
-  x?: [number, number]; y?: [number, number]; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
+  /** The window, fixed: with both given the drawing's scale stays the same whatever the motion. */
+  x?: [number, number]; y?: [number, number];
+  /** true: the path appears only once the mover has finished it (an applet's shot, not yet given away). */
+  hide_path?: boolean; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isP = (v: unknown): v is P2 => Array.isArray(v) && v.length === 2 && v.every(isNum);
@@ -117,7 +120,7 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const keyed = (g: (t: number) => number): Key[] => ts.map((t, i) => (i ? [tau(t), g(t), 'linear'] : [tau(t), g(t)]) as Key);
   const mover: Actor = {id: 'mover', rig: 'dot', at: toScene(plane, path[0]), scale: 1.3 * k, layer: 3,
     base: ts.map((t, i) => ({t: tau(t), at: toScene(plane, kin.r(t)), ...(i ? {ease: 'linear' as const} : {})}))};
-  props.push({id: 'path', type: 'polyline', plane: 'p', points: path, style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k], opacity: 0.7}} as Prop);
+  props.push({id: 'path', type: 'polyline', plane: 'p', points: path, style: {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k], opacity: 0.7}, ...(s.hide_path ? {show: [tau(t1), 1e9]} : {})} as Prop);
   if (s.circle) props.push({id: 'centre', type: 'circle', plane: 'p', x: 0, y: 0, r: 6 * k, style: {fill: 'ink'}} as Prop);
   // with nothing after the motion, its last frame holds; else the arrows and readouts make way for the construction
   const after = show.has('limit') || (show.has('delta_v') && !!s.circle), hold = after ? tau(t1) + 0.01 : 1e9;

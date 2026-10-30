@@ -29,6 +29,9 @@ export type RaySpec = Common & {
   focal_length?: number;
   /** Object distances from the mirror or lens in cm, shown one after another; 'infinity' is a parallel beam. */
   objects: (number | 'infinity')[];
+  /** The window in cm, fixed: x from and to, y up and down from the axis. One true scale, across and up, whatever the object's
+   * distance (no height stretch, no refit), so that an applet's picture can be compared from one setting to the next. */
+  window?: {x: [number, number]; y: number};
   /** The object's height in cm; default a third of f (a plane mirror: a third of the farthest distance). */
   object_height?: number;
   /** Which principal rays to draw (1 to 3; one alone shows a single ray rule): parallel to the axis, through (or towards) F, through C or the optical
@@ -117,6 +120,8 @@ const FALLBACK: RayName[] = ['parallel', 'centre', 'focus', 'pole'];
 
 export function rayDiagramErrors(s: RaySpec): string[] {
   const e: string[] = [];
+  if (s.window !== undefined && !(Array.isArray(s.window.x) && s.window.x.length === 2 && s.window.x[0] < 0 && s.window.x[1] > 0 && isNum(s.window.y) && s.window.y > 0))
+    return ['ray_diagram: window is {x: [from, to] around the mirror or lens at 0, y: how far up and down from the axis}, in cm'];
   if (s.with !== undefined) {
     const w = s.with as {device?: string; focal_length?: number};
     if (!(s.device === 'convex_lens' || s.device === 'concave_lens')) return ['ray_diagram: with (a lens in contact) goes with a convex or concave lens'];
@@ -279,18 +284,19 @@ export function rayDiagram(s: RaySpec): Scene {
   const span = x1 - x0;
   x0 -= 0.12 * span; x1 += 0.12 * span;
   if (mirror) x1 = Math.max(x1, 0.18 * span);
+  if (s.window) [x0, x1] = s.window.x;
   const ys = [h, ...positions.flatMap(p => [isFinite(p.img.m) ? Math.abs(p.img.m * h) : 0, ...p.rays.map(r => Math.abs(r.hit[1]))])];
   // Exact rays are drawn to one scale whatever the aperture (the sphere's 0.9 R), so a small aperture looks small
   // beside a large one (C2: both were zoomed to fill their halves and looked alike).
   if (s.exact) ys.push(0.9 * R / 1.22);
   // Marked angles need the reflected ray in view for a while above the point of incidence.
-  const ymax = (plane && s.angles ? 1.55 : 1.22) * Math.max(...ys);
+  const ymax = s.window?.y ?? (plane && s.angles ? 1.55 : 1.22) * Math.max(...ys);
   // Without the panel the drawing takes the whole width under its title (a part of a side-by-side compound).
   const panel = s.panel !== false, left = 0.04 * W, right = panel ? 0.62 * W : 0.96 * W, top = panel ? 0.13 * H : (s.title ? 0.24 : 0.13) * H, bottom = 0.93 * H;
   // Heights may be stretched up to 2.5 times, as book figures are, so a small object still reads; straight rays stay
   // straight and still meet at the image. A plane mirror stays to scale: its angles are shown.
   const unit = Math.min((right - left) / (x1 - x0), (bottom - top) / (2 * ymax));
-  const unitY = plane ? unit : Math.min(2.5 * unit, (bottom - top) / (2 * ymax));
+  const unitY = plane || s.window ? unit : Math.min(2.5 * unit, (bottom - top) / (2 * ymax));
   const ox = left + ((right - left) - unit * (x1 - x0)) / 2 - unit * x0, oy = (top + bottom) / 2;
   const P = ([x, y]: Vec): Vec => [round(ox + unit * x, 2), round(oy - unitY * y, 2)];
   const bx0 = (left - ox) / unit, bx1 = (right - ox) / unit, by = (oy - top) / unitY;
