@@ -131,7 +131,11 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
       const box = planes.length === 1 ? (planes[0] as Plane).box : undefined;
       const right = x > 0.85 * scene.width || (!!box && x < box[2] && x + 14 * k + m.text.length * 30 * k * 0.58 > box[2] + 20 * k);
       // Kept inside the frame: a label near an edge reads inwards, and never above the top or below the bottom.
-      const lx = right ? x - 14 * k : Math.min(x + 14 * k, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
+      // A label at a large filled disc goes beside it, not across it (a radiating body, keph2-03 C10, 2026-10-31); small dots stay.
+      const disc = scene.props.find(p => { const c = p as unknown as {type: string; x: number; y: number; r: number; plane?: string; style?: {fill?: string}};
+        return c.type === 'circle' && !c.plane && c.r >= 40 * k && c.style?.fill && Math.hypot(x - c.x, y - c.y) < c.r + 14 * k; }) as unknown as {x: number; r: number} | undefined;
+      const start = disc ? (right ? disc.x - disc.r - 12 * k : disc.x + disc.r + 12 * k) : right ? x - 14 * k : x + 14 * k;
+      const lx = right ? start : Math.min(start, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
       props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(0.14 * scene.height, clear(lx, Math.max(0.14 * scene.height, y - 16 * k), m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
         align: right ? 'end' : 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     }

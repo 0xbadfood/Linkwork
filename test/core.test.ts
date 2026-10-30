@@ -1503,3 +1503,10 @@ test('fluids reproduce the book: the ocean window, syringes, car lift, spirit, s
   assert.match(err({verb: 'surface_tension', kind: 'drop', r: 2, liquid: 'water'}), /r is the radius/);
   assert.match(err({verb: 'fluid_pressure', kind: 'depth', liquid: 'water', depth: 2, annotate: [{text: 'deep', at: [0.5, 0.5]}]}), /named points only/);
 });
+
+test('a mark at a large disc is written beside it, not across it', () => {
+  const r: any = compile({verb: 'heat_transfer', kind: 'radiation', T: 301, Ts: 295, A: 1.9, e: 0.97, annotate: [{text: 'area 1.9 m²', at: 'body'}, {text: 'skin 301 K', at: 'surface'}]} as never);
+  const ball = r.scene.props.find((p: any) => p.type === 'circle' && p.r >= 40 && p.style?.fill);
+  assert.ok(ball, 'the radiating body is a filled disc');
+  for (const p of r.scene.props.filter((q: any) => q.id.endsWith('-label'))) assert.ok(p.x >= ball.x + ball.r, `${p.text} starts at ${p.x}, inside the disc`);
+});
