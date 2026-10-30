@@ -165,23 +165,27 @@ export function orbit(s: OrbitSpec): Scene {
   }
 
   if (s.kind === 'periods') {
-    const ps = s.planets!.map(p => ({...p, T: p.T ?? p.a ** 1.5})), aMax = Math.max(...ps.map(p => p.a));
+    const ps = s.planets!.map(p => ({...p, T: p.T ?? p.a ** 1.5})).sort((p, q) => p.a - q.a), aMax = Math.max(...ps.map(p => p.a));
+    // orbits from Mercury to Jupiter span 13 times: drawn to scale the inner ones crowd the Sun and their names pile up
+    // (C1 of keph1-07, 2026-10-30); past 4 times, radii are drawn on a square-root scale and the scene says so
+    const squeeze = aMax / Math.min(...ps.map(p => p.a)) > 4, rd = (a: number) => (squeeze ? Math.sqrt(a * aMax) : a);
     const win = fit([[-aMax, -aMax], [aMax, aMax]], box, 0.08), plane: Plane = {id: 'p', x: win.x, y: win.y, box};
     const Tin = Math.min(...ps.map(p => p.T)), Tout = Math.max(...ps.map(p => p.T)), physical = Math.min(Tout, 5 * Tin), span = 8, n = 240;
     const c = toScene(plane, [0, 0]);
     props.push({id: 'star', type: 'circle', x: c[0], y: c[1], r: 22 * k, style: {fill: 'accent', stroke: 'accent', width: 2 * k}, layer: 3} as Prop);
     const colours = ['cool', 'good', 'figure', 'bad', 'accent', 'ink'];
     ps.forEach((p, i) => {
-      const r = p.a * (box[2] - box[0]) / (win.x[1] - win.x[0]);
+      const r = rd(p.a) * (box[2] - box[0]) / (win.x[1] - win.x[0]);
       props.push({id: `o${i}`, type: 'circle', x: c[0], y: c[1], r, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 7 * k]}, layer: 1} as Prop);
       const ts = Array.from({length: n + 1}, (_, j) => physical * j / n), ph = 0.6 * i;
-      const id = mover(plane, `p${i}`, ts.map(t => [p.a * Math.cos(ph + 2 * Math.PI * t / p.T), p.a * Math.sin(ph + 2 * Math.PI * t / p.T)] as P2), ts.map(t => lead + span * t / physical));
+      const id = mover(plane, `p${i}`, ts.map(t => [rd(p.a) * Math.cos(ph + 2 * Math.PI * t / p.T), rd(p.a) * Math.sin(ph + 2 * Math.PI * t / p.T)] as P2), ts.map(t => lead + span * t / physical));
       body(`p${i}`, id, 12 * k, colours[i % colours.length], p.name);
     });
     line('l1', 'Law of periods: T² / a³ is the same for every planet', 0.3, {weight: 700});
-    ps.forEach((p, i) => line(`t${i}`, s.illustrative ? `${p.name}: farther out, a longer year` : `${p.name}: a = ${f(p.a)} AU, T = ${f(p.T)} y, T²/a³ = ${f(p.T ** 2 / p.a ** 3)}`,
+    ps.forEach((p, i) => line(`t${i}`, s.illustrative ? `${p.name}: ${i ? 'farther out, a longer year' : 'nearest, the shortest year'}` : `${p.name}: a = ${f(p.a)} AU, T = ${f(p.T)} y, T²/a³ = ${f(p.T ** 2 / p.a ** 3)}`,
       lead + 0.5 + 0.4 * i, {style: {fill: colours[i % colours.length]}}));
-    line('l9', 'Farther planets move slower and go farther round: a much longer year', lead + 1 + 0.4 * ps.length, {style: {fill: 'muted'}});
+    if (W >= 1.3 * H) line('l9', 'Farther planets move slower and go farther round: a much longer year', lead + 1 + 0.4 * ps.length, {style: {fill: 'muted'}});
+    if (squeeze) line('l10', 'Orbits not to scale: the outer ones are drawn closer in', lead + 1.4 + 0.4 * ps.length, {style: {fill: 'muted'}});
     facts.push(...ps.map(p => `${p.name}: a = ${f(p.a)} AU, T = ${f(p.T)} years, T²/a³ = ${f(p.T ** 2 / p.a ** 3)}`));
     return scene(s, W, H, lead + span + 1.2, plane, props, actors, {verb: 'orbit', facts, ratios: ps.map(p => p.T ** 2 / p.a ** 3)});
   }
