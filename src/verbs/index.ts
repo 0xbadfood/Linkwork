@@ -35,6 +35,7 @@ import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
 import {elastic, elasticErrors, type ElasticSpec} from './elastic.ts';
 import {fluidFlow, fluidFlowErrors, fluidPressure, fluidPressureErrors, surfaceErrors, surfaceTension, type FluidFlowSpec, type FluidPressureSpec, type SurfaceSpec} from './fluids.ts';
+import {exchangeErrors, expansionErrors, heatExchange, heatTransfer, temperature, temperatureErrors, thermalExpansion, transferErrors, type ExchangeSpec, type ExpansionSpec, type TemperatureSpec, type TransferSpec} from './thermal.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
@@ -42,7 +43,7 @@ export type Spec = LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec 
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
   | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
-  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec;
+  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -128,6 +129,14 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'a liquid in motion, computed: a pipe narrowing with particles riding its streamlines faster where they crowd, A₁v₁ = A₂v₂; Bernoulli, P + ½ρv² + ρgh the same at two sections (bars of the three terms); a jet from a hole, v = √(2gh), landing where its parabola meets the ground; streamlines past a ball, a spinning ball (Magnus effect) or a wing, with the lift; liquid layers between a fixed and a moving plate, or in a pipe, η = (F/A) / (v/l); a sphere falling through a liquid to its terminal velocity, vt = 2a²(ρ − σ)g / 9η'} as Verb<FluidFlowSpec>,
   surface_tension: {errors: surfaceErrors, compile: surfaceTension,
     about: 'surface tension, computed: molecules inside a liquid and at its surface (the net inward pull); a soap film on a U-shaped wire pulling a slider, S = F / 2l; a drop on a surface with its angle of contact and the three tensions (wetting or not); the excess pressure in a drop, an air cavity or a soap bubble, 2S/r or 4S/r; a liquid rising (or falling) in narrow tubes, h = 2S cos θ / ρga'} as Verb<SurfaceSpec>,
+  temperature: {errors: temperatureErrors, compile: temperature,
+    about: 'temperature scales and the gas law, computed: Celsius, Fahrenheit and Kelvin side by side with ice and steam points; the straight line between tC and tF; low-density gas lines extrapolated to absolute zero, −273.15 °C; PV = μRT with one unknown solved'},
+  thermal_expansion: {errors: expansionErrors, compile: thermalExpansion,
+    about: 'expansion on heating, computed from Table 10.1: a rod, Δl = αl l ΔT; a sheet with its strips ΔA₁, ΔA₂, ΔA₃, ΔA/A ≈ 2αl ΔT; a block, αv = 3αl; a ring heated to fit a rim; water, least volume at 4 °C; a rod held between walls, thermal stress Y αl ΔT'},
+  heat_exchange: {errors: exchangeErrors, compile: heatExchange,
+    about: 'heat taken in and given up, computed from Table 10.3: the same heat raising substances by different amounts, Q = msΔT; a hot body in a calorimeter, heat lost = heat gained, solving a specific heat, a final temperature or a latent heat; ice to steam, temperature against heat with flats where Q = mL'},
+  heat_transfer: {errors: transferErrors, compile: heatTransfer,
+    about: "how heat moves, computed: conduction along bars end to end in the steady state, H = KAΔT/L, junction temperature; convection in a pot, a sea or land breeze, a pumped loop, with particles riding the current; radiation, H = eσA(T⁴ − Ts⁴); Wien's law on blackbody curves; Newton's law of cooling"},
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,

@@ -1420,6 +1420,30 @@ test('elastic films: names the right way round, marks at named points, side-by-s
   assert.ok(Math.abs(sag(1) / sag(0) - 2e11 / 7e10) < 0.01, `${sag(0)} ${sag(1)}`);
 });
 
+test('thermal verbs reproduce the book: Ex. 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, the rail, the skin, Wien', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const meta = (spec: any) => { const r: any = compile(spec); assert.ok(r.scene, JSON.stringify(r.errors)); return r.scene.meta; };
+  const near = (a: number, b: number, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${a} vs ${b}`);
+  near(meta({verb: 'thermal_expansion', kind: 'ring', material: 'iron', d_ring: 5.231, d_rim: 5.243, T1: 27}).T2, 218);
+  near(meta({verb: 'thermal_expansion', kind: 'stress', material: 'steel', dT: 10, Y: 2e11, A: 40e-4}).stress, 2.4e7);
+  near(meta({verb: 'heat_exchange', kind: 'mixing', hot: {name: 'aluminium sphere', m: 0.047, T: 100}, cold: {material: 'water', s: 4180, m: 0.25, T: 20}, vessel: {material: 'copper', s: 386, m: 0.14}, Tf: 23}).s_hot, 911);
+  near(meta({verb: 'heat_exchange', kind: 'mixing', hot: {name: 'water', m: 0.3, T: 50}, ice: 0.15, Tf: 6.7}).L, 3.34e5);
+  const st = meta({verb: 'heat_exchange', kind: 'state', m: 3, T0: -12});
+  near(st.Q[0], 75600); near(st.Q[1], 1.005e6); near(st.Q[2], 1255800); near(st.Q[3], 6.768e6); near(st.total, 9.1e6);
+  near(meta({verb: 'heat_transfer', kind: 'conduction', bars: [{material: 'steel', L: 0.15, A: 2}, {material: 'copper', L: 0.1, A: 1}], T1: 300, T2: 0}).junctions[1], 44.4);
+  const compound = meta({verb: 'heat_transfer', kind: 'conduction', bars: [{K: 79, L: 0.1, A: 0.02}, {K: 109, L: 0.1, A: 0.02}], T1: 373, T2: 273});
+  near(compound.junctions[1], 315); near(compound.H, 916.1);
+  near(meta({verb: 'heat_transfer', kind: 'cooling', from: 94, to: 86, minutes: 2, Ts: 20, then_from: 71, then_to: 69}).time * 60, 42);
+  near(meta({verb: 'heat_transfer', kind: 'radiation', T: 301, Ts: 295, A: 1.9, e: 0.97}).H, 66.4);
+  near(meta({verb: 'heat_transfer', kind: 'wien', temps: [6000]}).peaks[0], 2.9e-3 / 6000);
+  assert.ok((compile({verb: 'heat_exchange', kind: 'mixing', hot: {material: 'copper', m: 1, T: 100}, cold: {material: 'water', m: 1, T: 20}, Tf: 300} as any) as any).errors?.length);
+  assert.ok((compile({verb: 'thermal_expansion', kind: 'rod', material: 'unobtainium', dT: 5} as any) as any).errors?.length);
+  assert.ok((compile({verb: 'heat_transfer', kind: 'conduction', bars: [{material: 'copper', L: 1}], T1: 0, T2: 100} as any) as any).errors?.length);
+  for (const spec of [{kind: 'scales', t: 37}, {kind: 'conversion', t: -40}, {kind: 'absolute_zero'}, {kind: 'gas_law', P: 1.013e5, mu: 1, T: 273}]) meta({verb: 'temperature', ...spec});
+  for (const kind of ['pot', 'day', 'night', 'forced']) meta({verb: 'heat_transfer', kind: 'convection', setting: kind});
+  for (const spec of [{kind: 'rod', material: 'copper', l: 1, dT: 100}, {kind: 'sheet'}, {kind: 'block', material: 'iron'}, {kind: 'water'}]) meta({verb: 'thermal_expansion', dT: 10, ...spec});
+});
+
 test('surface_tension pictures tell the truth at their edges: a near-zero angle is opened up and says so, a fall is a fall, a drop can grow', async () => {
   const {compile} = await import('../src/verbs/index.ts');
   const text = (spec: any) => JSON.stringify(compile(spec).scene);

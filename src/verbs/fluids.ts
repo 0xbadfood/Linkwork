@@ -48,7 +48,7 @@ const colour = (name?: string) => (name?.toLowerCase() === 'mercury' ? 'muted' :
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 /** The pieces every fluid scene uses: the frame, the panel's lines, labels, rectangles and the scene's end. */
-function kit(s: Common) {
+export function kit(s: Common) {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], facts: string[] = [];
   const [bx0, by0, bx1, by1] = box, bw = bx1 - bx0, bh = by1 - by0, narrow = W < 1.3 * H, ptext = panel(W, k), ill = !!s.illustrative;

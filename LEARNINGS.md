@@ -109,3 +109,7 @@ caught or a reviewer saw while building the examples and the first pilot film (h
 ## A true value can draw nothing
 
 Water on glass has an angle of contact near 0°, so the true picture is a bare line with no drop and no θ. When a true value makes the picture empty, open it up to the smallest readable size and say so on the panel, in the words "drawn larger than it is". The same goes for wording written with one case in mind: "the narrower the tube, the higher" was on screen over mercury falling.
+
+## Check the direction of a cycle against the words beside it
+
+The first convection pot circulated both cells downward through the middle while its own arrow said hot water rises there. Numbers are tested against the book, but a loop's sense isn't a number: read a frame of any cycle against its caption before committing.
