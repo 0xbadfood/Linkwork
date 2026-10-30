@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
-import {check, compile, dist, frame, toPlane, ladderFacts, place, poseAt, RIGS, solve, svg, valueAt, wavelengthColour, type Key,
+import {cards, check, compile, dist, frame, toPlane, ladderFacts, place, poseAt, RIGS, solve, svg, valueAt, wavelengthColour, type Key,
   type Rig, type Scene} from '../src/index.ts';
 
 const figure = RIGS.figure;
@@ -1385,4 +1385,37 @@ test('elastic reproduces the book: a rod, wires end to end, a sheared slab, the 
   assert.match(err({kind: 'curve', curve: 'rubber', show: ['unload']}), /no 'unload'/);
   assert.match(err({kind: 'shear', material: 'lead', L: 0.5, A: 0.05, F: 9e4, show: ['edge']}), /shows nothing extra/);
   assert.match(err({kind: 'hydraulic', material: 'water', depth: 10, g: 32}), /g is 9\.8/);
+});
+
+test('elastic films: names the right way round, marks at named points, side-by-side parts share one factor (keph2-01)', () => {
+  const err = (spec: object) => compile({verb: 'elastic', ...spec} as any).errors.join(' ');
+  // C1 said 'Plastic: the spring has no tendency to regain it': names is [springs back, stays deformed]
+  assert.match(err({kind: 'recover', names: ['body', 'spring']}), /wrong way round/);
+  assert.match(err({kind: 'recover', names: ['putty', 'spring']}), /wrong way round/);
+  assert.equal(err({kind: 'recover', names: ['rubber band', 'clay']}), '');
+  // C2 put Δx and θ in an empty corner: the plane is only the drawing's box, so marks go at named points
+  assert.match(err({kind: 'shear', material: 'steel', L: 1, A: 0.01, F: 2e4, annotate: [{text: 'top slides', at: [0.3, 1]}]}), /named points only \(.*top_face/);
+  const sh = compile({verb: 'elastic', kind: 'shear', material: 'steel', L: 1, A: 0.01, F: 2e4, annotate: [{text: 'chosen face', at: 'top_face'}]} as any);
+  assert.equal(sh.errors.join(' '), '');
+  const anchors = (sh.scene!.meta as any).anchors, note = sh.scene!.props.find(p => p.id === 'note0-label') as any;
+  assert.ok(note && Math.abs(note.x - anchors.top_face[0]) < 200 && Math.abs(note.y - anchors.top_face[1]) < 120, `${JSON.stringify(note)} ${anchors.top_face}`);
+  // the same holds for every verb drawn on a bare 0–1 box (forces, moments ...): no [x, y] offered there
+  for (const v of ['forces', 'moments', 'rotation', 'work', 'energy']) {
+    const card = (cards(['trusted', 'trial']) as any)[v];
+    if (card?.fields?.annotate) assert.doesNotMatch(card.fields.annotate, /\[x, y\] in the drawing's own/, v);
+  }
+  // C3: the curve's 'permanent set' sits under the axis, clear of 'plastic region'; written again by the plan, it goes back
+  const curve = compile({verb: 'elastic', kind: 'curve', show: ['regions', 'unload']} as any).scene!;
+  const set = curve.props.find(p => p.id === 'lset') as any, plastic = curve.props.find(p => p.id === 'lplastic') as any;
+  assert.ok(set.y - plastic.y > 200, `set ${set.y}, plastic ${plastic.y}`);
+  const el = curve.props.find(p => p.id === 'lelastic') as any;
+  assert.ok(plastic.x > el.x + 'elastic region'.length * 22 * 0.5, 'the two region labels side by side, not on each other');
+  assert.match(err({kind: 'curve', show: ['unload'], annotate: [{text: 'permanent set', at: 'set', point: true}]}), /already on the picture/);
+  assert.equal(err({kind: 'curve', show: ['unload'], annotate: [{at: 'set', point: true}, {text: 'yield', at: 'B'}]}), '');
+  // C9: a stiff beam beside a soft one sagged alike, each fitted to its own box; a compound shares the smaller factor
+  const beam = (Y: number) => ({verb: 'elastic', kind: 'beam', Y, l: 1, b: 0.05, d: 0.1, F: 1000, illustrative: true});
+  const both = compile({compound: true, parts: [{id: 'a', box: [0, 0, 960, 1080], spec: beam(2e11)}, {id: 'b', box: [960, 0, 960, 1080], spec: beam(7e10)}]} as any);
+  assert.equal(both.errors.join(' '), '');
+  const sag = (i: number) => { const c = both.scene!.parts![i].scene.meta as any; return c.anchors.centre[1] - c.anchors.left[1]; };
+  assert.ok(Math.abs(sag(1) / sag(0) - 2e11 / 7e10) < 0.01, `${sag(0)} ${sag(1)}`);
 });

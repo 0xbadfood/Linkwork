@@ -36,12 +36,18 @@ export function marksErrors(marks: unknown): string[] {
   return e;
 }
 
-/** Where marks can go in this scene: its named points, and the units [x, y] is read in (or why it has none). */
+/** A plane that is only the drawing's box (x and y from 0 to 1, no axes drawn on it): its numbers mean nothing to a
+ * planner, who guessed [0.3, 1] for 'the top of the block' and put Δx in an empty corner (keph2-01 C2, 2026-10-30). */
+const placeholder = (scene: Scene, plane: Plane) => plane.x[0] === 0 && plane.x[1] === 1 && plane.y[0] === 0 && plane.y[1] === 1
+  && !scene.props.some(p => p.type === 'axes' && (p as {plane?: string}).plane === plane.id);
+
+/** Where marks can go in this scene: its named points, and the units [x, y] is read in (or why it has none). A verb
+ * whose meta says anchorsOnly (its plane is not to scale, such as a curve's shape) takes named points only. */
 export function markable(scene: Scene): {anchors: string[]; units: string | null} {
-  const meta = scene.meta as {anchors?: Record<string, Vec>; units?: Units} | undefined;
+  const meta = scene.meta as {anchors?: Record<string, Vec>; units?: Units; anchorsOnly?: boolean} | undefined;
   const planes = scene.planes ?? [];
   return {anchors: Object.keys(meta?.anchors ?? {}),
-    units: meta?.units ? meta.units.name : planes.length === 1 ? "the drawing's own x and y (the numbers on its axes, or metres on a stage)" : null};
+    units: meta?.units ? meta.units.name : planes.length === 1 && !meta?.anchorsOnly && !placeholder(scene, planes[0] as Plane) ? "the drawing's own x and y (the numbers on its axes, or metres on a stage)" : null};
 }
 
 /** The scene with its marks drawn: a dot (point: true) and a label just above and to the right of it. */
@@ -57,7 +63,7 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
       at = meta?.anchors?.[v];
       if (!at) { errors.push(`${verb}: annotate[${i}].${field}: no point named ${JSON.stringify(v)}; ${anchors.length ? `named points: ${anchors.join(', ')}` : 'this verb names no points'}${units ? `, or [x, y] in ${units}` : ''}`); return; }
     } else if (meta?.units) at = [meta.units.ox + meta.units.sx * v[0], meta.units.oy - meta.units.sy * v[1]];
-    else if (planes.length === 1) at = toScene(planes[0] as Plane, v);
+    else if (units) at = toScene(planes[0] as Plane, v);
     else { errors.push(`${verb}: annotate[${i}]: this verb takes named points only (${anchors.join(', ') || 'none'})`); return; }
     if (at[0] < 0 || at[0] > scene.width || at[1] < 0 || at[1] > scene.height) { errors.push(`${verb}: annotate[${i}].${field} is off the picture`); return; }
     return at;
@@ -85,12 +91,15 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
   // A mark's text is words for the viewer. A point's id (focus_edge) on screen reads as code: it goes back to the
   // planner. The name of a point the verb already labels (P, F, C) is not drawn twice: only its dot, if asked for.
   const labelled = new Set(((meta as {labelled?: string[]})?.labelled ?? []).map(n => n.toLowerCase()));
+  // A label the verb already draws, written again (the curve's 'permanent set' twice, keph2-01 C3): it goes back.
+  const own = new Set(scene.props.filter(p => p.type === 'text' && p.id !== 'title').map(p => String((p as {text: string}).text).trim().toLowerCase()));
   marks.forEach((m, i) => {
     if (m.text && /_/.test(m.text) && anchors.includes(m.text.trim())) errors.push(`${verb}: annotate[${i}].text ${JSON.stringify(m.text)} is a point's name: write the words to show, such as ${JSON.stringify(m.text.replace(/_/g, ' '))}`);
     if (m.text && typeof m.at === 'string' && !m.to && labelled.has(m.text.trim().replace(/[₁₂]/g, c => (c === '₁' ? '1' : '2')).toLowerCase()) && m.text.trim().toLowerCase().replace(/[₁₂]/g, c => (c === '₁' ? '1' : '2')) === m.at.toLowerCase()) {
       if (!m.point) return;
       m = {...m, text: undefined};
     }
+    if (m.text && !m.to && own.has(m.text.trim().toLowerCase())) { errors.push(`${verb}: annotate[${i}].text ${JSON.stringify(m.text)} is already on the picture: leave it out, or give point: true without text for a dot`); return; }
     const at = resolve(m.at, i, 'at');
     if (!at) return;
     const to = m.to === undefined ? undefined : resolve(m.to, i, 'to');

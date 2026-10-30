@@ -97,3 +97,9 @@ caught or a reviewer saw while building the examples and the first pilot film (h
 - A real deformation is too small to see (a steel wire stretches a thousandth of its length). Draw it larger with one
   factor for every part of the scene, so parts still compare truly, and say on screen that it is drawn larger (elastic).
 - A panel of many lines overflows a half-width part: drop the lines that don't fit, with the main ones written first.
+- Side-by-side parts that each fit their own deformation look alike (a stiff and a soft beam sagged the same): a verb
+  publishes meta.shared_scale {key, value}, and a compound gives its parts of one key the smallest factor.
+- A verb drawn on a bare 0–1 box offers no [x, y] for marks: a planner guesses where the block is and misses. Publish
+  named points (meta.anchors), and set anchorsOnly when the plane is a shape, not a scale.
+- A two-name field whose order is the physics ([springs back, stays deformed]) gets a guard on the order, not only the
+  card's wording: the plan once named ['body', 'spring'] and the screen called the spring plastic.

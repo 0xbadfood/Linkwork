@@ -47,7 +47,15 @@ export type ElasticSpec = Common & {verb: 'elastic'; kind: (typeof ELASTIC_KINDS
   Y?: number; G?: number; B?: number; sigma?: number; L?: number; d?: number; A?: number; F?: number; load?: number;
   wires?: Wire[]; dL?: number; compress?: boolean; w?: number; p?: number; depth?: number; V?: number; shape?: 'sphere' | 'cube';
   compare?: string[]; curve?: 'metal' | 'rubber'; g?: number; l?: number; b?: number; names?: [string, string];
-  show?: ('lateral' | 'energy' | 'regions' | 'unload' | 'edge')[]};
+  show?: ('lateral' | 'energy' | 'regions' | 'unload' | 'edge')[];
+  /** Drawn px per real metre of deformation: set by a compound scene so side-by-side parts share one factor (a stiffer
+   * beam beside a softer one sagged alike when each part fitted its own sag, C9 of keph2-01). Not a planner field. */
+  deform_scale?: number};
+
+// Words for things that spring back and things that stay deformed: names is [the elastic one, the plastic one], and a
+// plan once named ['body', 'spring'], so the screen said 'Plastic: the spring has no tendency to regain it' (keph2-01 C1).
+const SPRINGY = /\b(spring|rubber|elastic|steel|wire|ball|band|bow|trampoline)\b/i;
+const DOUGHY = /\b(putty|clay|plasticine|dough|wax|mud|play-?doh|lead shot)\b/i;
 
 const SHOWS: Record<string, string[]> = {tension: ['lateral', 'energy'], curve: ['regions', 'unload', 'energy'], beam: ['edge'],
   shear: [], hydraulic: [], recover: []};
@@ -130,6 +138,12 @@ export function elasticErrors(s: ElasticSpec): string[] {
   if (s.kind === 'recover' && s.names !== undefined)
     (Array.isArray(s.names) && s.names.length === 2 ? s.names : [undefined, undefined]).forEach((n, i) => {
       const bad = nameError(`elastic: names ${i + 1}`, n, 14, 'spring, putty, rubber band'); if (bad) e.push(bad); });
+  if (s.kind === 'recover' && Array.isArray(s.names) && s.names.length === 2) {
+    const [a, b] = s.names.map(String);
+    if (SPRINGY.test(b) || DOUGHY.test(a) || a.trim().toLowerCase() === b.trim().toLowerCase())
+      e.push(`elastic: names is [the one that springs back, the one that stays deformed], such as ['spring', 'putty']; ${JSON.stringify(s.names)} has them the wrong way round or the same`);
+  }
+  if (s.deform_scale !== undefined && !(isNum(s.deform_scale) && s.deform_scale > 0)) e.push('elastic: deform_scale is set by a compound scene, px per metre');
   return e;
 }
 
@@ -158,6 +172,10 @@ export function elastic(s: ElasticSpec): Scene {
   const key = (t0: number, t1: number, v0: number, v1: number): [number, number][] => [[t0, v0], [t1, v1]];
   const lead = 0.6, t0 = 1.4, t1 = 3.6;          // the load is put on at lead + 0.4 and the deformation grows from t0 to t1
   const larger = () => line('lnote', 'The deformation is drawn larger than real', t1 + 0.3, {style: {fill: 'muted'}});
+  // Marks go at named points only: the plane is the drawing's box, so [x, y] in it landed beside the block, not on it
+  // (keph2-01 C2, 'Δx' and 'θ' floating in the corner). shared: the deformation factor, for a compound to share.
+  const anchors: Record<string, [number, number]> = {};
+  const pin = (perMetre?: number, kind?: string) => ({anchors, anchorsOnly: true, ...(perMetre && kind ? {shared_scale: {key: `elastic-${kind}`, value: perMetre}} : {})});
 
   if (s.kind === 'tension') {
     const one = !s.wires, comp = !!s.compress && one;
@@ -173,7 +191,7 @@ export function elastic(s: ElasticSpec): Scene {
     const blocks = ws.map((w, i) => (w.load !== undefined || (i === ws.length - 1 && s.load !== undefined)));
     const blockH = 56 * k, arrowL = 80 * k, top = by0 + 24 * k;
     const sc = (bh - 40 * k - blocks.filter(Boolean).length * blockH - (s.F !== undefined || s.dL !== undefined ? arrowL + 30 * k : 0) - (blocks[ws.length - 1] ? arrowL : 0)) / ((1 + stretch) * sumL);
-    const ex = stretch * sumL / total;                     // drawn metres per real metre of stretch, one factor for all
+    const ex = s.deform_scale ? s.deform_scale / sc : stretch * sumL / total;   // drawn metres per real metre of stretch, one factor for all
     const dmax = Math.max(...ws.map(w => Math.sqrt(w.A)));
     const wpx = ws.map(w => (lateral ? 80 * k : 14 * k + 22 * k * Math.sqrt(w.A) / dmax));
     const cx = bx0 + (narrow ? 0.4 : 0.45) * bw;
@@ -191,11 +209,15 @@ export function elastic(s: ElasticSpec): Scene {
       label('ldL', cx + wpx[0] / 2 + 120 * k, ground - h0 + 18 * k, 'ΔL', {show: [t1, 1e9], style: {fill: 'bad'}});
       props.push({id: 'Ldim', type: 'line', x1: x - 40 * k, y1: ground, x2: x - 40 * k, y2: ground - h0, style: {stroke: 'muted', width: 2 * k}, layer: 2} as Prop);
       label('lL', x - 52 * k, ground - h0 / 2, 'L', {align: 'end', style: {fill: 'muted'}});
+      Object.assign(anchors, {top: [cx, ground - h1], bottom: [cx, ground], rod: [cx, ground - h1 / 2], load: [cx, ground - h1 - blockH / 2]});
     } else {
       hatch('ceiling', cx - 150 * k, cx + 150 * k, top, false);
       let y0 = top, y1 = top;                       // the running top of the next wire: unloaded and loaded
+      anchors.top = [cx, top];
       ws.forEach((w, i) => {
         const h0 = w.L * sc, h1 = h0 + dL[i] * ex * sc, x = cx - wpx[i] / 2;
+        anchors[ws.length > 1 ? `wire${i + 1}` : 'wire'] = [cx, y1 + h1 / 2];
+        anchors.bottom = [cx, y1 + h1];
         const thin = lateral ? wpx[i] * (1 - Math.min(0.4, (s.sigma ?? MATERIALS[(s.material ?? '').toLowerCase()]?.sigma ?? 0.3) * stretch)) : wpx[i];
         rect(`wire${i}`, x, y0, wpx[i], h0, {fill: ['cool', 'figure', 'good'][i], stroke: 'ink', width: 2 * k},
           {keys: {y: key(t0, t1, y0, y1), h: key(t0, t1, h0, h1), ...(lateral ? {x: key(t0, t1, x, cx - thin / 2), w: key(t0, t1, wpx[i], thin)} : {})}});
@@ -209,6 +231,7 @@ export function elastic(s: ElasticSpec): Scene {
         if (i === ws.length - 1) label('ldL', cx + 156 * k, (y0 + y1) / 2 + 10 * k, ws.length > 1 ? 'total ΔL' : 'ΔL', {show: [t1 - 0.6, 1e9], style: {fill: 'bad'}});
         if (blocks[i]) {
           const kg = w.load ?? s.load!;
+          anchors[ws.length > 1 ? `load${i + 1}` : 'load'] = [cx, y1 + blockH / 2];
           rect(`load${i}`, cx - 55 * k, y0, 110 * k, blockH, {fill: 'faint', stroke: 'ink', width: 2 * k}, {show: [lead + 0.4, 1e9], fade: 0.3, keys: {y: key(t0, t1, y0, y1)}});
           label(`lload${i}`, cx, y0 + blockH / 2 + 9 * k, `${f(kg)} kg`, {align: 'middle', show: [lead + 0.4, 1e9], keys: {y: key(t0, t1, y0 + blockH / 2 + 9 * k, y1 + blockH / 2 + 9 * k)}});
           y0 += blockH; y1 += blockH;
@@ -244,13 +267,13 @@ export function elastic(s: ElasticSpec): Scene {
       facts.push(`elastic potential energy stored ${num(U)} J (u = ½ σ ε = ${num(stress * strain / 2)} J/m³)`);
     }
     larger();
-    return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, dL, T, ...(s.dL !== undefined ? {F: Fb} : {})});
+    return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, dL, T, ...(s.dL !== undefined ? {F: Fb} : {}), ...pin(ex * sc, `tension`)});
   }
 
   if (s.kind === 'shear') {
     const L = s.L!, w = s.w ?? L, F = force(s)!, A = s.A!, G = modulus(s, 'G') ?? 3e10;
     const dx = F * L / (A * G), theta = dx / L;
-    const hpx = Math.min(0.62 * bh, 0.5 * bw * L / w), wpx = hpx * w / L, D = 0.22 * hpx;
+    const hpx = Math.min(0.62 * bh, 0.5 * bw * L / w), wpx = hpx * w / L, D = s.deform_scale ? s.deform_scale * dx : 0.22 * hpx;
     const base = by1 - 40 * k, x0 = bx0 + 0.18 * bw, top = base - hpx;
     hatch('ground', x0 - 40 * k, x0 + wpx + 60 * k, base, true);
     props.push({id: 'was', type: 'rect', x: x0, y: top, w: wpx, h: hpx, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, layer: 2} as Prop);
@@ -282,7 +305,9 @@ export function elastic(s: ElasticSpec): Scene {
     line('l4', ill ? 'Shear modulus G = (F / A) / θ' : `G = (F / A) / θ = ${num(G)} Pa${s.material ? ` (${s.material})` : ''}`, t1 + 0.4, {weight: 700});
     larger();
     facts.push(`shearing stress F/A = ${num(F / A)} Pa`, `displacement of the top face Δx = ${mm(dx)}`, `shearing strain θ = ${num(theta)} rad (${num(theta * 180 / Math.PI)}°)`, `shear modulus G = ${num(G)} Pa`);
-    return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, dx, theta});
+    Object.assign(anchors, {top_left: [x0 + D, top], top_right: [x0 + wpx + D, top], top_face: [x0 + wpx / 2 + D, top], base_left: [x0, base],
+      base_right: [x0 + wpx, base], base: [x0 + wpx / 2, base], block: [x0 + wpx / 2 + D / 2, base - hpx / 2]});
+    return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, dx, theta, ...pin(D / dx, 'shear')});
   }
 
   if (s.kind === 'hydraulic') {
@@ -325,7 +350,8 @@ export function elastic(s: ElasticSpec): Scene {
       });
     }
     larger();
-    return scene(s, W, H, t1 + 2.6 + 0.4 * (s.compare?.length ?? 0), plane, props, [], {verb: 'elastic', facts, strain});
+    Object.assign(anchors, {body: [cx, cy], surface: [cx, cy - r1], fluid: [bx0 + 30 * k, by0 + 80 * k]});
+    return scene(s, W, H, t1 + 2.6 + 0.4 * (s.compare?.length ?? 0), plane, props, [], {verb: 'elastic', facts, strain, ...pin()});
   }
 
   if (s.kind === 'curve') {
@@ -401,7 +427,9 @@ export function elastic(s: ElasticSpec): Scene {
       if (unload) {
         const [x, y] = toScene(gp, [set, 0]);
         props.push({id: 'mset', type: 'circle', x, y, r: 8 * k, style: {fill: 'bad'}, layer: 4, show: [end, 1e9], fade: 0.3} as Prop);
-        label('lset', x + 10 * k, y - 18 * k, 'permanent set', {style: {fill: 'bad'}, show: [end, 1e9]});
+        // under the strain axis, where the set is read: above it, it sat on the plastic region's label (keph2-01 C3)
+        label('lset', x, y + 34 * k, 'permanent set', {align: 'middle', style: {fill: 'bad'}, show: [end, 1e9]});
+        anchors.set = [x, y];
       }
       facts.push('O to A: stress proportional to strain (Hooke\'s law); A: proportional limit', 'B: yield point (elastic limit); past it, plastic deformation',
         ...(unload ? ['unloaded beyond B, the wire returns along a line parallel to OA and keeps a permanent set'] : ['D: ultimate tensile strength; E: fracture point']),
@@ -412,7 +440,8 @@ export function elastic(s: ElasticSpec): Scene {
       rect('elastic', ex0, ey0, ex1 - ex0, ey1 - ey0, {fill: 'good', opacity: 0.14}, {layer: 1, show: [whenAt(Bp), 1e9], fade: 0.4});
       rect('plastic', ex1, ey0, qx - ex1, ey1 - ey0, {fill: 'bad', opacity: 0.1}, {layer: 1, show: [whenAt(Bp) + 0.4, 1e9], fade: 0.4});
       label('lelastic', ex0 + 8 * k, ey0 + 28 * k, 'elastic region', {style: {fill: 'good'}, show: [whenAt(Bp), 1e9], size: 22 * k});
-      label('lplastic', ex1 + 16 * k, ey1 - 16 * k, 'plastic region', {style: {fill: 'bad'}, show: [whenAt(Bp) + 0.4, 1e9], size: 22 * k});
+      // at the top of its band, after the elastic label: at the bottom the unloading line came down through it (keph2-01 C3)
+      label('lplastic', Math.max(ex1 + 16 * k, ex0 + 8 * k + 'elastic region'.length * 22 * k * 0.56 + 28 * k), ey0 + 28 * k, 'plastic region', {style: {fill: 'bad'}, show: [whenAt(Bp) + 0.4, 1e9], size: 22 * k});
     }
     if (show.has('energy')) {
       const top = rubber ? {x: 0.6, y: rub(0.6)} : A;
@@ -422,7 +451,11 @@ export function elastic(s: ElasticSpec): Scene {
       void top;
     }
     line('lnote', rubber ? 'The shape is the book\'s, not to scale' : (ill ? 'Not to scale: the straight part is really very short' : 'Not to scale: the straight part really ends below 1 % strain'), end + 0.2, {style: {fill: 'muted'}});
-    return scene(s, W, H, end + 2.2, gp, props, [dot as never], {verb: 'elastic', facts, ...(unload ? {set} : {})});
+    if (!rubber) for (const [n, q] of Object.entries({O, A, B: Bp, C, D, E})) anchors[n] = toScene(gp, [q.x, q.y]);
+    else Object.assign(anchors, {O: toScene(gp, [0, 0]), top: toScene(gp, [1, rub(1)])});
+    anchors.wire = [wx, wtop + wl / 2];
+    return scene(s, W, H, end + 2.2, gp, props, [dot as never], {verb: 'elastic', facts, ...(unload ? {set} : {}), ...pin(),
+      labelled: rubber ? [] : ['A', 'B', ...(unload ? ['set'] : ['D', 'E'])]});
   }
 
   if (s.kind === 'beam') {
@@ -434,7 +467,7 @@ export function elastic(s: ElasticSpec): Scene {
     const thick = (dd: number) => 10 * k + 28 * k * dd / Math.max(b, d);
     const shape = (u: number) => { const v = u <= 0.5 ? u : 1 - u; return 3 * v - 4 * v ** 3; };   // central load, both ends free to turn
     rows.forEach((r, ri) => {
-      const ds = maxSag * deltas[ri] / big, th = thick(r.d), y = r.y;
+      const ds = (s.deform_scale ?? maxSag / big) * deltas[ri], th = thick(r.d), y = r.y;
       for (const [i, x] of [[0, xl], [1, xr]] as const)
         props.push({id: `sup${ri}${i}`, type: 'polyline', points: [[x, y + th / 2], [x - 22 * k, y + th / 2 + 36 * k], [x + 22 * k, y + th / 2 + 36 * k]], closed: true, style: {fill: 'muted', stroke: 'ink', width: 2 * k}, layer: 2} as Prop);
       props.push({id: `was${ri}`, type: 'line', x1: xl, y1: y, x2: xr, y2: y, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, layer: 1} as Prop);
@@ -443,7 +476,8 @@ export function elastic(s: ElasticSpec): Scene {
         props.push({id: `b${ri}-${i}`, type: 'line', x1: xl + span * u0, y1: y, x2: xl + span * u1, y2: y, style: {stroke: ri ? 'figure' : 'cool', width: th, cap: 'round'}, layer: 3,
           keys: {y1: key(t0, t1, y, y + ds * shape(u0)), y2: key(t0, t1, y, y + ds * shape(u1))}} as Prop);
       }
-      const cxm = xl + span / 2;
+      const cxm = xl + span / 2, sfx = ri ? '2' : '';
+      Object.assign(anchors, {[`centre${sfx}`]: [cxm, y + ds], [`left${sfx}`]: [xl, y], [`right${sfx}`]: [xr, y], [`load${sfx}`]: [cxm, y + th / 2 + 52 * k + ds]});
       rect(`w${ri}`, cxm - 40 * k, y + th / 2 + 30 * k, 80 * k, 44 * k, {fill: 'faint', stroke: 'ink', width: 2 * k}, {show: [lead + 0.4, 1e9], fade: 0.3, keys: {y: key(t0, t1, y + th / 2 + 30 * k, y + th / 2 + 30 * k + ds)}});
       props.push({id: `hang${ri}`, type: 'line', x1: cxm, y1: y + th / 2, x2: cxm, y2: y + th / 2 + 30 * k, keys: {y1: key(t0, t1, y + th / 2, y + th / 2 + ds), y2: key(t0, t1, y + th / 2 + 30 * k, y + th / 2 + 30 * k + ds)}, style: {stroke: 'ink', width: 2 * k}, show: [lead + 0.4, 1e9], layer: 3} as Prop);
       label(`lW${ri}`, cxm + 50 * k, y + th / 2 + 62 * k, 'W', {show: [lead + 0.4, 1e9], keys: {y: key(t0, t1, y + th / 2 + 62 * k, y + th / 2 + 62 * k + ds)}});
@@ -462,7 +496,7 @@ export function elastic(s: ElasticSpec): Scene {
     } else line('l3', 'Deeper sags far less (d³); a stiffer material (larger Y) and a shorter span help too', t1 + 0.5, {style: {fill: 'muted'}});
     larger();
     facts.push(...rows.map((r, i) => `b = ${f(r.b * 100)} cm, d = ${f(r.d * 100)} cm: sag δ = ${mm(deltas[i])}`), `load W = ${f(F, 1)} N, span l = ${f(l)} m, Y = ${num(Y)} Pa`);
-    return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, deltas});
+    return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, deltas, ...pin(maxSag / big, 'beam')});
   }
 
   // recover: a spring and a lump of putty pulled the same way, then let go
@@ -498,5 +532,6 @@ export function elastic(s: ElasticSpec): Scene {
   line('l3', `Plastic: the ${n2} has no tendency to regain it, it stays deformed`, back + 0.5, {style: {fill: 'bad'}});
   line('l4', 'Real solids are elastic only up to a limit', back + 1.1, {style: {fill: 'muted'}});
   facts.push(`${n1}: elastic, returns to its length`, `${n2}: plastic, keeps its new shape`);
-  return scene(s, W, H, back + 2.6, plane, props, [], {verb: 'elastic', facts});
+  Object.assign(anchors, {[`left`]: [xs[0], top + L0 / 2], right: [xs[1], top + L0 / 2]});
+  return scene(s, W, H, back + 2.6, plane, props, [], {verb: 'elastic', facts, ...pin()});
 }

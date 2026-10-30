@@ -78,6 +78,23 @@ export function compose(c: CompoundSpec, compile: (spec: {verb: string}) => {sce
   const waits = new Set(c.parts.filter(p => p.wait).map(p => p.id));
   for (const p of c.parts) if (!targets.has(p.id)) errors.push(...build(p));
   if (errors.length) return {errors};
+  // Parts that draw a deformation larger than real (meta.shared_scale: px per real metre, under a key such as
+  // elastic-beam) share the smallest factor, so side by side a stiffer beam sags less than a softer one. Each fitted
+  // its own, and two beams of different Y looked the same (keph2-01 C9, 2026-10-30).
+  const groups = new Map<string, {id: string; value: number}[]>();
+  for (const p of c.parts) {
+    const sh = (scenes.get(p.id)?.meta as {shared_scale?: {key: string; value: number}})?.shared_scale;
+    if (p.spec && sh && isNum(sh.value) && sh.value > 0) groups.set(sh.key, [...(groups.get(sh.key) ?? []), {id: p.id, value: sh.value}]);
+  }
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const value = Math.min(...members.map(m => m.value));
+    for (const m of members) {
+      specs.set(m.id, {...specs.get(m.id)!, deform_scale: value});
+      errors.push(...build(c.parts.find(p => p.id === m.id)!));
+    }
+  }
+  if (errors.length) return {errors};
   // A trace link: the graph's series becomes the mover's formula, traced in step with the clock, and the mover's part
   // starts when the graph's tracer does.
   for (const l of c.links ?? []) {
