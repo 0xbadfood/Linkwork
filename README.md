@@ -48,6 +48,7 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `rotation`: a rigid body turning about a fixed axis: I from the book's formulas, ω and θ under α or a torque (α = τ / I), v = ωr on particles, L = Iω, ½Iω², work τθ and power τω; masses sliding along a spinning rod with L conserved
 - `orbit`: a planet on its Kepler ellipse sweeping equal areas in equal times; planets' periods with T² / a³ the same; Newton's cannon (falls back, circles at v₁, an ellipse, escapes at vₑ); a satellite's speed, period and energies (E = −GMm / 2r)
 - `gravity_law`: two masses pulling each other, F = G m₁ m₂ / r², moved apart step by step; g against distance from a planet's centre, at a height or a depth
+- `elastic`: solids under stress from the book's moduli, drawn larger than real: a wire (or wires end to end) stretched, ΔL = FL / AY, thinning (Poisson's ratio) and storing ½ F ΔL; a rod pressed; a block sheared (θ ≈ Δx / L); a body squeezed in a fluid (ΔV/V = p / B); a metal's stress-strain curve beside its wire (yield, fracture, permanent set) or a rubber-like one; a beam sagging, flat and on its edge; a spring and putty (elastic and plastic)
   (constant acceleration, x(t) and y(t), or a circle); Δr/Δt becoming the velocity; uniform circular motion with Δv.
 - `graph` (trial): any quantity against another, from a formula in the axis's own variable or the book's data; a tracer
   with readouts, a tangent with its slope, a shaded area, marked points (v–t, Boyle's law, periodic trends, heating curves).

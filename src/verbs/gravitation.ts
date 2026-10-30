@@ -18,7 +18,7 @@ const G = 6.67e-11, EARTH = {M: 5.97e24, R: 6.37e6}, AU = 1.496e11, YEAR = 3.156
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const f = (v: number, p = 2) => n2(round(v, 9), Number.isInteger(round(v, 9)) ? 0 : p);
 /** A number in powers of ten when large or small: 6.67 × 10⁻¹¹ */
-const sci = (v: number, p = 2) => {
+export const sci = (v: number, p = 2) => {
   if (v === 0 || (Math.abs(v) >= 0.01 && Math.abs(v) < 1e5)) return f(v, p);
   const e = Math.floor(Math.log10(Math.abs(v))), m = v / 10 ** e, sup = '⁰¹²³⁴⁵⁶⁷⁸⁹';
   return `${f(round(m, p), p)} × 10${e < 0 ? '⁻' : ''}${String(Math.abs(e)).split('').map(d => sup[+d]).join('')}`;

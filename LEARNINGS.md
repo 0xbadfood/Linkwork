@@ -94,3 +94,6 @@ caught or a reviewer saw while building the examples and the first pilot film (h
   NARROW_BACKLOG lists the older verbs still without a half-width layout, and only shrinks.
 - illustrative hides every text with a digit, so a sentence whose digit is notation (1 / r², "2 r") vanishes whole:
   word such lines without digits ("as the square of the distance grows", "twice as far: a quarter of the force").
+- A real deformation is too small to see (a steel wire stretches a thousandth of its length). Draw it larger with one
+  factor for every part of the scene, so parts still compare truly, and say on screen that it is drawn larger (elastic).
+- A panel of many lines overflows a half-width part: drop the lines that don't fit, with the main ones written first.

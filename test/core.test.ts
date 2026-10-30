@@ -1351,3 +1351,38 @@ test('every card\'s example and shortest stay in the frame: full width, half wid
   assert.deepEqual(bad, []);
   assert.deepEqual([...narrowOk], [], 'these now pass at half width: take them off NARROW_BACKLOG');
 });
+
+test('elastic reproduces the book: a rod, wires end to end, a sheared slab, the ocean, a beam on its edge', () => {
+  const meta = (spec: object) => compile({verb: 'elastic', ...spec} as any).scene!.meta as any;
+  // Ex. 8.1: a steel rod, radius 10 mm, 1 m, 100 kN: ΔL = 1.59 mm
+  assert.ok(Math.abs(meta({kind: 'tension', material: 'steel', L: 1, d: 0.02, F: 1e5}).dL[0] - 1.59e-3) < 0.01e-3);
+  // Ex. 8.2: copper 2.2 m and steel 1.6 m, 3 mm across, 0.70 mm in all: the load is about 1.8 × 10² N
+  const pair = meta({kind: 'tension', wires: [{material: 'copper', L: 2.2, d: 0.003}, {material: 'steel', L: 1.6, d: 0.003}], dL: 0.0007});
+  assert.ok(Math.abs(pair.F - 177) < 1, `F ${pair.F}`);
+  // Exercise, Fig. 8.11: steel holds both loads (10 kg), brass the lower 6 kg: 1.49 × 10⁻⁴ m and 1.3 × 10⁻⁴ m
+  const two = meta({kind: 'tension', wires: [{material: 'steel', L: 1.5, d: 0.0025, load: 4}, {material: 'brass', L: 1, d: 0.0025, load: 6}]});
+  assert.ok(Math.abs(two.T[0] - 98) < 1e-9 && Math.abs(two.dL[0] - 1.49e-4) < 0.01e-4 && Math.abs(two.dL[1] - 1.32e-4) < 0.01e-4, `${two.dL}`);
+  // Ex. 8.3: a lead slab, 50 cm by 10 cm face, 9.0 × 10⁴ N: the top moves 0.16 mm
+  assert.ok(Math.abs(meta({kind: 'shear', material: 'lead', L: 0.5, A: 0.05, F: 9e4}).dx - 1.6e-4) < 0.01e-4);
+  // Ex. 8.5: 3000 m of the Indian Ocean (g = 10): ΔV/V = 1.36 %
+  assert.ok(Math.abs(meta({kind: 'hydraulic', material: 'water', depth: 3000, g: 10}).strain - 0.0136) < 0.0001);
+  // a beam on its edge: δ ∝ 1 / (b d³), so turning a 10 cm by 2 cm beam sags (10/2)² = 25 times less
+  const beam = meta({kind: 'beam', material: 'steel', l: 4, b: 0.1, d: 0.02, load: 50, show: ['edge']});
+  assert.ok(Math.abs(beam.deltas[0] / beam.deltas[1] - 25) < 1e-9 && Math.abs(beam.deltas[0] - 490 * 64 / (4 * 0.1 * 8e-6 * 2e11)) < 1e-9);
+  // unloaded past the yield point, it keeps a permanent set
+  assert.ok(meta({kind: 'curve', show: ['unload']}).set > 0);
+  const err = (spec: object) => compile({verb: 'elastic', ...spec} as any).errors.join(' ');
+  assert.match(err({kind: 'tension', material: 'unobtainium', L: 1, d: 0.01, F: 10}), /material is one the book's tables list/);
+  assert.match(err({kind: 'tension', L: 1, d: 0.01, F: 10}), /give Y in Pa or a material/);
+  assert.equal(err({kind: 'tension', L: 1, d: 0.01, F: 10, illustrative: true}), '');
+  assert.match(err({kind: 'tension', material: 'steel', L: 1, d: 0.01, F: 10, load: 2}), /not both/);
+  assert.match(err({kind: 'tension', wires: [{material: 'steel', L: 1, d: 0.01}], dL: 0.001, F: 5}), /the load is solved/);
+  assert.match(err({kind: 'tension', wires: [{material: 'steel', L: 1, d: 0.01, load: 1}], show: ['lateral']}), /for one wire/);
+  assert.match(err({kind: 'shear', material: 'lead', L: 0.5, F: 10}), /A is the area of the face/);
+  assert.match(err({kind: 'hydraulic', material: 'water'}), /give p, the pressure/);
+  assert.match(err({kind: 'hydraulic', material: 'water', p: 1e5, compare: ['steel', 'lead']}), /lead has no bulk modulus/);
+  assert.match(err({kind: 'beam', material: 'steel', l: 1, b: 0.8, d: 0.1, F: 10}), /long and thin/);
+  assert.match(err({kind: 'curve', curve: 'rubber', show: ['unload']}), /no 'unload'/);
+  assert.match(err({kind: 'shear', material: 'lead', L: 0.5, A: 0.05, F: 9e4, show: ['edge']}), /shows nothing extra/);
+  assert.match(err({kind: 'hydraulic', material: 'water', depth: 10, g: 32}), /g is 9\.8/);
+});
