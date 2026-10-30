@@ -23,6 +23,9 @@ const sci = (v: number, p = 2) => {
   const e = Math.floor(Math.log10(Math.abs(v))), m = v / 10 ** e, sup = '⁰¹²³⁴⁵⁶⁷⁸⁹';
   return `${f(round(m, p), p)} × 10${e < 0 ? '⁻' : ''}${String(Math.abs(e)).split('').map(d => sup[+d]).join('')}`;
 };
+// ratios in words, for illustrative scenes (their digits are hidden): twice as far, a quarter of the force
+const times = (x: number) => ({2: 'twice', 3: 'three times', 4: 'four times'} as Record<number, string>)[round(x, 6)] ?? 'farther';
+const part = (x: number) => ({4: 'a quarter', 9: 'a ninth', 16: 'a sixteenth'} as Record<number, string>)[round(x, 6)] ?? 'less';
 export const ORBIT_KINDS = ['kepler', 'periods', 'launch', 'satellite'] as const;
 
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
@@ -320,7 +323,7 @@ export function gravityLaw(s: GravityLawSpec): Scene {
       text('lx', ox - 10 * k, oy - 20 * k, 'distance from the centre, r / R', 24 * k, {align: 'end', style: {fill: 'muted'}}),
       text('ly', box[0] + 10 * k, gy - 16 * k, s.illustrative ? 'g' : `g (g₀ = ${f(g0)} m/s²)`, 24 * k, {style: {fill: 'muted'}}));
     line('l1', 'Inside, only the mass nearer the centre pulls: g grows as r', 0.5, {style: {fill: 'good'}});
-    line('l2', 'Outside, g = GM / r²: it falls as 1 / r²', 2.2, {style: {fill: 'cool'}});
+    line('l2', 'Outside, g = GM / r²: it falls as the square of the distance grows', 2.2, {style: {fill: 'cool'}});  // no digit: kept when illustrative
     line('l3', 'Greatest at the surface', 4.2, {weight: 700});
     const mark = (id: string, x: number, label: string, when: number, fill: string) => {
       const [mx, my] = toScene(plane, [x, gOf(x)]);
@@ -365,13 +368,14 @@ export function gravityLaw(s: GravityLawSpec): Scene {
     props.push({id: `F1-${i}`, type: 'arrow', x1: A[0] + rad(m1), y1: A[1], x2: A[0] + rad(m1) + L(Fs[i]), y2: A[1], head: 16 * k, style: {stroke: 'accent', width: 5 * k}, show, fade: 0.2, layer: 4} as Prop,
       {id: `F2-${i}`, type: 'arrow', x1: B[0] - rad(m2), y1: B[1], x2: B[0] - rad(m2) - L(Fs[i]), y2: B[1], head: 16 * k, style: {stroke: 'accent', width: 5 * k}, show, fade: 0.2, layer: 4} as Prop,
       {id: `rl-${i}`, type: 'line', x1: A[0], y1: A[1] + 0.25 * rMax * per, x2: B[0], y2: B[1] + 0.25 * rMax * per, style: {stroke: 'muted', width: 2 * k}, show, fade: 0.2} as Prop,
-      text(`lr-${i}`, (A[0] + B[0]) / 2, A[1] + 0.25 * rMax * per + 36 * k, s.illustrative ? (i ? `${f(r / rs[0])} r` : 'r') : `r = ${sci(r)} m`, 26 * k, {align: 'middle', style: {fill: 'muted'}, show, fade: 0.2}));
+      text(`lr-${i}`, (A[0] + B[0]) / 2, A[1] + 0.25 * rMax * per + 36 * k, s.illustrative ? (i ? `${times(r / rs[0])} r` : 'r') : `r = ${sci(r)} m`, 26 * k, {align: 'middle', style: {fill: 'muted'}, show, fade: 0.2}));
   });
   line('l1', 'Every two masses attract: F = G m₁ m₂ / r²', 0.3, {weight: 700});
   const narrow = W < 1.3 * H;            // a half-width part: the law and the forces, not the side notes
   if (!narrow) line('l2', 'Equal and opposite pulls, along the line joining the centres', 0.9, {style: {fill: 'accent'}});
   if (!s.illustrative && !narrow) line('l3', `G = 6.67 × 10⁻¹¹ N m² kg⁻²`, 1.2, {style: {fill: 'muted'}});
-  rs.forEach((r, i) => line(`f${i}`, s.illustrative ? (i ? `${f(r / rs[0])} times as far: F ÷ ${f((r / rs[0]) ** 2)}` : 'F at distance r')
+  // illustrative lines say the ratios in words (digits are hidden then): twice as far, a quarter of the force
+  rs.forEach((r, i) => line(`f${i}`, s.illustrative ? (i ? `${times(r / rs[0])} as far: ${part((r / rs[0]) ** 2)} of the force` : 'The force F at distance r')
     : `r = ${sci(r)} m: F = ${sci(Fs[i])} N${i ? ` (${f(r / rs[0])}× the distance, F ÷ ${f(Fs[0] / Fs[i])})` : ''}`, at(i) + 0.3, {style: {fill: i ? 'cool' : 'ink'}}));
   if (rs.length > 1) line('l9', 'Inverse square: twice as far, a quarter of the force', at(rs.length - 1) + 1, {weight: 700, style: {fill: 'accent'}});
   facts.push(...rs.map((r, i) => `at r = ${sci(r)} m: F = ${sci(Fs[i])} N`), 'G = 6.67 × 10⁻¹¹ N m² kg⁻²',

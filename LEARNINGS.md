@@ -92,3 +92,5 @@ caught or a reviewer saw while building the examples and the first pilot film (h
 - Look at a verb's frames AND run `check` on them, at full width, half width and illustrative: a render looked fine
   while an axis name sat below the frame (gravity_law, C5 of keph1-07). The cards test now does this for every verb;
   NARROW_BACKLOG lists the older verbs still without a half-width layout, and only shrinks.
+- illustrative hides every text with a digit, so a sentence whose digit is notation (1 / r², "2 r") vanishes whole:
+  word such lines without digits ("as the square of the distance grows", "twice as far: a quarter of the force").
