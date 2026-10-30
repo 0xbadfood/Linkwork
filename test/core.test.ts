@@ -1328,3 +1328,26 @@ test("no verb's own field shares a name with a scene's size or style (width, hei
   for (const [name, card] of Object.entries(CARDS))
     for (const field of ['width', 'height', 'fps', 'theme']) assert.ok(!(field in (card.fields ?? {})), `${name} has a field named ${field}`);
 });
+
+test('every card\'s example and shortest stay in the frame: full width, half width and illustrative', async () => {
+  // 2026-10-30: gravity_law's axis name sat below the frame, and its half-width part ran off the bottom; a verb's
+  // own renders looked fine because nothing ran the frame check on them
+  // Verbs still without a half-width layout (found 2026-10-30): the list only shrinks; a verb that passes leaves it.
+  const NARROW_BACKLOG = ['energy_ladder', 'sliding_ladder', 'pendulum', 'compass_arc', 'slider_crank', 'domain_range', 'work',
+    'energy', 'motion_on_line', 'path_length', 'stage', 'magnetic_force', 'domestic_circuit', 'energy_use'];
+  const {CARDS} = await import('../src/verbs/cards.ts');
+  const bad: string[] = [], narrowOk = new Set(NARROW_BACKLOG);
+  for (const [name, card] of Object.entries(CARDS))
+    for (const [which, spec] of [['example', card.example], ['shortest', card.shortest]] as const) {
+      if (!spec) continue;
+      for (const extra of [{}, {width: 960, height: 1080}, {illustrative: true}]) {
+        const r = compile({...spec, ...extra} as any);
+        if (r.errors.some(e => e.includes('never illustrative'))) continue;   // a verb whose numbers are the picture
+        const problems = r.errors.length ? r.errors : check(r.scene!), narrow = 'width' in extra;
+        if (problems.length && narrow && NARROW_BACKLOG.includes(name)) { narrowOk.delete(name); continue; }
+        if (problems.length) bad.push(`${name} ${which} ${JSON.stringify(extra)}: ${problems[0]}`);
+      }
+    }
+  assert.deepEqual(bad, []);
+  assert.deepEqual([...narrowOk], [], 'these now pass at half width: take them off NARROW_BACKLOG');
+});

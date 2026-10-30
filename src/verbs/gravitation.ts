@@ -50,12 +50,20 @@ function eccentric(M: number, e: number): number {
 }
 
 const planetOf = (p?: Planet) => ({M: p?.M ?? EARTH.M, R: p?.R ?? EARTH.R, name: p?.name ?? 'Earth'});
+/** A planet's own numbers, SI: a toy planet (R = 10, M = 1) drew nothing a viewer could read (C5 of keph1-07, 2026-10-30). */
+function planetErrors(verb: string, p: unknown): string[] {
+  if (p === undefined) return [];
+  const q = p as Planet;
+  if (typeof p !== 'object' || p === null || (q.M !== undefined && !(isNum(q.M) && q.M >= 1e18 && q.M <= 1e32))
+    || (q.R !== undefined && !(isNum(q.R) && q.R >= 1e5 && q.R <= 1e9)))
+    return [`${verb}: planet is {M in kg (the Earth's 5.97e24), R in metres (the Earth's 6.37e6), name}; leave it out for the Earth, illustrative scenes too (the shape is the same)`];
+  return [];
+}
 
 export function orbitErrors(s: OrbitSpec): string[] {
   const e: string[] = [];
   if (!ORBIT_KINDS.includes(s.kind)) return [`orbit: kind is one of ${ORBIT_KINDS.join(', ')}`];
-  if (s.planet !== undefined && (typeof s.planet !== 'object' || (s.planet.M !== undefined && !(isNum(s.planet.M) && s.planet.M > 0))
-    || (s.planet.R !== undefined && !(isNum(s.planet.R) && s.planet.R > 0)))) e.push('orbit: planet is {M (kg), R (m), name?}; leave it out for the Earth');
+  e.push(...planetErrors('orbit', s.planet));
   if (s.kind === 'kepler') {
     if (s.a !== undefined && !(isNum(s.a) && s.a > 0)) e.push('orbit: a is the semi-major axis in AU (above 0)');
     if (!(isNum(s.e) && s.e >= 0 && s.e <= 0.9)) e.push('orbit: e is the eccentricity, 0 (a circle) to 0.9; exaggerate a near-circle (0.5) to show the ellipse');
@@ -245,14 +253,17 @@ export function orbit(s: OrbitSpec): Scene {
     line('l4', s.illustrative ? 'Kinetic energy is half the size of the potential energy' : `KE = GMm / 2r = ${sci(KE)} J`, 2.4, {style: {fill: 'good'}});
     line('l5', s.illustrative ? 'Potential energy is negative, twice as large' : `PE = −GMm / r = ${sci(PE)} J`, 2.9, {style: {fill: 'bad'}});
     line('l6', s.illustrative ? 'Total energy is negative: the satellite is bound' : `E = KE + PE = −GMm / 2r = ${sci(E)} J (bound)`, 3.4, {weight: 700, style: {fill: 'accent'}});
-    // bars from a zero line: KE up, PE down twice as far, E down as far as KE is up
+    // bars from a zero line: KE up, PE down twice as far, E down as far as KE is up; left out where the text column
+    // has no room below (a half-width part), the lines above carry the same numbers
     const zx = px + 20 * k, zy = row + 140 * k, unit = 110 * k / (GM * mm / (2 * r)), bw = 90 * k;
+    if (zy + 2 * 110 * k + 20 * k <= H) {
     props.push({id: 'zero', type: 'line', x1: zx, y1: zy, x2: zx + 3.6 * bw, y2: zy, style: {stroke: 'muted', width: 2 * k}, show: [2.4, 1e9]} as Prop);
     ([['KE', KE, 'good', 2.4], ['PE', PE, 'bad', 2.9], ['E', E, 'accent', 3.4]] as const).forEach(([name, val, fill, when], i) => {
       const x = zx + 0.2 * bw + 1.2 * bw * i, hgt = Math.abs(val) * unit;
       props.push({id: `bar${name}`, type: 'rect', x, y: val > 0 ? zy - hgt : zy, w: bw, h: hgt, style: {fill}, show: [when, 1e9], fade: 0.3} as Prop,
         text(`lbar${name}`, x + bw / 2, val > 0 ? zy + 30 * k : zy - 10 * k, name, 24 * k, {weight: 700, align: 'middle', style: {fill}, show: [when, 1e9]}));
     });
+    }
     facts.push(`KE = ${sci(KE)} J`, `PE = ${sci(PE)} J`, `total energy E = ${sci(E)} J (negative: bound)`, ...(m === undefined ? ['energies per kg of satellite'] : []));
   }
   facts.push(`orbit radius r = R + h = ${sci(r / 1000)} km`, `orbital speed v = ${f(v / 1000)} km/s`, `period T = ${f(hours)} h (${f(T / 60, 1)} min)`);
@@ -261,6 +272,8 @@ export function orbit(s: OrbitSpec): Scene {
 
 export function gravityLawErrors(s: GravityLawSpec): string[] {
   const e: string[] = [];
+  e.push(...planetErrors('gravity_law', s.planet));
+  if (e.length) return e;
   if (s.profile) {
     if (s.altitude !== undefined && !(isNum(s.altitude) && s.altitude >= 0)) e.push('gravity_law: altitude is a height in km above the surface');
     if (s.depth !== undefined && !(isNum(s.depth) && s.depth >= 0)) e.push('gravity_law: depth is in km below the surface');
@@ -300,7 +313,7 @@ export function gravityLaw(s: GravityLawSpec): Scene {
       {id: 'outside', type: 'polyline', plane: 'p', points: curve.filter(p => p[0] >= 1), draw: 0, keys: {draw: [[2.2, 0], [4.2, 1, 'linear']]}, style: {stroke: 'cool', width: 5 * k}, layer: 3} as Prop);
     const [sx, sy] = toScene(plane, [1, 1.12]), [ox, oy] = toScene(plane, [4, 0]), [, gy] = toScene(plane, [0, 1]);
     props.push(text('lsurf', sx, sy - 10 * k, 'surface, r = R', 24 * k, {align: 'middle', style: {fill: 'muted'}}),
-      text('lx', ox, oy + 56 * k, 'distance from the centre, r / R', 24 * k, {align: 'end', style: {fill: 'muted'}}),
+      text('lx', ox - 10 * k, oy - 20 * k, 'distance from the centre, r / R', 24 * k, {align: 'end', style: {fill: 'muted'}}),
       text('ly', box[0] + 10 * k, gy - 16 * k, s.illustrative ? 'g' : `g (g₀ = ${f(g0)} m/s²)`, 24 * k, {style: {fill: 'muted'}}));
     line('l1', 'Inside, only the mass nearer the centre pulls: g grows as r', 0.5, {style: {fill: 'good'}});
     line('l2', 'Outside, g = GM / r²: it falls as 1 / r²', 2.2, {style: {fill: 'cool'}});
@@ -351,8 +364,9 @@ export function gravityLaw(s: GravityLawSpec): Scene {
       text(`lr-${i}`, (A[0] + B[0]) / 2, A[1] + 0.25 * rMax * per + 36 * k, s.illustrative ? (i ? `${f(r / rs[0])} r` : 'r') : `r = ${sci(r)} m`, 26 * k, {align: 'middle', style: {fill: 'muted'}, show, fade: 0.2}));
   });
   line('l1', 'Every two masses attract: F = G m₁ m₂ / r²', 0.3, {weight: 700});
-  line('l2', 'Equal and opposite pulls, along the line joining the centres', 0.9, {style: {fill: 'accent'}});
-  if (!s.illustrative) line('l3', `G = 6.67 × 10⁻¹¹ N m² kg⁻²`, 1.2, {style: {fill: 'muted'}});
+  const narrow = W < 1.3 * H;            // a half-width part: the law and the forces, not the side notes
+  if (!narrow) line('l2', 'Equal and opposite pulls, along the line joining the centres', 0.9, {style: {fill: 'accent'}});
+  if (!s.illustrative && !narrow) line('l3', `G = 6.67 × 10⁻¹¹ N m² kg⁻²`, 1.2, {style: {fill: 'muted'}});
   rs.forEach((r, i) => line(`f${i}`, s.illustrative ? (i ? `${f(r / rs[0])} times as far: F ÷ ${f((r / rs[0]) ** 2)}` : 'F at distance r')
     : `r = ${sci(r)} m: F = ${sci(Fs[i])} N${i ? ` (${f(r / rs[0])}× the distance, F ÷ ${f(Fs[0] / Fs[i])})` : ''}`, at(i) + 0.3, {style: {fill: i ? 'cool' : 'ink'}}));
   if (rs.length > 1) line('l9', 'Inverse square: twice as far, a quarter of the force', at(rs.length - 1) + 1, {weight: 700, style: {fill: 'accent'}});

@@ -90,8 +90,13 @@ export function work(s: WorkSpec): Scene {
   const xAt = (t: number) => v0 * t + a * t * t / 2, vAt = (t: number) => Math.max(0, v0 + a * t);
   const key = (fn: (t: number) => number): Key[] => Array.from({length: n + 1}, (_, i) => (i ? [at(i), fn(tw(i)), 'linear'] : [at(i), fn(tw(i))]) as Key);
   // the drawing: the floor low in the box, the bars above it
-  const bw = box[2] - box[0], bh = box[3] - box[1], floorY = box[1] + 0.82 * bh, x0 = box[0] + 0.1 * bw, ppm = 0.62 * bw / d;
+  const bw = box[2] - box[0], bh = box[3] - box[1], floorY = box[1] + 0.82 * bh;
   const body = s.body ?? 'block', side = 0.16 * Math.min(bw, bh), hy = body === 'car' ? 0.37 * side : body === 'block' ? 0.35 * side : 0.5 * side;
+  // room behind the body at the start for a backward force (friction, a pull at over 90°) and its name: a braking
+  // cycle's friction arrow and "f" were drawn off the left edge (2026-10-30)
+  const hx0 = body === 'car' ? 0.8 * side : 0.5 * side, L0 = 0.2 * Math.min(bw, bh) / Math.max(F, motion(s).fr, 1e-9);
+  const back = Math.max(motion(s).fr, F * Math.max(0, -Math.cos((s.force?.angle ?? 0) * DEG)));
+  const x0 = box[0] + Math.max(0.1 * bw, back > 0 ? hx0 + back * L0 + 70 * k : 0), ppm = Math.min(0.62 * bw, box[2] - 0.06 * bw - hx0 - x0) / d;
   const cx = (t: number) => x0 + xAt(t) * ppm, cy = floorY - hy;
   props.push({id: 'floor', type: 'line', x1: box[0], y1: floorY, x2: box[2], y2: floorY, style: {stroke: 'muted', width: 4 * k}} as Prop);
   if (body === 'ball') props.push({id: 'body', type: 'circle', x: x0, y: cy, r: side / 2, style: {fill: 'faint', stroke: 'ink', width: 4 * k}, layer: 1, keys: {x: key(t => cx(t))}} as Prop);
