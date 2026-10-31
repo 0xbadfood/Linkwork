@@ -1511,6 +1511,30 @@ test('a mark at a large disc is written beside it, not across it', () => {
   for (const p of r.scene.props.filter((q: any) => q.id.endsWith('-label'))) assert.ok(p.x >= ball.x + ball.r, `${p.text} starts at ${p.x}, inside the disc`);
 });
 
+test('Marks: words at a point too narrow to carry them go where the verb says, and none run from a graph into its cylinder', () => {
+  const label = (s: unknown) => { const r: any = compile(s as never); assert.ok(r.scene, String(r.errors)); return [r.scene, r.scene.props.find((p: any) => p.id === 'note0-label')]; };
+  const gas = {verb: 'gas_process', kind: 'adiabatic', illustrative: true, T: 300, V1: 1, V2: 2, window: {V: 3, P: 3000}};
+  const [s, g] = label({...gas, annotate: [{text: 'no heat flows in or out', at: 'gas'}]});
+  const cyl = s.props.find((p: any) => p.id === 'cyl');
+  assert.ok(g.x > cyl.x + cyl.w, 'the words sit past the cylinder, not across it');
+  const [s2, c] = label({...gas, annotate: [{text: 'temperature falls from T1 to T2', at: 'curve'}]});
+  const cy2 = s2.props.find((p: any) => p.id === 'cyl');
+  assert.ok(c.x > cy2.x + cy2.w, 'too long for the graph: it goes past the cylinder with the other notes');
+  const [s3, sh] = label({...gas, annotate: [{text: 'work', at: 'curve'}]});
+  assert.ok(sh.x + 80 < s3.props.find((p: any) => p.id === 'cyl').x, 'a short one stays on the graph');
+  const engine = {verb: 'heat_engine', kind: 'engine', illustrative: true, Q1: 1, Q2: 0.6, W: 0.4};
+  const [e, h] = label({...engine, annotate: [{text: 'heat in from T1', at: 'hot'}]});
+  const hot = e.props.find((p: any) => p.id === 'hot');
+  assert.ok(h.x > hot.x + hot.w, 'beside the reservoir, not on its name');
+  const [e2, w] = label({...engine, annotate: [{text: 'another effect needed', at: 'work'}]});
+  const arrow = e2.props.find((p: any) => p.id === 'w');
+  assert.ok(w.y - 15 > arrow.y1 + arrow.style.width / 2, 'under the work arrow, not on it');
+  for (const size of [{}, {width: 960, height: 1080}]) {
+    const r: any = compile({...gas, ...size, annotate: [{text: 'temperature falls from T1 to T2', at: 'curve'}, {text: 'no heat flows in or out', at: 'gas'}]} as never);
+    assert.deepEqual(check(r.scene), []);
+  }
+});
+
 test('thermodynamics verbs reproduce the book: 1 g of water boiling, the heater, the formulas', () => {
   const meta = (s: unknown) => { const r: any = compile(s as never); assert.ok(r.scene, String(r.errors)); assert.deepEqual(check(r.scene), [], JSON.stringify(s)); return r.scene.meta; };
   const near = (a: number, b: number, tol = 0.002) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${a} is not ${b}`);

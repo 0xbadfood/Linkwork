@@ -126,16 +126,27 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     }
     const fill = m.colour ?? 'accent', show: [number, number] = [m.t ?? 0.5, 1e9], [x, y] = [round(at[0], 2), round(at[1], 2)];
     if (m.point) props.push({id: `note${i}-point`, type: 'circle', x, y, r: 9 * k, show, fade: 0.3, style: {fill}, layer: 8});
-    if (m.text) {
+    // A point on something narrow or crowded (a cylinder, a reservoir holding its own name, an arrow) names where its words
+    // go instead: across it they read as neither (keph2-04 C13 and C15, 2026-10-31).
+    // labelEnd: where the graph stops and something else of the drawing starts; words too long for that room go to labelSpill
+    const {labelAt, labelEnd, labelSpill} = (meta ?? {}) as {labelAt?: Record<string, Vec>; labelEnd?: number; labelSpill?: Vec};
+    const spills = !!m.text && labelEnd !== undefined && !!labelSpill && x < labelEnd && x + 14 * k + m.text.length * 30 * k * 0.58 > labelEnd;
+    const beside = (typeof m.at === 'string' ? labelAt?.[m.at] : undefined) ?? (spills ? labelSpill : undefined);
+    if (m.text && beside) {
+      const lx = Math.min(beside[0], scene.width - 10 * k - m.text.length * 30 * k * 0.58);
+      props.push({id: `note${i}-label`, type: 'text', x: round(lx, 2), y: round(clear(lx, beside[1], m.text, 'start'), 2), text: m.text, size: 30 * k, weight: 700,
+        align: 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
+    } else if (m.text) {
       // near the right edge the label reads leftwards; so does one that would run out of a drawing into its panel
       const box = planes.length === 1 ? (planes[0] as Plane).box : undefined;
-      const right = x > 0.85 * scene.width || (!!box && x < box[2] && x + 14 * k + m.text.length * 30 * k * 0.58 > box[2] + 20 * k);
+      const stop = labelEnd ?? (box ? box[2] + 20 * k : undefined);
+      const right = x > 0.85 * scene.width || (stop !== undefined && x < stop && x + 14 * k + m.text.length * 30 * k * 0.58 > stop);
       // Kept inside the frame: a label near an edge reads inwards, and never above the top or below the bottom.
       // A label at a large filled disc goes beside it, not across it (a radiating body, keph2-03 C10, 2026-10-31); small dots stay.
       const disc = scene.props.find(p => { const c = p as unknown as {type: string; x: number; y: number; r: number; plane?: string; style?: {fill?: string}};
         return c.type === 'circle' && !c.plane && c.r >= 40 * k && c.style?.fill && Math.hypot(x - c.x, y - c.y) < c.r + 14 * k; }) as unknown as {x: number; r: number} | undefined;
       const start = disc ? (right ? disc.x - disc.r - 12 * k : disc.x + disc.r + 12 * k) : right ? x - 14 * k : x + 14 * k;
-      const lx = right ? start : Math.min(start, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
+      const lx = right ? Math.max(start, 10 * k + m.text.length * 30 * k * 0.58) : Math.min(start, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
       props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(0.14 * scene.height, clear(lx, Math.max(0.14 * scene.height, y - 16 * k), m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
         align: right ? 'end' : 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     }

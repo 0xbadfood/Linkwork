@@ -68,7 +68,7 @@ function cylinder(c: ReturnType<typeof kit>, x0: number, x1: number, top: number
 }
 
 export function gasProcess(s: GasProcessSpec): Scene {
-  const c = kit(s), {k, bx0, by0, by1, bw, bh, ill, props, facts, line, label, rect, seg, arrow, dot, anchors, end} = c;
+  const c = kit(s), {k, bx0, bx1, by0, by1, bw, bh, ill, props, facts, line, label, rect, seg, arrow, dot, anchors, end} = c;
   if (s.kind === 'first_law') {
     const Wd = s.W ?? (s.P && s.dV ? s.P * s.dV : undefined);
     const Q = s.Q ?? (s.U !== undefined && Wd !== undefined ? s.U + Wd : 100), W = Wd ?? (s.U !== undefined ? Q - s.U : 40), U = s.U ?? Q - W;
@@ -118,6 +118,8 @@ export function gasProcess(s: GasProcessSpec): Scene {
   const hot = s.kind === 'isochoric' || s.kind === 'isobaric';
   cylinder(c, cx0, cx1, y0 + 30 * k, y1, t => (t <= go ? frac(0) : frac(p.line.length - 1)), [go, done], hot);
   Object.assign(anchors, {start: a, end: b, curve: line0[Math.floor(line0.length / 2)], area: [(a[0] + b[0]) / 2, (y1 + Math.max(a[1], b[1])) / 2]});
+  // the gas and the piston are too narrow to carry words: theirs go under the panel's, or at the foot of a half-width part
+  const note: P2 = c.narrow ? [bx0 + 0.1 * bw, c.H - 60 * k] : [bx1 + 20 * k, by1 - 60 * k];
   const words = {
     isothermal: ['Isothermal: T stays fixed, so PV is constant', 'W = μRT ln(V₂/V₁); ΔU = 0, so the heat taken in equals the work'],
     adiabatic: ['Adiabatic: insulated walls, no heat in or out', 'PV^γ is constant; W = μR(T₁ − T₂)/(γ − 1), paid from internal energy'],
@@ -132,7 +134,7 @@ export function gasProcess(s: GasProcessSpec): Scene {
     else { const pa = p.other![p.other!.length - 1][1], pi = p.line[p.line.length - 1][1]; line('l4', `At the end: P isothermal ${num(pi)} Pa, adiabatic ${num(pa)} Pa`, done + 1.6, {weight: 700, style: {fill: 'accent'}}); facts.push(`final pressure: isothermal ${num(pi)} Pa, adiabatic ${num(pa)} Pa`); }
     facts.push(`μ = ${num(p.mu)} mol, T₁ = ${num(p.T1)} K, T₂ = ${num(p.T2)} K, V₁ = ${num(p.V1)} m³, V₂ = ${num(p.V2)} m³`, `W = ${num(p.W)} J, ΔU = ${num(p.dU)} J, Q = ${num(p.Q)} J`);
   }
-  return end('gas_process', p.other ? 5.6 : 4.6, {W: p.W, dU: p.dU, Q: p.Q, T2: p.T2, P1: p.P1, P2: p.line[p.line.length - 1][1], Pa2: p.other?.[p.other.length - 1][1], scale: {V: (x1 - x0) / Vmax, P: (y1 - y0) / Pmax}});
+  return end('gas_process', p.other ? 5.6 : 4.6, {labelEnd: cx0 - 8 * k, labelSpill: note, labelAt: {gas: note, piston: note}, W: p.W, dU: p.dU, Q: p.Q, T2: p.T2, P1: p.P1, P2: p.line[p.line.length - 1][1], Pa2: p.other?.[p.other.length - 1][1], scale: {V: (x1 - x0) / Vmax, P: (y1 - y0) / Pmax}});
 }
 
 export const ENGINE_KINDS = ['engine', 'refrigerator', 'carnot'] as const;
@@ -196,7 +198,9 @@ export function heatEngine(s: HeatEngineSpec): Scene {
   label('lq2', cx - wid(Q2) / 2 - 12 * k, (gapB + midy + R) / 2 + 9 * k, lq('Q₂', Q2), {align: 'end', style: {fill: 'cool'}, show: [fridge ? 0.8 : 2.4, 1e9]});
   label('lw', cx + R + 20 * k, midy - wid(W) / 2 - 14 * k, lq('W', W), {style: {fill: 'accent'}, show: [1.6, 1e9]});
   Object.assign(anchors, {hot: [cx, yt + hb / 2], cold: [cx, yb + hb / 2], body: [cx, midy], work: [cx + R + 60 * k, midy]});
+  const under = midy + Math.max(16 * k, 0.95 * wid(W)) + 34 * k, side = cx + w / 2 + 16 * k;
+  const labelAt = {hot: [side, yt + hb / 2], cold: [side, yb + hb / 2], work: [cx + R + 20 * k, under], body: [cx + R + 20 * k, under + 40 * k]};
   if (fridge) { line('l1', 'A refrigerator: work carries heat from cold to hot', 0.3, {weight: 700}); line('l2', 'Q₁ = Q₂ + W; α = Q₂ / W', 1.6, {style: {fill: 'cool'}}); if (!ill) line('l3', `α = ${num(alpha)}`, 2.8, {weight: 700, style: {fill: 'accent'}}); facts.push(`Q₁ = ${num(Q1)} J, Q₂ = ${num(Q2)} J, W = ${num(W)} J, α = ${num(alpha)}`); }
   else { line('l1', 'A heat engine: heat in, work out, the rest rejected', 0.3, {weight: 700}); line('l2', 'W = Q₁ − Q₂; η = W / Q₁ = 1 − Q₂ / Q₁', 1.6, {style: {fill: 'cool'}}); if (!ill) line('l3', `η = ${num(eta)}`, 2.8, {weight: 700, style: {fill: 'accent'}}); facts.push(`Q₁ = ${num(Q1)} J, Q₂ = ${num(Q2)} J, W = ${num(W)} J, η = ${num(eta)}`); }
-  return end('heat_engine', 3.8, {Q1, Q2, W, eta, alpha});
+  return end('heat_engine', 3.8, {Q1, Q2, W, eta, alpha, labelAt});
 }
