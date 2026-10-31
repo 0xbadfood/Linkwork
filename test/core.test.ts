@@ -1535,6 +1535,26 @@ test('Marks: words at a point too narrow to carry them go where the verb says, a
   }
 });
 
+test('kinetic theory reproduces the book: 516 m/s, Ar to Cl₂ 1.33, Tables 12.1 and 12.3, the mean free path', () => {
+  const meta = (s: unknown) => { const r: any = compile(s as never); assert.ok(r.scene, String(r.errors)); assert.deepEqual(check(r.scene), []); return r.scene.meta; };
+  const near = (a: number, b: number, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${a} is not ${b}`);
+  near(meta({verb: 'kinetic_gas', kind: 'pressure', gas: 'nitrogen', T: 300}).v_rms, 516);
+  near(meta({verb: 'kinetic_gas', kind: 'pressure', gas: 'nitrogen', T: 300}).P, 1.013e5);
+  const v = meta({verb: 'kinetic_gas', kind: 'speeds', gases: ['argon', 'chlorine'], T: 300}).speeds; near(v.argon / v.chlorine, 1.33);
+  const f = (atoms: string, vibration = 0) => meta({verb: 'kinetic_gas', kind: 'freedom', atoms, vibration});
+  near(f('mono').Cv, 12.5); near(f('mono').Cp, 20.8); near(f('mono').gamma, 1.67);
+  near(f('di').Cv, 20.8); near(f('di').Cp, 29.1); near(f('di').gamma, 1.40);
+  near(f('poly').Cv, 24.93); near(f('poly').Cp, 33.24); near(f('poly').gamma, 1.33);
+  near(f('di', 1).Cv, 29.1);
+  near(meta({verb: 'kinetic_gas', kind: 'solid'}).C, 24.93);
+  near(meta({verb: 'kinetic_gas', kind: 'free_path', simple: true}).l, 2.9e-7, 0.03); near(meta({verb: 'kinetic_gas', kind: 'free_path', simple: true}).tau, 6.1e-10, 0.03);
+  near(meta({verb: 'kinetic_gas', kind: 'free_path'}).l, 2.08e-7);
+  near(meta({verb: 'kinetic_gas', kind: 'mixture', mu: [2, 1], T: 300, V: 0.1}).P, 3 * 8.31 * 300 / 0.1);
+  for (const kind of ['box', 'pressure', 'speeds', 'freedom', 'solid', 'mixture', 'free_path']) meta({verb: 'kinetic_gas', kind, illustrative: true, width: 960, height: 1080});
+  assert.ok((compile({verb: 'kinetic_gas', kind: 'box', gas: 'unobtainium'} as never) as any).errors.length);
+  assert.ok((compile({verb: 'kinetic_gas', kind: 'freedom', atoms: 'mono', vibration: 1} as never) as any).errors.length);
+});
+
 test('thermodynamics verbs reproduce the book: 1 g of water boiling, the heater, the formulas', () => {
   const meta = (s: unknown) => { const r: any = compile(s as never); assert.ok(r.scene, String(r.errors)); assert.deepEqual(check(r.scene), [], JSON.stringify(s)); return r.scene.meta; };
   const near = (a: number, b: number, tol = 0.002) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${a} is not ${b}`);

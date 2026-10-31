@@ -37,6 +37,7 @@ import {elastic, elasticErrors, type ElasticSpec} from './elastic.ts';
 import {fluidFlow, fluidFlowErrors, fluidPressure, fluidPressureErrors, surfaceErrors, surfaceTension, type FluidFlowSpec, type FluidPressureSpec, type SurfaceSpec} from './fluids.ts';
 import {exchangeErrors, expansionErrors, heatExchange, heatTransfer, temperature, temperatureErrors, thermalExpansion, transferErrors, type ExchangeSpec, type ExpansionSpec, type TemperatureSpec, type TransferSpec} from './thermal.ts';
 import {gasProcess, gasProcessErrors, heatEngine, heatEngineErrors} from './thermodynamics.ts';
+import {kineticErrors, kineticGas, type KineticSpec} from './kinetic.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
@@ -142,6 +143,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'a gas under a piston and its path on a P–V graph, with the work as the area under it: isothermal, adiabatic, isobaric, isochoric, an isotherm against an adiabat; the first law as heat in, internal energy and work. Every number computed'},
   heat_engine: {errors: heatEngineErrors, compile: heatEngine,
     about: 'reservoirs and a working body with arrows as wide as the heats: an engine, η = 1 − Q₂/Q₁; a refrigerator, α = Q₂/W; the Carnot cycle on P–V, its four steps, η = 1 − T₂/T₁'},
+  kinetic_gas: {errors: kineticErrors, compile: kineticGas,
+    about: 'kinetic theory, computed: molecules in a box to one speed scale, a molecule hitting a wall and P = ⅓nm⟨v²⟩, v_rms of gases as bars, degrees of freedom with Cᵥ, Cₚ, γ, a solid\'s 3R against the book\'s table, Dalton\'s law, the mean free path'},
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,
