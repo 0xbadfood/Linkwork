@@ -1652,3 +1652,19 @@ test('electric gets the book right', () => {
   for (const b of bad) assert.ok((compile({verb: 'electric', ...b} as never) as any).errors?.length, JSON.stringify(b));
   for (const sh of ['rubbing', 'pith', 'electroscope', 'induction', 'coulomb', 'plates', 'flux', 'dipole', 'torque', 'density']) assert.deepEqual(check(made({show: sh, illustrative: true})).filter((x: any) => x.level === 'error'), [], sh);
 });
+
+test('electric keeps its point and arrows inside the frame', () => {
+  // a planner's reach smaller than its own point drew the arrows over the header (leph1-01 C1)
+  for (const o of [
+    {charges: [{q: 1e-6, x: -0.1, y: 0}, {q: -1e-6, x: 0.1, y: 0}], at: [0, 1.2], reach: 1, illustrative: true},
+    {charges: [{q: 1e-6, x: 0, y: 0}], at: [0, 1]},
+    {charges: [{q: 1e-6, x: 0, y: 0}, {q: 2e-6, x: 0.02, y: 0}], at: [0.05, 0]},
+  ]) {
+    const scene = (compile({verb: 'electric', show: 'superposition', title: 'T', ...o} as never) as any).scene;
+    const arrows = scene.props.filter((p: any) => p.type === 'arrow');
+    assert.ok(arrows.length);
+    for (const a of arrows) {
+      assert.ok(a.x2 >= 0 && a.x2 <= 1920 && a.y1 >= 90 && a.y2 >= 90 && a.y2 <= 1080, JSON.stringify([a.x1, a.y1, a.x2, a.y2]));
+    }
+  }
+});

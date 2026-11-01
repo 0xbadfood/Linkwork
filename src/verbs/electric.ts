@@ -219,7 +219,8 @@ export function electric(s: ElectricSpec): Scene {
     facts.push(`k = 1/4πε₀ = ${sci(K, 'N m²/C²')}`);
   } else if (s.show === 'superposition' || s.show === 'lines') {
     const cs = s.charges!, pts: P2[] = cs.map(c => [c.x, c.y]); if (s.at) pts.push(s.at);
-    const reach = s.reach ?? (Math.max(...pts.map(p => Math.max(Math.abs(p[0]), Math.abs(p[1])))) * 1.7 || 1), ppm = S / 2 / reach;
+    // a reach too small for its own charges or point would draw them off the canvas: it widens to hold them
+    const far = Math.max(...pts.map(p => Math.max(Math.abs(p[0]), Math.abs(p[1])))), reach = Math.max(s.reach ?? 0, far * (s.reach === undefined ? 1.7 : 1.15)) || 1, ppm = S / 2 / reach;
     const to = (p: P2): P2 => [cx + p[0] * ppm, cy - p[1] * ppm];
     if (s.show === 'lines') {
       for (const pts_ of traceLines(cs, reach, 12)) {
@@ -243,7 +244,10 @@ export function electric(s: ElectricSpec): Scene {
       const others = target ? cs.filter(c => c !== target) : cs, P: P2 = target ? [target.x, target.y] : s.at!, q0 = target ? target.q : field ? 1 : s.test ?? 1;
       const each = others.map(c => { const [ex, ey] = fieldAt([c], P[0], P[1]); return [q0 * ex, q0 * ey] as P2; });
       const net: P2 = [each.reduce((a, v) => a + v[0], 0), each.reduce((a, v) => a + v[1], 0)];
-      const top = s.full ?? Math.max(hyp(net[0], net[1]), ...each.map(v => hyp(v[0], v[1]))), len = S * 0.32 / top, unit = field ? 'N/C' : 'N', p = to(P);
+      const top = s.full ?? Math.max(hyp(net[0], net[1]), ...each.map(v => hyp(v[0], v[1]))), unit = field ? 'N/C' : 'N', p = to(P);
+      // every arrow shares one scale, short enough that the longest stays inside the frame
+      const room = (v: P2) => Math.min(v[0] > 0 ? (bx + bw - p[0]) / v[0] : v[0] < 0 ? (bx - p[0]) / v[0] : Infinity, v[1] > 0 ? (p[1] - by) / v[1] : v[1] < 0 ? (p[1] - by - bh) / v[1] : Infinity);
+      const len = Math.min(S * 0.32 / top, ...[net, ...each].map(room));
       anchors.P = p; anchors.O = to([0, 0]);
       cs.forEach(c => { const a = to([c.x, c.y]); charge(a[0], a[1], c.q, 22, c.name); });
       if (!target) { props.push({id: 'P', type: 'circle', x: p[0], y: p[1], r: 9 * k, style: {fill: 'ink'}, layer: 3} as Prop); label(p[0] + 22 * k, p[1] - 14 * k, 'P', 'ink', 26); }
