@@ -91,7 +91,7 @@ export type Prop = PropBase & (
   /** A plane's axes, with an optional grid, ticks every `step` and numbers. */
   | {type: 'axes'; plane: string; grid?: boolean; step?: [number, number]; numbers?: boolean; names?: [string, string]; size?: number}
   /** y = f(x) on a plane, broken where f is undefined; `draw` (0 to 1) draws it from left to right. */
-  | {type: 'curve'; plane: string; expr: string; from?: number; to?: number; draw?: number; samples?: number}
+  | {type: 'curve'; plane: string; expr: string; from?: number; to?: number; draw?: number; samples?: number; /** expr also uses t, the scene's seconds: a travelling wave. */ live?: boolean}
   /** The region between y = f(x) and y = lower(x) (default 0) from `from` to `to`. */
   | {type: 'region'; plane: string; expr: string; lower?: string; from: number; to: number}
   /** n rectangles under y = f(x) from `from` to `to`. */
@@ -424,7 +424,8 @@ export function propFrame(prop: Prop, t: number, actors: Map<string, ActorFrame>
     case 'curve': {
       const plane = planeNamed(planes, prop.plane), from = prop.from ?? plane.x[0], to = prop.to ?? plane.x[1];
       const draw = Math.max(0, Math.min(1, (out.draw as number | undefined) ?? 1));
-      const items = curvePaths(plane, prop.expr, from, from + (to - from) * draw, prop.samples ?? 600)
+      const expr = prop.live ? prop.expr.replace(/\bt\b/g, `(${t.toFixed(6)})`) : prop.expr;
+      const items = curvePaths(plane, expr, from, from + (to - from) * draw, prop.samples ?? 600)
         .map((points, i) => ({id: `${prop.id}.${i}`, type: 'polyline', points, style: prop.style} as Prop));
       Object.assign(out, {type: 'group', items});
       break;
@@ -572,7 +573,8 @@ function axesItems(p: Prop & {type: 'axes'}, plane: Plane): Prop[] {
     {id: `${p.id}.y`, type: 'arrow', x1: o[0], y1: bottom, x2: o[0], y2: top - size * 0.8, head: size * 0.6, style: {stroke: 'muted', width: 3}});
   const [nx, ny] = p.names ?? ['x', 'y'];
   items.push({id: `${p.id}.nx`, type: 'text', x: r + size * 1.3, y: o[1], text: nx, size: size * 1.2, style: {fill: 'muted'}},
-    {id: `${p.id}.ny`, type: 'text', x: o[0], y: top - size * 1.6, text: ny, size: size * 1.2, align: 'middle', style: {fill: 'muted'}});
+    // a long name on a narrow part stays inside the frame
+    {id: `${p.id}.ny`, type: 'text', x: Math.max(o[0], ny.length * size * 0.33 + 8), y: top - size * 1.6, text: ny, size: size * 1.2, align: 'middle', style: {fill: 'muted'}});
   if (p.numbers !== false) {
     for (const v of ticks(plane.x[0], plane.x[1], step)) {
       if (Math.abs(v - ox) < 1e-9) continue;

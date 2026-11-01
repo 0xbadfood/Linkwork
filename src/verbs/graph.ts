@@ -220,8 +220,9 @@ export function graph(s: GraphSpec): Scene {
       ptext(`label${i}`, px + 50 * k, row, ser.label, 32 * k, {style: {fill: colour}, show: [at, 1e9]}));
     row += wrapText(ser.label, 32 * k, pw - 50 * k).length * 1.25 * 32 * k;
     if ('expr' in ser) {
-      props.push(ptext(`formula${i}`, px + 50 * k, row, `${s.y.name} = ${show(tree(ser.expr, [v]))}`, 28 * k, {style: {fill: 'muted'}, show: [at, 1e9]}));
-      row += 1.25 * 28 * k;
+      const formula = `${s.y.name} = ${show(tree(ser.expr, [v]))}`;
+      props.push(ptext(`formula${i}`, px + 50 * k, row, formula, 28 * k, {style: {fill: 'muted'}, show: [at, 1e9]}));
+      row += wrapText(formula, 28 * k, pw - 50 * k).length * 1.25 * 28 * k;
     }
     row += 16 * k;
     t = Math.max(t, at + DRAW + 0.4);

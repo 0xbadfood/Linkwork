@@ -65,7 +65,7 @@ export function sceneErrors(scene: Scene): string[] {
   scene.props.forEach((p: Prop, i) => {
     const where = `prop ${p.id ?? i}`;
     needPlane(p.plane, where);
-    if ('expr' in p) errors.push(...exprErrors(p.expr, ['x'], `${where} expr`));
+    if ('expr' in p) errors.push(...exprErrors(p.expr, (p as {live?: boolean}).live ? ['x', 't'] : ['x'], `${where} expr`));
     if (p.type === 'region' && p.lower) errors.push(...exprErrors(p.lower, ['x'], `${where} lower`));
     for (const [field, keys] of Object.entries(p.keys ?? {})) errors.push(...keyErrors(keys, `${where} keys.${field}`));
     if (p.anchor && !joints.get(p.anchor.actor)?.has(p.anchor.joint)) errors.push(`${where}: anchor ${p.anchor.actor}.${p.anchor.joint} is not a joint of an actor`);

@@ -145,7 +145,7 @@ export function shm(s: ShmSpec): Scene {
     const R = Math.min(0.23 * bh, 0.3 * bw), cx = box[0] + 0.5 * bw, cy = box[1] + 0.03 * bh + R, sg = o.sg;
     const th = (t: number) => sg * (w * t + o.phi), Px = (t: number) => cx + R * Math.cos(th(t)), Py = (t: number) => cy - R * Math.sin(th(t));
     props.push({id: 'ring', type: 'circle', x: cx, y: cy, r: R, style: {stroke: 'muted', width: 3 * k, fill: 'none'}} as Prop);
-    line('diam', cx - 1.2 * R, cy, cx + 1.2 * R, cy); label('lx', cx + 1.26 * R, cy + 9 * k, 'x', 'muted', 'start', 30); dot('oo', cx, cy, 'muted', 6); label('lo', cx - 14 * k, cy + 34 * k, 'O', 'muted', 'end');
+    line('diam', cx - 1.2 * R, cy, cx + 1.2 * R, cy); label('lx', cx + 1.26 * R, cy + 38 * k, 'x', 'muted', 'start', 30); dot('oo', cx, cy, 'muted', 6); label('lo', cx - 14 * k, cy + 34 * k, 'O', 'muted', 'end');
     props.push({id: 'rad', type: 'line', x1: cx, y1: cy, x2: 0, y2: 0, style: {stroke: 'ink', width: 3 * k}, keys: {x2: key(Px), y2: key(Py)}} as Prop,
       {id: 'drop', type: 'line', x1: 0, y1: 0, x2: 0, y2: cy, style: {stroke: 'cool', width: 3 * k, dash: [8 * k, 6 * k]}, keys: {x1: key(Px), y1: key(Py), x2: key(Px)}} as Prop);
     dot('P', key(Px), key(Py), 'cool', 13); dot('Pp', key(Px), cy, 'accent', 14);

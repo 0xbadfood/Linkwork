@@ -1590,3 +1590,18 @@ test('shm gets the book right', () => {
   for (const bad of [{show: 'spring', A: 1, T: 2, k: 5, mass: 1}, {show: 'circle', A: 1, T: 2, damping: 1}, {show: 'spring', A: 1, T: 2, damping: 5}, {show: 'spring', A: 1, T: 2, reach: 0.5}])
     assert.ok((compile({verb: 'shm', ...bad} as never) as any).errors?.length, JSON.stringify(bad));
 });
+
+test('wave gets the book right', () => {
+  const facts = (s: object) => (compile({verb: 'wave', ...s} as never) as any).scene.meta.facts.join(' | ');
+  // Example 14.2: y = 0.005 sin(80x − 3t)
+  const ex = facts({show: 'travelling', a: 0.005, k: 80, omega: 3});
+  assert.match(ex, /λ = 0\.0785 m/); assert.match(ex, /T = 2\.09 s/); assert.match(ex, /ν = 0\.48 Hz/); assert.match(ex, /v = λν = 0\.0375 m\/s/);
+  // Example 14.3: steel wire 0.72 m, 5 g, 60 N
+  assert.match(facts({show: 'travelling', a: 0.01, wavelength: 1, tension: 60, mu: 0.005 / 0.72}), /√\(T\/μ\).* = 92\.95 m\/s/);
+  // Example 14.5: a 30 cm pipe and 1.1 kHz at 330 m/s
+  assert.match(facts({show: 'modes', system: 'open_pipe', L: 0.3, speed: 330, source: 1100, harmonics: [1, 2]}), /resonates: it is harmonic 2/);
+  assert.match(facts({show: 'modes', system: 'closed_pipe', L: 0.3, speed: 330, source: 1100, harmonics: [1, 2]}), /does not resonate/);
+  assert.match(facts({show: 'beats', nu1: 11, nu2: 9}), /= 2 Hz/);
+  assert.match(facts({show: 'superposition', a: 0.1, wavelength: 1, frequency: 1, phase: 180}), /2a cos\(φ\/2\) = 0 m/);
+  assert.ok((compile({verb: 'wave', show: 'travelling', wavelength: 1, frequency: 2, speed: 5} as never) as any).errors?.length);
+});

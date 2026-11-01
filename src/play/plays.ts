@@ -147,6 +147,25 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.plus_A[0] - a.O[0], n(v, 'A')]]; },
   },
+  {
+    id: 'beats', chapter: 'keph2-07', title: 'Tune by beats',
+    intro: 'A note of 12 Hz and a second note you can tune, over one second. Tuners listen for exactly this: the swells in the sum.',
+    controls: [{id: 'nu2', label: 'Second note', kind: 'slider', min: 12.5, max: 20, step: 0.5, unit: 'Hz', start: 16}],
+    spec: v => ({verb: 'wave', show: 'beats', title: 'Beats in one second', nu1: 12, nu2: n(v, 'nu2'), window: 1}),
+    setup: 0.9,
+    reading: v => [['Beats in a second', fixed(n(v, 'nu2') - 12, 1)]],
+    predict: {
+      question: 'You tune the second note from 16 Hz down to 13 Hz, closer to the first. What happens to the swells?',
+      options: [{text: 'They come slower, wider apart', right: true}, {text: 'They come faster'}, {text: 'They stay the same'}],
+      runs: [{nu2: 16}, {nu2: 13}],
+      why: 'Beats per second = ν₁ − ν₂: 4 at 16 Hz, 1 at 13 Hz. As the notes come into tune, the swells slow down and vanish at exact unison.',
+    },
+    challenges: [
+      {text: 'Make exactly 2 beats in the second.', start: {nu2: 18}, hit: v => n(v, 'nu2') === 14, hint: v => `Now ${fixed(n(v, 'nu2') - 12, 1)} beats.`},
+      {text: 'Get as close to unison as this slider allows.', start: {nu2: 16}, hit: v => n(v, 'nu2') === 12.5, hint: v => `Still ${fixed(n(v, 'nu2') - 12, 1)} beats a second.`},
+    ],
+    probe: (_v, s) => { const a = s.meta.anchors; return [[a.end[0] - a.start[0], 1]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);
