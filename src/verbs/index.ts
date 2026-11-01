@@ -33,6 +33,7 @@ import {work, workErrors, type WorkSpec} from './work.ts';
 import {energy, energyErrors, type EnergySpec} from './energy.ts';
 import {shm, shmErrors, type ShmSpec} from './shm.ts';
 import {wave, waveErrors, type WaveSpec} from './waves.ts';
+import {electric, electricErrors, type ElectricSpec} from './electric.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
 import {elastic, elasticErrors, type ElasticSpec} from './elastic.ts';
@@ -43,7 +44,7 @@ import {kineticErrors, kineticGas, type KineticSpec} from './kinetic.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 
-export type Spec = WaveSpec | ShmSpec | LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
+export type Spec = WaveSpec | ElectricSpec | ShmSpec | LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
   | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
@@ -113,6 +114,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "forces on a body, computed: a free-body diagram of a block, ball, car or point on a floor, an incline or in the air, its weight, normal force, tension, friction and pushes drawn to scale; unknown forces solved by the second law (equilibrium, or a given acceleration); components along and across a slope, the net force and a = F/m, the forces head to tail closing a triangle when they balance; friction at work: a growing push or a tilting plane, static friction up to µs N, then slipping with µk N"} as Verb<ForcesSpec>,
   work: {errors: workErrors, compile: work,
     about: 'work done by a constant force, computed: a body pulled or pushed through a displacement d at θ to the motion, with kinetic friction; W = F d cos θ (positive, zero or negative), −f d for friction, none for N and mg; bars of the net work done and the kinetic energy grow together (the work-energy theorem); the final speed, time and power'} as Verb<WorkSpec>,
+  electric: {errors: electricErrors, compile: electric,
+    about: 'electrostatics from Coulomb\'s law: charging, the force between charges, superposition, field lines, charges in a uniform field, flux, dipoles, Gaussian surfaces, E against r'},
   wave: {errors: waveErrors, compile: wave,
     about: 'waves, computed from y = a sin(kx − ωt): a travelling wave, a pulse, sound in a pipe, superposition at a phase difference, reflection at a rigid or free end, standing waves, harmonics of strings and pipes, beats'} as Verb<WaveSpec>,
   shm: {errors: shmErrors, compile: shm,

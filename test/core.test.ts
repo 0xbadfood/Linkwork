@@ -1,3 +1,4 @@
+import {fieldAt, traceLines} from '../src/verbs/electric.ts';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -1625,4 +1626,29 @@ test('wave gets the book right', () => {
   assert.match(facts({show: 'beats', nu1: 11, nu2: 9}), /= 2 Hz/);
   assert.match(facts({show: 'superposition', a: 0.1, wavelength: 1, frequency: 1, phase: 180}), /2a cos\(φ\/2\) = 0 m/);
   assert.ok((compile({verb: 'wave', show: 'travelling', wavelength: 1, frequency: 2, speed: 5} as never) as any).errors?.length);
+});
+
+test('electric gets the book right', () => {
+  const made = (o: object) => (compile({verb: 'electric', ...o} as never) as any).scene;
+  const facts = (o: object) => made(o).meta.facts.join(' | ');
+  // Example 1.5: an electron falling 1.5 cm in 2.0 × 10⁴ N/C takes 2.9 × 10⁻⁹ s; a proton, 1.3 × 10⁻⁷ s
+  assert.match(facts({show: 'plates', E: 2e4, d: 0.015}), /2\.92 × 10⁻⁹ s/);
+  assert.match(facts({show: 'plates', E: 2e4, d: 0.015, particle: 'proton'}), /1\.25 × 10⁻⁷ s/);
+  // Example 1.8: ±10 μC, 5 mm apart: 2.6 × 10⁵ N/C at 15 cm on the axis, 1.33 × 10⁵ N/C on the equator
+  const dip = facts({show: 'dipole', q: 1e-5, a: 0.0025, r: 0.15});
+  assert.match(dip, /p = q × 2a = 5 × 10⁻⁸ C m/); assert.match(dip, /axis, E = 2\.66 × 10⁵/); assert.match(dip, /equator, E = 1\.33 × 10⁵/);
+  // Coulomb, and doubling the distance gives a quarter
+  assert.match(facts({show: 'coulomb', q1: 1e-6, q2: -2e-6, r: 0.1, r2: 0.2}), /1\.8 N at r = 0\.1 m, attractive.*0\.25 times/);
+  assert.match(facts({show: 'flux', E: 100, A: 0.01, theta: 60}), /0\.5 N m²\/C/);
+  // three equal charges at an equilateral triangle: nothing at the centre (Fig. 1.6)
+  const r = 0.1, tri = [90, 210, 330].map(d => ({q: 1e-7, x: r * Math.cos(d * Math.PI / 180), y: r * Math.sin(d * Math.PI / 180)}));
+  assert.match(facts({show: 'superposition', charges: tri, at: [0, 0]}), /net E = [\d.]+ × 10⁻|net E = 0/);
+  // field lines: count ∝ charge, none crossing into a positive charge's start
+  const lines = traceLines([{q: 2e-9, x: 0.1, y: 0}, {q: -1e-9, x: -0.1, y: 0}], 0.3, 12);
+  assert.ok(lines.length >= 12);
+  assert.deepEqual(fieldAt([{q: 1, x: 0, y: 0}], 1, 0).map(v => Math.round(v / 1e9)), [9, 0]);
+  // on the equator the sum runs against p; a nonuniform field pulls an aligned dipole toward the stronger side
+  const bad = [{show: 'superposition'}, {show: 'lines'}, {show: 'superposition', charges: [{q: 1, x: 0, y: 0}], at: [0, 0]}, {show: 'dipole', q: 1, a: 1, r: 0.5}, {show: 'gauss'}, {show: 'torque', field: 'nonuniform', theta: 45}, {show: 'coulomb', q1: 1, q2: 1, r: 0.1, r2: 1}];
+  for (const b of bad) assert.ok((compile({verb: 'electric', ...b} as never) as any).errors?.length, JSON.stringify(b));
+  for (const sh of ['rubbing', 'pith', 'electroscope', 'induction', 'coulomb', 'plates', 'flux', 'dipole', 'torque', 'density']) assert.deepEqual(check(made({show: sh, illustrative: true})).filter((x: any) => x.level === 'error'), [], sh);
 });

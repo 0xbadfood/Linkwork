@@ -166,6 +166,24 @@ export const PLAYS: Play[] = [
     ],
     probe: (_v, s) => { const a = s.meta.anchors; return [[a.end[0] - a.start[0], 1]]; },
   },
+  {
+    id: 'null-point', chapter: 'leph1-01', title: 'Find where the field vanishes',
+    intro: 'Two positive charges, +4 nC and +1 nC, 30 cm apart. Move the point P between them. Each charge sends a field arrow; somewhere they cancel.',
+    controls: [{id: 'x', label: 'P from the +4 nC charge', kind: 'slider', min: 6, max: 26, step: 1, unit: 'cm', start: 10}],
+    spec: v => ({verb: 'electric', show: 'superposition', title: 'Field on the line', charges: [{q: 4e-9, x: -0.15, y: 0, name: '+4 nC'}, {q: 1e-9, x: 0.15, y: 0, name: '+1 nC'}], at: [n(v, 'x') / 100 - 0.15, 0], reach: 0.2, full: 12000}),
+    setup: 1,
+    reading: v => { const x = n(v, 'x') / 100, e = 8.988e9 * (4e-9 / (x * x) - 1e-9 / ((0.3 - x) ** 2)); return [['Net field', `${fixed(Math.abs(e), 0)} N/C`]]; },
+    predict: {
+      question: 'Where do the two fields cancel?',
+      options: [{text: 'Nearer the +1 nC charge', right: true}, {text: 'Exactly halfway'}, {text: 'Nearer the +4 nC charge'}],
+      runs: [{x: 15}, {x: 20}],
+      why: 'E goes as q/r². Four times the charge needs twice the distance to give the same field: 20 cm from +4 nC, 10 cm from +1 nC.',
+    },
+    challenges: [
+      {text: 'Put P where the net field is zero.', start: {x: 10}, hit: v => n(v, 'x') === 20, hint: v => (n(v, 'x') < 20 ? 'The +4 nC charge still wins: move away from it.' : 'The +1 nC charge wins now: move back.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.P[0] - a.O[0], n(v, 'x') / 100 - 0.15]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);
