@@ -4,6 +4,7 @@
 // part's spec from another part's computed motion and puts both on one clock.
 import type {Prop, Scene, ScenePart} from './scene.ts';
 import type {Vec} from './vec.ts';
+import {shareWaveScale} from './verbs/waves.ts';
 
 type Box = [number, number, number, number];
 export type PartSpec = {id: string; box?: Box; spec?: {verb: string; [k: string]: unknown}; scene?: Scene;
@@ -67,6 +68,7 @@ export function compose(c: CompoundSpec, compile: (spec: {verb: string}) => {sce
   const scenes = new Map<string, Scene>();
   const starts = new Map(c.parts.map(p => [p.id, p.start ?? 0]));
   const specs = new Map(c.parts.map(p => [p.id, p.spec ? structuredClone(p.spec) : undefined]));
+  shareWaveScale([...specs.values()]);
   const build = (p: PartSpec): string[] => {
     const box = p.box ?? [0, 0, W, H];
     if (p.scene) { scenes.set(p.id, p.scene); return []; }

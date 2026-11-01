@@ -21,7 +21,8 @@ export const WAVE_SHOWS = ['travelling', 'pulse', 'longitudinal', 'superposition
 export type WaveSpec = {verb: 'wave'; show: (typeof WAVE_SHOWS)[number]; a?: number; wavelength?: number; frequency?: number; speed?: number;
   k?: number; omega?: number; tension?: number; mu?: number; bulk?: number; rho?: number; phase?: number; direction?: 1 | -1; pulses?: 1 | 2;
   end?: 'rigid' | 'free'; system?: 'string' | 'open_pipe' | 'closed_pipe'; L?: number; harmonics?: number[]; source?: number; nu1?: number; nu2?: number; window?: number;
-  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean;
+  against?: {wavelength: number; frequency: number}};
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const f = (v: number) => { const r = round(v, 9); return n2(r, Math.abs(r) >= 100 || Number.isInteger(r) ? 0 : Math.abs(r) < 0.1 ? 4 : 2); };
@@ -42,6 +43,18 @@ function model(s: WaveSpec) {
 }
 
 function modeFreq(s: WaveSpec, n: number, v: number) { const L = s.L ?? 1; return s.system === 'closed_pipe' ? (2 * n - 1) * v / (4 * L) : n * v / (2 * L); }
+
+/** Waves in a compound's panels are compared, so they share one scale: each is drawn against the longest wavelength and
+ *  the lowest frequency among them. Drawn alone, each would fill its panel alike and the comparison would show nothing. */
+export function shareWaveScale(specs: unknown[]) {
+  const moving = (specs as WaveSpec[]).filter(s => s?.verb === 'wave' && (s.show === 'travelling' || s.show === 'longitudinal'));
+  if (moving.length < 2 || !moving.every(s => model(s).given)) return;
+  const against = {wavelength: Math.max(...moving.map(s => model(s).lam)), frequency: Math.min(...moving.map(s => model(s).nu))};
+  for (const s of moving) s.against = against;
+}
+
+// A wave at most this many times shorter or quicker than the one it is compared with is still drawn truly; beyond it, it would be a blur.
+const MOST_AGAINST = 3;
 
 export function waveErrors(s: WaveSpec): string[] {
   const e: string[] = [], W = 'wave';
@@ -82,7 +95,9 @@ export function wave(s: WaveSpec): Scene {
   const m = model(s), {a, lam, nu, v} = m, dir = s.direction ?? 1, phi = (s.phase ?? 0) * Math.PI / 180;
   const facts: string[] = [];
   // a period on screen takes 2.5 s; `TW` is its ω on screen
-  const TW = 2 * Math.PI / 2.5, lead = 1;
+  const trueShort = s.against ? s.against.wavelength / lam : 1, trueQuick = s.against ? nu / s.against.frequency : 1;
+  const shorter = Math.min(trueShort, MOST_AGAINST), quicker = Math.min(trueQuick, MOST_AGAINST);
+  const TW = 2 * Math.PI / 2.5 * quicker, lead = 1;
   const curve = (id: string, expr: string, stroke = 'accent', width = 5, extra: Record<string, unknown> = {}) =>
     props.push({id, type: 'curve', plane: 'p', expr, live: true, samples: 360, style: {stroke, width: width * k}, layer: 2, ...extra} as Prop);
   const still = (id: string, expr: string, stroke = 'faint', width = 2, dash = true) =>
@@ -100,19 +115,21 @@ export function wave(s: WaveSpec): Scene {
 
   if (s.show === 'travelling') {
     // two wavelengths across; the upper part y against x, the lower the marked element's y against t
-    const K = 2 * Math.PI * 2, top = 0.72, amp = 0.17, xe = 0.3, sg = dir;
+    const across = 2 * shorter, K = 2 * Math.PI * across, top = 0.72, amp = 0.17, xe = 0.3, sg = dir;
     const Y = `${top} + ${amp} * sin(${num(K)} * x - ${num(sg * TW)} * t)`, ey = (t: number) => top + amp * Math.sin(K * xe - sg * TW * t);
     line('rest', 0, top, 1, top, 'faint', 2); curve('w', Y); dot('el', xe, keys(dur, ey), 'bad', 13); label('lel', xe, top + amp + 0.07, 'this bit only goes up and down', 'bad', 22);
     // a crest rides along at v: its phase stays fixed
     // sin(Kx − ωt) = 1: x = (π/2 + ωt)/K, wrapped across the window
-    const xc = (t: number) => { const c = (0.125 + sg * TW * t / K) % 1; return (c + 1) % 1; };
+    const whole = Math.floor(across) / across, xc = (t: number) => { const c = (0.25 / across + sg * TW * t / K) % whole; return (c + whole) % whole; };
     dot('crest', keys(dur, xc, 60), top + amp, 'cool', 11);
-    line('lam0', 0.25 / 2 + 0.25, top - amp - 0.05, 0.25 / 2 + 0.75, top - amp - 0.05, 'muted', 3); label('lam', 0.35, top - amp - 0.06, 'λ', 'ink', 30, 'end');
+    line('lam0', 0.375, top - amp - 0.05, 0.375 + 1 / across, top - amp - 0.05, 'muted', 3); label('lam', 0.35, top - amp - 0.06, 'λ', 'ink', 30, 'end');
     const by = 0.22, ba = 0.13, W1 = TW;
     line('ax', 0.03, by, 1, by, 'muted', 2); label('ny', 0.03, by + ba + 0.05, 'y of the marked bit, against t', 'muted', 22, 'start');
     props.push({id: 'et', type: 'curve', plane: 'p', expr: `${by} + ${ba} * sin(${num(K * xe)} - ${num(sg * W1 * dur / 0.97)} * (x - 0.03))`, from: 0.03, to: 1, draw: 0, samples: 300, keys: {draw: [[0, 0], [dur, 1, 'linear']]}, style: {stroke: 'bad', width: 4 * k}} as Prop);
     story = 'The wave travels; each piece of string only goes up and down';
     second = `One period later the pattern has moved one wavelength: v = λν`;
+    if (s.against) second = `Drawn to one scale with the wave beside it: ${f(lam)} m, ${f(nu)} Hz`;
+    if (trueShort > MOST_AGAINST || trueQuick > MOST_AGAINST) second = `Too short or quick to draw beside the other at true scale: ${f(lam)} m, ${f(nu)} Hz`;
   } else if (s.show === 'pulse') {
     const two = s.pulses === 2, w = 0.07, amp = 0.28, c = 0.5, sp = 0.13; dur = 7;
     const p = (centre: string, sign: number) => `${sign * amp} * exp(0 - ((x - (${centre})) / ${w}) ^ 2)`;
@@ -125,7 +142,7 @@ export function wave(s: WaveSpec): Scene {
     second = two ? 'Displacements add: y = y₁ + y₂' : 'A wave carries energy along, not the string';
   } else if (s.show === 'longitudinal') {
     // layers of air in a pipe, shifted by s = s₀ sin(kx − ωt): crowded where it is compressed
-    const K = 2 * Math.PI * 2.5, top = 0.62, half = 0.2, n = 64, shift = 0.022; dur = 7.5;
+    const K = 2 * Math.PI * 2.5 * shorter, top = 0.62, half = 0.2, n = 64, shift = 0.022; dur = 7.5;
     line('p1', 0.05, top + half, 1, top + half, 'ink', 4); line('p2', 0.05, top - half, 1, top - half, 'ink', 4);
     const piston = (t: number) => 0.035 + shift * Math.sin(-TW * t);
     props.push({id: 'piston', type: 'line', plane: 'p', x1: 0, y1: top + half, x2: 0, y2: top - half, style: {stroke: 'accent', width: 14 * k}, layer: 2, keys: {x1: keys(dur, piston), x2: keys(dur, piston)}} as Prop);

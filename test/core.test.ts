@@ -1591,6 +1591,27 @@ test('shm gets the book right', () => {
     assert.ok((compile({verb: 'shm', ...bad} as never) as any).errors?.length, JSON.stringify(bad));
 });
 
+test('waves side by side are drawn to one scale, or the comparison shows nothing', () => {
+  const part = (id: string, x: number, spec: object) => ({id, box: [x, 0, 960, 1080], spec: {verb: 'wave', show: 'travelling', ...spec}});
+  const scene = (a: object, b: object) => (compile({compound: true, parts: [part('a', 0, a), part('b', 960, b)]} as never) as any).scene;
+  const expr = (sc: any, i: number) => sc.parts[i].scene.props.find((p: any) => p.id === 'w').expr as string;
+  const waves = (sc: any, i: number) => Number(/\* sin\(([\d.]+) \* x/.exec(expr(sc, i))![1]) / (2 * Math.PI);
+  const rate = (sc: any, i: number) => Number(/x - ([\d.]+) \* t/.exec(expr(sc, i))![1]);
+  const c = scene({wavelength: 10, frequency: 10}, {wavelength: 5, frequency: 20});
+  assert.ok(Math.abs(waves(c, 0) - 2) < 1e-4); assert.ok(Math.abs(waves(c, 1) - 4) < 1e-4);     // half the wavelength: twice the waves
+  assert.ok(Math.abs(rate(c, 1) / rate(c, 0) - 2) < 1e-4);                                     // twice the frequency: twice as quick
+  const t = scene({a: 0.01, k: 2, omega: 178.9, tension: 80, mu: 0.01}, {a: 0.01, k: 2, omega: 89.44, tension: 80, mu: 0.04});
+  assert.ok(Math.abs(waves(t, 0) - waves(t, 1)) < 1e-4); assert.ok(Math.abs(rate(t, 0) / rate(t, 1) - 2) < 1e-3);
+  const far = scene({wavelength: 18, frequency: 1}, {wavelength: 1, frequency: 1});
+  assert.ok(waves(far, 1) <= 6.0001, 'a far shorter wave stays drawable');
+  // the riding crest stays on a crest however many waves fit, and a lone wave is unchanged
+  const off = scene({wavelength: 1.2, frequency: 10}, {wavelength: 1, frequency: 10}), w = rate(off, 1);
+  const crest = off.parts[1].scene.props.find((p: any) => p.id === 'crest');
+  for (const [time, x] of crest.keys.x) assert.ok(Math.sin(2 * Math.PI * 2.4 * x - w * time) > 0.999, `crest off the curve at t=${time}`);
+  const lone = (compile({verb: 'wave', show: 'travelling', wavelength: 5, frequency: 20} as never) as any).scene.props.find((p: any) => p.id === 'w').expr;
+  assert.match(lone, /12\.566/);
+});
+
 test('wave gets the book right', () => {
   const facts = (s: object) => (compile({verb: 'wave', ...s} as never) as any).scene.meta.facts.join(' | ');
   // Example 14.2: y = 0.005 sin(80x − 3t)
