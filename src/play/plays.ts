@@ -47,6 +47,9 @@ const junction = (v: Values) => { const [a, b] = resist(v); return 100 * b / (a 
 // A convex lens, f = 10 cm, the object 12 to 40 cm away: always a real image, in a window that holds the farthest
 const F = 10, HEIGHT = 5, across = (v: Values) => F * n(v, 'd') / (n(v, 'd') - F), times = (v: Values) => F / (n(v, 'd') - F);
 
+// A block on a spring, T = 2π√(m/k), every period shown in true time so two runs can be compared by eye
+const period = (v: Values) => 2 * Math.PI * Math.sqrt(n(v, 'mass') / n(v, 'k'));
+
 export const PLAYS: Play[] = [
   {
     id: 'projectile', chapter: 'keph1-03', title: 'Land the shot',
@@ -119,6 +122,30 @@ export const PLAYS: Play[] = [
       {text: 'Make the image 3 times the size of the object.', start: {d: 20}, hit: v => Math.abs(times(v) - 3) <= 0.05, hint: v => `The image is ${fixed(times(v), 2)} × the object.`},
     ],
     probe: (v, s) => { const a = s.meta.anchors, axis = s.meta.units.oy; return [[a.image[0] - a.object[0], n(v, 'd') + across(v)], [a.image[1] - axis, times(v) * HEIGHT], [axis - a.object[1], HEIGHT]]; },
+  },
+  {
+    id: 'spring-period', chapter: 'keph2-06', title: 'Tune the spring',
+    intro: 'A block on a spring, in true time. Change its mass, the stiffness of the spring and how far you pull it, then let go.',
+    controls: [
+      {id: 'mass', label: 'Mass', kind: 'slider', min: 1, max: 4, step: 0.1, unit: 'kg', start: 1},
+      {id: 'k', label: 'Spring constant', kind: 'slider', min: 10, max: 36, step: 1, unit: 'N/m', start: 20},
+      {id: 'A', label: 'Pull', kind: 'slider', min: 0.05, max: 0.2, step: 0.01, unit: 'm', start: 0.1},
+    ],
+    spec: v => ({verb: 'shm', show: 'spring', title: 'A block on a spring', mass: n(v, 'mass'), k: n(v, 'k'), A: n(v, 'A'), reach: 0.2}),
+    setup: 0.9,
+    reading: v => [['Period', `${fixed(period(v), 2)} s`], ['Greatest speed', `${fixed(2 * Math.PI / period(v) * n(v, 'A'), 2)} m/s`]],
+    predict: {
+      question: 'You pull the block twice as far before letting go. What happens to the time of one swing?',
+      options: [{text: 'It stays the same', right: true}, {text: 'It doubles'}, {text: 'It halves'}],
+      runs: [{A: 0.1}, {A: 0.2}],
+      why: 'T = 2π√(m/k) has no A in it. Pulled twice as far, the force is twice as large, so the block moves twice as fast and covers twice the distance in the same time.',
+    },
+    challenges: [
+      {text: 'Make one swing take exactly 2 seconds.', start: {mass: 1, k: 30, A: 0.1}, hit: v => Math.abs(period(v) - 2) <= 0.03, hint: v => `One swing takes ${fixed(period(v), 2)} s.`},
+      {text: 'Keep k at 30 N/m, and match the period of 1 kg on a 10 N/m spring.', start: {mass: 2, k: 30, A: 0.1},
+        hit: v => n(v, 'k') === 30 && Math.abs(period(v) - 2 * Math.PI * Math.sqrt(0.1)) <= 0.02, hint: v => `This one takes ${fixed(period(v), 2)} s; the other takes ${fixed(2 * Math.PI * Math.sqrt(0.1), 2)} s.`},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.plus_A[0] - a.O[0], n(v, 'A')]]; },
   },
 ];
 

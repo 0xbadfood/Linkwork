@@ -1576,3 +1576,17 @@ test('thermodynamics verbs reproduce the book: 1 g of water boiling, the heater,
   assert.deepEqual(fixed('isothermal'), fixed('adiabatic'));
   assert.ok((compile({verb: 'gas_process', kind: 'isothermal', T: 300, V1: 0.01, V2: 0.02, window: {V: 0.015, P: 3e5}} as never) as any).errors.length);
 });
+
+test('shm gets the book right', () => {
+  const facts = (s: object) => (compile({verb: 'shm', ...s} as never) as any).scene.meta.facts.join(' | ');
+  // Example 13.5: x = 5 cos(2πt + π/4) at t = 1.5 s
+  const ex = facts({show: 'graphs', A: 5, T: 1, phase: 45, at: 1.5});
+  assert.match(ex, /x = -?−?3\.54 m, v = 22\.21? m\/s, a = 140 m\/s²/);
+  // Example 13.7: 1 kg, 50 N/m, 10 cm
+  const e = facts({show: 'energy', A: 0.1, k: 50, mass: 1});
+  assert.match(e, /E = ½kA² = 0\.25 J/); assert.match(e, /ωA = 0\.71 m\/s/);
+  // two springs: ω = √(2k/m)
+  assert.match(facts({show: 'spring', A: 0.1, k: 25, mass: 1, springs: 2}), /k = 2 × 25 = 50 N\/m/);
+  for (const bad of [{show: 'spring', A: 1, T: 2, k: 5, mass: 1}, {show: 'circle', A: 1, T: 2, damping: 1}, {show: 'spring', A: 1, T: 2, damping: 5}, {show: 'spring', A: 1, T: 2, reach: 0.5}])
+    assert.ok((compile({verb: 'shm', ...bad} as never) as any).errors?.length, JSON.stringify(bad));
+});
