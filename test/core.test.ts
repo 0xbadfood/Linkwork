@@ -1714,3 +1714,24 @@ test('potential and capacitor get the book right', () => {
   assert.ok((compile({verb: 'capacitor', show: 'combine', caps: [1e-6]} as never) as any).errors.length >= 2);
   assert.ok((compile({verb: 'potential', show: 'system', charges: [{q: 1, x: 0, y: 0}], at: [0, 0]} as never) as any).errors.join().includes('on a charge'));
 });
+
+test('capacitor and gradient drawings say what the numbers say', async () => {
+  const {capacitor, sharePotentialScale, potential} = await import('../src/verbs/potential.ts');
+  // Ex. 2.8: a slab of 3d/4 gives C = 4KC0/(K+3), and is narrower than the gap
+  const d = 3e-3, A = 6e-3, K = 3, C0 = 8.854e-12 * A / d;
+  const slab = (x: Record<string, unknown>) => capacitor({verb: 'capacitor', show: 'insert', A, d, K, battery: false, ...x} as never);
+  const w = (sc: {props: {id: string; w?: number}[]}) => sc.props.find(p => p.id === 'slab')!.w!;
+  const part = slab({thickness: .75 * d}), full = slab({});
+  assert.ok(Math.abs(w(part) / w(full) - .75) < .01);
+  const expected = 4 * K * C0 / (K + 3);
+  assert.ok(Math.abs(8.854e-12 * A / (d - .75 * d + .75 * d / K) - expected) / expected < 1e-9);
+  // compared gradients: further apart looks further apart
+  const a = {verb: 'potential', show: 'gradient', dl: .1, illustrative: true}, b = {...a, dl: .4};
+  sharePotentialScale([a, b]);
+  const sep = (s: unknown) => { const xs = (potential(s as never).props as {id: string; type: string; points?: number[][]}[]).filter(p => p.points).map(p => p.points![0][0]); return Math.abs(xs[0] - xs[1]); };
+  assert.ok(sep(b) > 3 * sep(a));
+  // a parallel network holds unless asked to reduce; its rows clear the battery
+  const net = (x: Record<string, unknown>) => capacitor({verb: 'capacitor', show: 'combine', kind: 'parallel', caps: [1, 2, 3], illustrative: true, ...x} as never);
+  assert.ok(!JSON.stringify(net({}).props).includes('equivalent'));
+  assert.ok(JSON.stringify(net({reduce: true}).props).includes('equivalent'));
+});

@@ -29,9 +29,9 @@ type Charge = {q: number; x: number; y: number; name?: string};
 export const POTENTIAL_SHOWS = ['work', 'curves', 'dipole', 'system', 'equipotentials', 'gradient', 'assemble', 'external', 'dipole_energy'] as const;
 export const CAPACITOR_SHOWS = ['conductor', 'dielectric', 'plates', 'insert', 'combine', 'charging'] as const;
 export type PotentialSpec = {verb: 'potential'; show: (typeof POTENTIAL_SHOWS)[number]; q?: number; test?: number; r?: number; start?: number; paths?: boolean; a?: number; theta?: number; charges?: Charge[]; at?: P2; reach?: number; uniform?: boolean; lines?: boolean; E?: number; V?: number; dV?: number; dl?: number; particle?: 'electron' | 'proton'; p?: number; from?: number; to?: number;
-  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+  span?: number; dl0?: number; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 export type CapacitorSpec = {verb: 'capacitor'; show: (typeof CAPACITOR_SHOWS)[number]; case?: 'equilibrium' | 'external' | 'cavity' | 'pillbox'; molecules?: 'polar' | 'nonpolar'; K?: number; A?: number; d?: number; d2?: number; Q?: number; V?: number; C?: number; battery?: boolean; kind?: 'series' | 'parallel'; caps?: number[]; across?: number; sigma?: number;
-  span?: number; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+  span?: number; thickness?: number; reduce?: boolean; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const K0 = 8.988e9, EPS0 = 8.854e-12, QE = 1.602e-19;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -103,6 +103,7 @@ export function capacitorErrors(s: CapacitorSpec): string[] {
     if (!s.illustrative && s.V === undefined) e.push(`${W}: combine needs V (volts) across it; or set illustrative: true`);
   }
   if ((s.show === 'plates' || s.show === 'insert') && !s.illustrative && (s.A === undefined || s.d === undefined)) e.push(`${W}: ${s.show} needs A (m²) and d (m); or set illustrative: true`);
+  if (s.show === 'insert' && s.thickness !== undefined && !(s.thickness > 0 && s.thickness < (s.d ?? 1e-3))) e.push(`${W}: insert thickness is a slab thinner than the gap d`);
   if (s.show === 'insert' && !s.illustrative && s.K === undefined) e.push(`${W}: insert needs K, the dielectric constant; or set illustrative: true`);
   if (s.show === 'charging' && !s.illustrative && (s.C === undefined || s.V === undefined)) e.push(`${W}: charging needs C (F) and V (volts); or set illustrative: true`);
   return e;
@@ -207,13 +208,13 @@ export function potential(s: PotentialSpec): Scene {
       story = 'Each blue curve joins points of one potential; the field lines cross them at right angles'; second = 'Where the surfaces crowd, the field is strong';
     }
   } else if (s.show === 'gradient') {
-    const dl = s.dl ?? 0.01, dV = Math.abs(s.dV ?? 10), V = s.V ?? 100, E0 = dV / dl, x1 = cx + bw * .14, x2 = cx - bw * .14; dur = 7;
+    const dl = s.dl ?? 0.01, dV = Math.abs(s.dV ?? 10), V = s.V ?? 100, E0 = dV / dl, half = s.span ? Math.max(.05, .25 * dl / s.span) : .14, x1 = cx + bw * half, x2 = cx - bw * half; dur = 7;
     const surface = (x: number, c: string) => poly(Array.from({length: 41}, (_, i) => [x + bw * .05 * Math.sin(i / 40 * Math.PI), by + bh * (.05 + .9 * i / 40)] as P2), c, 5);
     surface(x1, 'cool'); surface(x2, 'bad');
-    if (!s.illustrative) { label(x2, by + 4 * k, `V + δV = ${sci(V + dV, 'V')}`, 'bad', 26); label(x1, by + 4 * k, `V = ${sci(V, 'V')}`, 'cool', 26); }
-    else { label(x2, by + 4 * k, 'V + δV', 'bad', 26); label(x1, by + 4 * k, 'V', 'cool', 26); }
+    if (!s.illustrative) { label(Math.min(x2, cx - 110 * k), by + 4 * k, `V + δV = ${sci(V + dV, 'V')}`, 'bad', 26); label(Math.max(x1, cx + 110 * k), by + 4 * k, `V = ${sci(V, 'V')}`, 'cool', 26); }
+    else { label(Math.min(x2, cx - 50 * k), by + 4 * k, 'V + δV', 'bad', 26); label(Math.max(x1, cx + 40 * k), by + 4 * k, 'V', 'cool', 26); }
     const mid = cy + bh * .02; line([x2 + bw * .05, mid + 64 * k], [x1 + bw * .05, mid + 64 * k], 'muted', 2); label(cx + bw * .05, mid + 100 * k, 'δl', 'muted', 28);
-    arrow([x2 + bw * .05, mid], [x1 + bw * .05, mid], 'accent', 7, on(1.5, 2.6)); label(cx + bw * .05, mid - 22 * k, 'E', 'accent', 34, {show: [2.6, 1e9]});
+    arrow([x2 + bw * .05, mid], [x1 + bw * .05, mid], 'accent', s.span ? 3 + 6 * (s.dl0 ?? dl) / dl : 7, on(1.5, 2.6)); label(cx + bw * .05, mid - 22 * k, 'E', 'accent', 34, {show: [2.6, 1e9]});
     facts.push(`|E| = δV/δl = ${sci(E0, 'V/m')}`);
     story = 'E points from higher to lower potential, along the steepest drop'; second = 'E = −δV/δl: the closer the surfaces, the stronger the field';
   } else if (s.show === 'assemble') {
@@ -254,6 +255,14 @@ export function potential(s: PotentialSpec): Scene {
     story = 'U = −pE cos θ: least when p lies along E'; second = 'The dipole turns downhill on this curve, toward θ = 0';
   }
   return finish('potential', s as never, dur, story, second, facts, anchors, s.illustrative);
+}
+
+/** Compared gradients share one drawn gap, so surfaces further apart look further apart and their field thinner. */
+export function sharePotentialScale(specs: unknown[]) {
+  const pairs = (specs as PotentialSpec[]).filter(s => s?.verb === 'potential' && s.show === 'gradient');
+  const gaps = pairs.map(s => s.dl ?? 0.01);
+  if (new Set(gaps).size < 2) return;
+  for (const s of pairs) { s.span = Math.max(...gaps); s.dl0 = Math.min(...gaps); }
 }
 
 /** Compared capacitors share one drawn gap, so a wider gap looks wider. */
@@ -313,7 +322,7 @@ export function capacitor(s: CapacitorSpec): Scene {
     facts.push(`E = E₀/K: with K = ${K}, ${+(100 / K).toPrecision(3)}% of it survives`, 'polarisation P = χₑE');
     story = polar ? 'Polar molecules have dipoles already: a field lines them up' : 'Non-polar molecules have none: a field pulls charge apart and makes them'; second = 'Only the surfaces end up charged, and that reduces the field without cancelling it';
   } else if (s.show === 'plates' || s.show === 'insert') {
-    const A = s.A ?? 1e-2, d = s.d ?? 1e-3, C0 = EPS0 * A / d, V0 = s.V ?? (s.Q ? s.Q / C0 : 100), Q0 = s.Q ?? C0 * V0, insert = s.show === 'insert', K = s.K ?? 3, battery = s.battery ?? true, d2 = insert ? undefined : s.d2;
+    const A = s.A ?? 1e-2, d = s.d ?? 1e-3, C0 = EPS0 * A / d, V0 = s.V ?? (s.Q ? s.Q / C0 : 100), Q0 = s.Q ?? C0 * V0, insert = s.show === 'insert', K = s.K ?? 3, battery = s.battery ?? true, d2 = insert ? undefined : s.d2, t = insert ? s.thickness : undefined, part = t ? t / d : 1;
     const span = s.span ?? Math.max(d, d2 ?? 0), gapOf = (x: number) => bw * .62 * x / span, gap = gapOf(d), gap2 = d2 ? gapOf(d2) : gap, xm = cx, ph = bh * .78, y0 = cy - ph / 2, moved = (t: number) => d2 ? gap + (gap2 - gap) * Math.min(1, Math.max(0, (t - 3) / 2)) : gap; dur = insert || d2 ? 9 : 7;
     const lx = (t: number) => xm - moved(t) / 2, rx = (t: number) => xm + moved(t) / 2;
     const plate = (name: string, xf: (t: number) => number, c: string) => props.push({id: name, type: 'rect', x: xf(0) - 7 * k, y: y0, w: 14 * k, h: ph, style: {fill: c}, layer: 3, keys: {x: keysOf(dur, t => xf(t) - 7 * k)}} as Prop);
@@ -321,13 +330,17 @@ export function capacitor(s: CapacitorSpec): Scene {
     for (let i = 0; i < 7; i++) { const y = y0 + ph * (i + .5) / 7; props.push({id: `ps${i}`, type: 'text', x: lx(0) - 26 * k, y: y + 9 * k, text: '+', size: 28 * k, weight: 700, align: 'middle', style: {fill: 'bad'}, layer: 3, keys: {x: keysOf(dur, t => lx(t) - 26 * k)}} as Prop); props.push({id: `ns${i}`, type: 'text', x: rx(0) + 26 * k, y: y + 9 * k, text: '−', size: 28 * k, weight: 700, align: 'middle', style: {fill: 'cool'}, layer: 3, keys: {x: keysOf(dur, t => rx(t) + 26 * k)}} as Prop); }
     const arrows = (a: number, width: number, stroke: string, show: [number, number]) => { for (let i = 0; i < 5; i++) { const y = y0 + ph * (i + .75) / 6; props.push({id: `E${a}_${i}${width}`, type: 'arrow', x1: lx(0) + 12 * k, y1: y, x2: rx(0) - 12 * k, y2: y, head: 14 * k, style: {stroke, width: width * k}, show, layer: 2, keys: {x1: keysOf(dur, t => lx(t) + 12 * k), x2: keysOf(dur, t => rx(t) - 12 * k)}} as Prop); } };
     if (insert) {
-      const end = lx(0) + 10 * k, slabW = gap - 20 * k, H = (t: number) => ph * .96 * (u => u * u * (3 - 2 * u))(Math.min(1, Math.max(0, (t - 2.5) / 2.2))); // slides down between the plates
+      const end = lx(0) + 10 * k, slabW = (gap - 20 * k) * part, H = (t: number) => ph * .96 * (u => u * u * (3 - 2 * u))(Math.min(1, Math.max(0, (t - 2.5) / 2.2))); // slides down between the plates
       props.push({id: 'slab', type: 'rect', x: end, y: y0 + ph * .02, w: slabW, h: 0, r: 6 * k, style: {fill: 'faint', stroke: 'muted', width: 3 * k}, layer: 1, keys: {h: keysOf(dur, H)}} as Prop);
-      if (battery) arrows(1, 5, 'accent', [.8, 1e9]); else { arrows(1, 6, 'accent', [.8, 4.7]); arrows(2, 2.5, 'accent', [4.7, 1e9]); } // V/d is held with the battery on; alone, E falls K times
+      if (t) { // a slab thinner than the gap: E is K times less in the slab than in the air, and the gap's own field depends on the battery
+        arrows(1, battery ? 4 : 6, 'accent', [.8, 4.7]);
+        for (let i = 0; i < 5; i++) { const y = y0 + ph * (i + .75) / 6, edge = end + slabW; arrow([lx(0) + 12 * k, y], [edge, y], 'accent', 2, {show: [4.7, 1e9], head: 10 * k}); arrow([edge, y], [rx(0) - 12 * k, y], 'accent', battery ? 7 : 6, {show: [4.7, 1e9]}); }
+      } else if (battery) arrows(1, 5, 'accent', [.8, 1e9]); else { arrows(1, 6, 'accent', [.8, 4.7]); arrows(2, 2.5, 'accent', [4.7, 1e9]); } // V/d is held with the battery on; alone, E falls K times
       label(end + slabW / 2, y0 - 10 * k, `K${s.illustrative ? '' : ` = ${K}`}`, 'muted', 28, {show: [4.7, 1e9]});
-      const C = K * C0, Q = battery ? C * V0 : Q0, V = battery ? V0 : Q0 / C;
-      facts.push(`C = Kε₀A/d: ${farad(C0)} rises to ${farad(C)}`, battery ? `V held at ${sci(V0, 'V')}: Q rises from ${sci(Q0, 'C')} to ${sci(Q, 'C')}` : `Q held at ${sci(Q0, 'C')}: V falls from ${sci(V0, 'V')} to ${sci(V, 'V')}`, battery ? `E between the plates stays V/d = ${sci(V0 / d, 'V/m')}` : `E falls by a factor of ${K}`);
-      story = battery ? 'With the battery on, V stays and more charge flows on' : 'Disconnected, Q stays and the potential difference falls'; second = battery ? 'E stays V/d; the extra charge makes up for the slab. C grows K times' : 'E falls K times with V. C grows K times';
+      const C = t ? EPS0 * A / (d - t + t / K) : K * C0, Q = battery ? C * V0 : Q0, V = battery ? V0 : Q0 / C;
+      if (t) { anchors.slab = [end + slabW / 2, cy]; anchors.air = [(end + slabW + rx(0)) / 2, y0 + ph + 34 * k]; facts.push(`C = ε₀A/(d − t + t/K): ${farad(C0)} rises to ${farad(C)}`, `E in the air ${sci(V / (d - t + t / K), 'V/m')}, in the slab ${sci(V / (d - t + t / K) / K, 'V/m')}`, battery ? `V held at ${sci(V0, 'V')}` : `Q held at ${sci(Q0, 'C')}: V falls from ${sci(V0, 'V')} to ${sci(V, 'V')}`); }
+      else facts.push(`C = Kε₀A/d: ${farad(C0)} rises to ${farad(C)}`, battery ? `V held at ${sci(V0, 'V')}: Q rises from ${sci(Q0, 'C')} to ${sci(Q, 'C')}` : `Q held at ${sci(Q0, 'C')}: V falls from ${sci(V0, 'V')} to ${sci(V, 'V')}`, battery ? `E between the plates stays V/d = ${sci(V0 / d, 'V/m')}` : `E falls by a factor of ${K}`);
+      story = battery ? 'With the battery on, V stays and more charge flows on' : 'Disconnected, Q stays and the potential difference falls'; second = t ? 'E is K times less in the slab than in the air; C grows, by less than K' : battery ? 'E stays V/d; the extra charge makes up for the slab. C grows K times' : 'E falls K times with V. C grows K times';
     } else {
       arrows(1, 4, 'accent', [.8, 1e9]);
       label(xm, y0 + ph + 34 * k, 'E', 'accent', 30, {show: [1.2, 1e9]});
@@ -338,8 +351,8 @@ export function capacitor(s: CapacitorSpec): Scene {
     anchors.plus = [lx(0), cy]; anchors.minus = [rx(0), cy];
   } else if (s.show === 'combine') {
     const caps = s.caps ?? [1e-6, 2e-6], series = s.kind === 'series', V = s.V ?? 100, n = caps.length, branch = series ? seriesC(caps) : caps.reduce((a, c) => a + c, 0), Ceq = branch + (s.across ?? 0); dur = 9;
-    const symbol = (x: number, y: number, c: string, show: [number, number] = [0, 1e9], tag?: string) => { line([x - 10 * k, y - 34 * k], [x - 10 * k, y + 34 * k], c, 6, {show}); line([x + 10 * k, y - 34 * k], [x + 10 * k, y + 34 * k], c, 6, {show}); if (tag) label(x, y + 66 * k, tag, 'ink', 24, {show}); };
-    const x0 = bx + bw * .08, x1 = bx + bw * .92, last: [number, number] = [0, 4.8], yt = cy - bh * .26, yb = cy + bh * .3, wire = (p: P2, q: P2, show: [number, number] = last) => line(p, q, 'muted', 3, {show});
+    const symbol = (x: number, y: number, c: string, show: [number, number] = [0, 1e9], tag?: string, tall = 34 * k, beside = false) => { line([x - 10 * k, y - tall], [x - 10 * k, y + tall], c, 6, {show}); line([x + 10 * k, y - tall], [x + 10 * k, y + tall], c, 6, {show}); if (tag) label(beside ? x + 80 * k : x, beside ? y - 16 * k : y + 66 * k, tag, 'ink', 24, {show}); };
+    const x0 = bx + bw * .08, x1 = bx + bw * .92, last: [number, number] = s.reduce ? [0, 4.8] : [0, 1e9], yt = cy - bh * .26, yb = cy + bh * .3, wire = (p: P2, q: P2, show: [number, number] = last) => line(p, q, 'muted', 3, {show});
     line([x0, yb], [cx - 34 * k, yb], 'muted', 3); line([cx + 34 * k, yb], [x1, yb], 'muted', 3); line([cx - 12 * k, yb - 26 * k], [cx - 12 * k, yb + 26 * k], 'ink', 4); line([cx + 12 * k, yb - 14 * k], [cx + 12 * k, yb + 14 * k], 'ink', 4);
     if (!s.illustrative) label(cx, yb + 62 * k, sci(V, 'V'), 'muted', 26);
     wire([x0, yb], [x0, yt], [0, 1e9]); wire([x1, yb], [x1, yt], [0, 1e9]);
@@ -351,12 +364,12 @@ export function capacitor(s: CapacitorSpec): Scene {
       const Q = branch * V; caps.forEach((c, i) => facts.push(`C${i + 1}: Q = ${sci(Q, 'C')}, V = ${sci(Q / c, 'V')}`)); if (s.across) facts.push(`across the branch: Q = ${sci(s.across * V, 'C')}`);
       story = 'In series every capacitor carries the same charge; the voltages add'; second = '1/C = 1/C₁ + 1/C₂ + ...: less than the smallest';
     } else {
-      const ys = caps.map((_, i) => cy - bh * .4 + bh * .62 * (i + .5) / n);
-      ys.forEach((y, i) => { symbol(cx, y, 'accent', last, s.illustrative ? `C${i + 1}` : farad(caps[i])); wire([x0, y], [cx - 10 * k, y]); wire([cx + 10 * k, y], [x1, y]); }); wire([x0, ys[0]], [x0, ys[n - 1]]); wire([x1, ys[0]], [x1, ys[n - 1]]);
+      const pitch = (bh * .7 - 48 * k) / Math.max(n - 1, 1) * (n > 1 ? .9 : 1), ys = caps.map((_, i) => cy - bh * .4 + pitch * i), tall = Math.min(34 * k, pitch * .36); // rows stay clear of each other and of the battery
+      ys.forEach((y, i) => { symbol(cx, y, 'accent', last, s.illustrative ? `C${i + 1}` : farad(caps[i]), tall, true); wire([x0, y], [cx - 10 * k, y]); wire([cx + 10 * k, y], [x1, y]); }); wire([x0, ys[0]], [x0, ys[n - 1]]); wire([x1, ys[0]], [x1, ys[n - 1]]);
       caps.forEach((c, i) => facts.push(`C${i + 1}: Q = ${sci(c * V, 'C')}, V = ${sci(V, 'V')}`));
       story = 'In parallel every capacitor has the same voltage; the charges add'; second = 'C = C₁ + C₂ + ...: more than the largest';
     }
-    const after: [number, number] = [4.8, 1e9]; wire([x0, yt], [cx - 10 * k, yt], after); wire([cx + 10 * k, yt], [x1, yt], after); symbol(cx, yt, 'good', after, s.illustrative ? 'C equivalent' : `C = ${farad(Ceq)}`);
+    if (s.reduce) { const after: [number, number] = [4.8, 1e9]; wire([x0, yt], [cx - 10 * k, yt], after); wire([cx + 10 * k, yt], [x1, yt], after); symbol(cx, yt, 'good', after, s.illustrative ? 'C equivalent' : `C = ${farad(Ceq)}`); }
     facts.unshift(`equivalent C = ${farad(Ceq)}`);
   } else {
     const C = s.C ?? 1e-9, V = s.V ?? 100, Q = C * V, U = .5 * C * V * V, d = s.d ?? 1e-3, u = .5 * EPS0 * (V / d) ** 2, T0 = .8, T1 = 6, frac = (t: number) => Math.min(1, Math.max(0, (t - T0) / (T1 - T0))); dur = 8;
