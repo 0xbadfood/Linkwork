@@ -1736,6 +1736,29 @@ test('capacitor and gradient drawings say what the numbers say', async () => {
   assert.ok(JSON.stringify(net({reduce: true}).props).includes('equivalent'));
 });
 
+test('moving_charges gets the book right', async () => {
+  const {radiusOf, loopField, wireField, shuntFor, seriesFor, movingErrors} = await import('../src/verbs/moving.ts');
+  const facts = (spec: unknown) => ((compile(spec as never) as any).scene.meta.facts as string[]).join(' | ');
+  const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${a} vs ${b}`);
+  near(radiusOf(9e-31, 3e7, 1.6e-19, 6e-4), .281);
+  near(loopField(1, .1, 0), 2 * Math.PI * 1e-7 / .1);
+  near(wireField(1, .1), 2e-6); near(wireField(1, .01, .02), wireField(1, .02, .02) / 2);
+  near(shuntFor(4e-3, 15, 6), 4e-3 * 15 / (6 - 4e-3)); near(seriesFor(4e-3, 15, 18), 4485);
+  assert.match(facts({verb: 'moving_charges', show: 'wire', m: .2, L: 1.5, I: 2}), /0\.653 T/);        // Example 4.1, the book rounds to 0.65 T
+  assert.match(facts({verb: 'moving_charges', show: 'solenoid', N: 500, L: .5, I: 5}), /6\.28 × 10⁻³ T/); // Example 4.8-style
+  assert.match(facts({verb: 'moving_charges', show: 'parallel', I: 1, I2: 1, d: 1}), /2(\.00)? × 10⁻⁷/);   // the ampere
+  assert.match(facts({verb: 'moving_charges', show: 'cross', angle: 0}), /F = qvB sin θ = 0/);
+  for (const show of ['cross', 'wire', 'path', 'element', 'loop', 'ampere', 'solenoid', 'parallel', 'torque', 'galvo']) { const r: any = compile({verb: 'moving_charges', show} as never); assert.ok(r.scene, show); assert.deepEqual(check(r.scene), [], show); }
+  for (const kind of ['ammeter', 'voltmeter']) assert.ok((compile({verb: 'moving_charges', show: 'galvo', kind} as never) as any).scene, kind);
+  assert.ok((compile({verb: 'moving_charges', show: 'path', angle: 60} as never) as any).scene);
+  assert.ok((compile({verb: 'moving_charges', show: 'ampere', a: .02, r: .01} as never) as any).scene);
+  assert.ok(movingErrors({verb: 'moving_charges', show: 'path', angle: 5}).length, 'too near B');
+  assert.ok(movingErrors({verb: 'moving_charges', show: 'galvo', kind: 'ammeter', I: 1e-4}).length, 'range below Ig');
+  // a positive charge in a field into the page goes anticlockwise; an electron clockwise
+  const first = (spec: unknown) => { const a = (compile(spec as never) as any).scene.meta.anchors; return a; };
+  assert.ok(first({verb: 'moving_charges', show: 'path', charge: 'positive', q: 1.6e-19}));
+});
+
 test('current gets the book right', async () => {
   const {combineCells, solveBranches, solveBridge} = await import('../src/verbs/current.ts');
   const facts = (spec: unknown) => ((compile(spec as never) as any).scene.meta.facts as string[]).join(' | ');

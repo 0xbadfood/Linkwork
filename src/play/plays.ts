@@ -220,6 +220,43 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors, r = n(v, 'R4'), R1 = 100, R2 = 10, R3 = 300, Rg = 50, e = 10, A = 1 / R2 + 1 / r + 1 / Rg, d = 1 / R1 + 1 / R3 + 1 / Rg, det = A * d - 1 / (Rg * Rg), VB = (e / R2 * d + e / R1 / Rg) / det, VD = (A * e / R1 + e / R2 / Rg) / det; return r === 30 ? [] : [[a.needle[0] - a.G[0], (VB - VD) / Rg]]; },
   },
+  {
+    id: 'bend-the-beam', chapter: 'leph1-04', title: 'Bend the beam',
+    intro: 'An electron moves at 3 × 10⁷ m/s through a uniform magnetic field going into the page. Change the field and watch its circle. The scale stays fixed, so a smaller circle really is smaller.',
+    controls: [{id: 'B', label: 'Field', kind: 'slider', min: 2, max: 12, step: 1, unit: '× 10⁻⁴ T', start: 3}],
+    spec: v => ({verb: 'moving_charges', show: 'path', title: 'Electron in a field', charge: 'negative', v: 3e7, B: n(v, 'B') * 1e-4, rspan: 0.84, Tspan: 1.77e-7, field: 'in'}),
+    setup: 0,
+    reading: v => [['Radius', `${fixed(9e-31 * 3e7 / (1.6e-19 * n(v, 'B') * 1e-4) * 100, 1)} cm`]],
+    predict: {
+      question: 'You double the field from 3 to 6 × 10⁻⁴ T. What happens to the circle?',
+      options: [{text: 'Its radius halves', right: true}, {text: 'Its radius doubles'}, {text: 'It stays the same: the force does no work'}],
+      runs: [{B: 3}, {B: 6}],
+      why: 'r = mv/qB. The force does no work, so the speed is unchanged, but twice the force bends the path twice as sharply.',
+    },
+    challenges: [
+      {text: 'Make the radius 14 cm.', start: {B: 3}, hit: v => n(v, 'B') === 12, hint: v => 'Too wide: a stronger field draws a tighter circle.'},
+      {text: 'Make the radius 42 cm.', start: {B: 12}, hit: v => n(v, 'B') === 4, hint: v => (n(v, 'B') > 4 ? 'Too tight: weaken the field.' : 'Too wide: strengthen the field.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.edge[0] - a.centre[0], 9e-31 * 3e7 / (1.6e-19 * n(v, 'B') * 1e-4)]]; },
+  },
+  {
+    id: 'float-the-wire', chapter: 'leph1-04', title: 'Float the wire',
+    intro: 'A straight wire of 1 m and 200 g lies in a field of 0.98 T going into the page. Set the current so that the upward force carries its weight.',
+    controls: [{id: 'I', label: 'Current', kind: 'slider', min: 0.5, max: 4, step: 0.5, unit: 'A', start: 1}],
+    spec: v => ({verb: 'moving_charges', show: 'wire', title: 'A wire in mid-air', I: n(v, 'I'), L: 1, m: 0.2, B: 0.98, fspan: 3.92}),
+    setup: 2,
+    reading: v => [['Force', `${fixed(.98 * n(v, 'I'), 2)} N`], ['Weight', '1.96 N']],
+    predict: {
+      question: 'What current holds the wire in mid-air?',
+      options: [{text: '2 A', right: true}, {text: '1 A'}, {text: '4 A'}],
+      runs: [{I: 1}, {I: 2}],
+      why: 'BIL = mg, so I = mg/BL = 1.96/0.98 = 2 A.',
+    },
+    challenges: [
+      {text: 'Make the forces balance.', start: {I: 4}, hit: v => n(v, 'I') === 2, hint: v => (n(v, 'I') > 2 ? 'The force beats the weight: less current.' : 'The weight wins: more current.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.wire[1] - a.force[1], .98 * n(v, 'I')]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);

@@ -8,6 +8,7 @@ import {shareWaveScale} from './verbs/waves.ts';
 import {shareElectricScale} from './verbs/electric.ts';
 import {shareCapacitorScale, sharePotentialScale} from './verbs/potential.ts';
 import {shareCurrentScale} from './verbs/current.ts';
+import {shareMovingScale} from './verbs/moving.ts';
 
 type Box = [number, number, number, number];
 export type PartSpec = {id: string; box?: Box; spec?: {verb: string; [k: string]: unknown}; scene?: Scene;
@@ -76,6 +77,7 @@ export function compose(c: CompoundSpec, compile: (spec: {verb: string}) => {sce
   shareCapacitorScale([...specs.values()]);
   sharePotentialScale([...specs.values()]);
   shareCurrentScale([...specs.values()]);
+  shareMovingScale([...specs.values()]);
   const build = (p: PartSpec): string[] => {
     const box = p.box ?? [0, 0, W, H];
     if (p.scene) { scenes.set(p.id, p.scene); return []; }
