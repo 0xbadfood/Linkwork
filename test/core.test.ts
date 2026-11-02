@@ -1735,3 +1735,28 @@ test('capacitor and gradient drawings say what the numbers say', async () => {
   assert.ok(!JSON.stringify(net({}).props).includes('equivalent'));
   assert.ok(JSON.stringify(net({reduce: true}).props).includes('equivalent'));
 });
+
+test('current gets the book right', async () => {
+  const {combineCells, solveBranches, solveBridge} = await import('../src/verbs/current.ts');
+  const facts = (spec: unknown) => ((compile(spec as never) as any).scene.meta.facts as string[]).join(' | ');
+  // Ex. 3.1: 1.5 A in a 1e-7 m² wire, n = 8.5e28: about 1.1 mm/s
+  assert.match(facts({verb: 'current', show: 'drift', I: 1.5, A: 1e-7, n: 8.5e28}), /1\.1\d* × 10⁻³ m\/s/);
+  // V = ε − Ir; R = 2.5, r = 0.5, ε = 1.5: I = 0.5 A, V = 1.25 V
+  assert.match(facts({verb: 'current', show: 'cell', emf: 1.5, r: .5, R: 2.5}), /1\.25 V/);
+  // cells
+  assert.deepEqual(combineCells([{e: 2, r: 1}, {e: 2, r: 1}], 'series'), {e: 4, r: 2});
+  const eq = combineCells([{e: 2, r: 1}, {e: 2, r: 1}], 'parallel'); assert.ok(Math.abs(eq.e - 2) < 1e-9 && Math.abs(eq.r - .5) < 1e-9);
+  // junction rule holds; loop rule holds
+  const bs = [{e: 10, R: 2}, {R: 4}, {e: 5, R: 2}], {I, V} = solveBranches(bs);
+  assert.ok(Math.abs(I[0] + I[1] + I[2]) < 1e-9);
+  bs.forEach((b, i) => assert.ok(Math.abs((b.e ?? 0) - I[i] * b.R - V) < 1e-9));
+  // bridge: balance, and a known unbalanced case by Kirchhoff at B and D
+  assert.ok(Math.abs(solveBridge(10, 100, 10, 300, 30, 50).Ig) < 1e-12);
+  const un = solveBridge(10, 100, 10, 300, 60, 50);
+  assert.ok(un.Ig < 0, 'R4 too big raises D above B, so the current runs D to B');
+  assert.ok(Math.abs((10 - un.VB) / 100 + (un.VD - un.VB) / 50 - un.VB / 10) < 1e-9);
+  // losses go as 1/V²
+  assert.match(facts({verb: 'current', show: 'transmission', P: 6e5, Rc: 4, V: 220, V2: 22000}), /2\.98 × 10⁷ W/);
+  for (const show of ['drift', 'wire', 'iv', 'resistivity', 'transmission', 'cell', 'kirchhoff', 'bridge']) assert.ok((compile({verb: 'current', show} as never) as any).scene, show);
+  assert.ok((compile({verb: 'current', show: 'kirchhoff', branches: [{R: 1}]} as never) as any).errors.length);
+});

@@ -110,7 +110,7 @@ export function capacitorErrors(s: CapacitorSpec): string[] {
 }
 
 /** The drawing helpers both verbs share. */
-function kit(s: {width?: number; height?: number; title?: string}) {
+export function kit(s: {width?: number; height?: number; title?: string}) {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles];
   const bx = box[0], by = box[1], bw = box[2] - box[0], bh = box[3] - box[1], cx = bx + bw / 2, cy = by + bh / 2, S = Math.min(bw, bh);
   let n = 0; const id = (p: string) => `${p}${n++}`;

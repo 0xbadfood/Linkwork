@@ -449,6 +449,18 @@ export const CARDS: Record<string, Card> = {
     shortest: {verb: 'potential', title: 'V against r', show: 'curves'},
     status: 'trial',
   },
+  current: {
+    subjects: ['physics'],
+    concepts: ['electric current', 'drift velocity', 'drift of electrons', 'mobility', 'relaxation time', 'current density', 'resistivity', 'conductivity', "limitations of Ohm's law", 'V-I characteristic', 'non-linear device', 'temperature dependence of resistivity', 'temperature coefficient of resistance', 'power transmission', 'power loss in cables', 'emf', 'internal resistance', 'terminal voltage', 'cells in series', 'cells in parallel', "Kirchhoff's rules", 'junction rule', 'loop rule', 'Wheatstone bridge', 'balance condition'],
+    kinds: ['model', 'schematic', 'graph'], motions: ['value_change', 'translate', 'draw_on', 'labels'],
+    use_when: "Class 12 current electricity, computed. show drift: electrons wandering, then drifting once a field comes on (E, tau; or I, A, n for v = I/neA). wire: R = ρl/A, J, σ (rho, l, A, V; compared wires share one scale). iv: V against I, kind ohmic, nonlinear, diode, gaas. resistivity: ρ against T, kind metal, alloy, semiconductor (rho, alpha, T, T0). transmission: one power through cables at two voltages (P, Rc, V, V2). cell: V = ε − Ir with V against I (emf, r, R). cells: kind series or parallel, cells [{e, r}], then the one equivalent cell. kirchhoff: three branches between two junctions, solved, then a loop walked (branches: 3 of {e, R}). bridge: Wheatstone, the galvanometer's current from R1..R4, Rg, emf; R1 A-B, R2 B-C, R3 A-D, R4 D-C.",
+    not_when: 'a simple series and parallel circuit with meters and bulbs (use circuit); static charges (use electric); capacitors (use capacitor)',
+    fields: {show: 'drift | wire | iv | resistivity | transmission | cell | cells | kirchhoff | bridge', E: 'drift: V/m', tau: 'drift: s', I: 'A', A: 'm²', n: 'carriers per m³', rho: 'Ω m', l: 'm', V: 'volts', kind: 'iv: ohmic | nonlinear | diode | gaas; resistivity: metal | alloy | semiconductor; cells: series | parallel', alpha: 'per °C', T: '°C', T0: '°C', P: 'W', Rc: 'Ω', V2: 'second line voltage', emf: 'V', r: 'internal Ω', R: 'external Ω', cells: '2 to 4 of {e (V, negative for a cell turned round), r (Ω)}', branches: 'exactly 3 of {e (V, driving upward; leave out for none), R (Ω)}', R1: 'Ω', R2: 'Ω', R3: 'Ω', R4: 'Ω', Rg: 'galvanometer Ω', title: 'scene heading', illustrative: 'true: no numbers on screen'},
+    anchors: 'drift: wire; wire: slab, end; cell: point, origin; cells: cell; kirchhoff: junction, left, middle, right; bridge: G, needle',
+    example: {verb: 'current', title: 'Wheatstone bridge', show: 'bridge', R1: 100, R2: 10, R3: 300, R4: 30},
+    shortest: {verb: 'current', title: 'A cell in use', show: 'cell'},
+    status: 'trial',
+  },
   capacitor: {
     subjects: ['physics'],
     concepts: ['conductors in electrostatics', 'electrostatic shielding', 'charge on the surface of a conductor', 'dielectrics', 'polarisation', 'polar molecules', 'non-polar molecules', 'dielectric constant', 'capacitance', 'parallel plate capacitor', 'capacitor with a dielectric', 'capacitors in series', 'capacitors in parallel', 'combination of capacitors', 'energy stored in a capacitor', 'energy density'],

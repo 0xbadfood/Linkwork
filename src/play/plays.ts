@@ -202,6 +202,24 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.P[0] - a.O[0], n(v, 'x') / 100 - 0.075]]; },
   },
+  {
+    id: 'balance-bridge', chapter: 'leph1-03', title: 'Balance the bridge',
+    intro: 'A Wheatstone bridge with 100 Ω, 10 Ω and 300 Ω fixed. Change the fourth arm and watch the galvanometer. Its needle tells you which of B and D is at the higher potential.',
+    controls: [{id: 'R4', label: 'Fourth arm', kind: 'slider', min: 10, max: 60, step: 5, unit: 'Ω', start: 10}],
+    spec: v => ({verb: 'current', show: 'bridge', title: 'Wheatstone bridge', R1: 100, R2: 10, R3: 300, R4: n(v, 'R4'), emf: 10, Rg: 50, gmax: 0.01}),
+    setup: 1,
+    reading: v => { const r = n(v, 'R4'), R1 = 100, R2 = 10, R3 = 300, Rg = 50, e = 10, a = 1 / R1 + 1 / R2 + 1 / Rg, d = 1 / R3 + 1 / r + 1 / Rg, det = a * d - 1 / (Rg * Rg), VB = (e / R1 * d + e / R3 / Rg) / det, VD = (a * e / R3 + e / R1 / Rg) / det; return [['Galvanometer current', `${fixed((VB - VD) / Rg * 1000, 2)} mA`]]; },
+    predict: {
+      question: 'R₁/R₂ is 10. What fourth arm stops the current through G?',
+      options: [{text: '30 Ω', right: true}, {text: '100 Ω, the same as R₁'}, {text: '10 Ω, the same as R₂'}],
+      runs: [{R4: 10}, {R4: 30}],
+      why: 'The ratio must match on both sides: R₁/R₂ = R₃/R₄, so R₄ = 300/10 = 30 Ω. Then B and D sit at the same potential, whatever the cell.',
+    },
+    challenges: [
+      {text: 'Make the needle stand straight.', start: {R4: 60}, hit: v => n(v, 'R4') === 30, hint: v => (n(v, 'R4') > 30 ? 'D is too high: make the fourth arm smaller.' : 'B is too high now: make the fourth arm larger.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors, r = n(v, 'R4'), R1 = 100, R2 = 10, R3 = 300, Rg = 50, e = 10, A = 1 / R1 + 1 / R2 + 1 / Rg, d = 1 / R3 + 1 / r + 1 / Rg, det = A * d - 1 / (Rg * Rg), VB = (e / R1 * d + e / R3 / Rg) / det, VD = (A * e / R3 + e / R1 / Rg) / det; return r === 30 ? [] : [[a.needle[0] - a.G[0], (VB - VD) / Rg]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);
