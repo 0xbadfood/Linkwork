@@ -1806,6 +1806,18 @@ test('magnetic_matter gets the book right', async () => {
   assert.match(facts({verb: 'magnetic_matter', show: 'gauss', source: 'charge'}), /lines in: 0/);
   for (const show of ['needle', 'cut', 'gauss', 'core', 'response', 'atoms', 'domains', 'hysteresis']) assert.ok((compile({verb: 'magnetic_matter', show} as never) as any).scene, show);
   for (const kind of ['paramagnetic', 'ferromagnetic']) assert.ok((compile({verb: 'magnetic_matter', show: 'response', kind} as never) as any).scene, kind);
+  const arrows = (spec: object) => (compile({verb: 'magnetic_matter', ...spec} as never) as any).scene.props.filter((p: any) => /^(at|d)\d/.test(p.id));
+  const flat = (p: any) => { const end = (k: string) => (p.keys?.[k]?.at(-1)?.[1] ?? p[k]); return Math.abs(end('y1') - end('y2')) < 1 && end('x2') > end('x1'); };
+  assert.ok(arrows({show: 'atoms', aligned: true}).every(flat), 'saturation draws every moment along B');
+  assert.ok(!arrows({show: 'atoms', B: 1, T: 300}).every(flat), 'below saturation they stay scattered');
+  assert.ok(!arrows({show: 'atoms', B: 0}).every(flat));
+  assert.ok(arrows({show: 'domains'}).every(flat), 'in a field the domains end along B');
+  assert.ok(!arrows({show: 'domains', B: 0}).every(flat), 'with no field they stay random');
+  assert.ok(!arrows({show: 'domains', heat: true}).every(flat), 'heated, they end out of order');
+  assert.ok(arrows({show: 'domains', heat: true}).every((p: any) => Math.abs(p.y1 - p.y2) < 1), 'heated, they begin in order');
+  const end = (kind: string, id: string) => { const r = (compile({verb: 'magnetic_matter', show: 'poles', kind} as never) as any).scene.props.find((p: any) => p.id === id); return r.keys.x.at(-1)[1] - r.keys.x[0][1]; };
+  assert.ok(end('like', 'r0') < 0 && end('unlike', 'r0') > 0, 'like poles part, unlike poles close');
+  assert.ok(matterErrors({verb: 'magnetic_matter', show: 'needle', B: 0}).length);
   assert.ok(matterErrors({verb: 'magnetic_matter', show: 'needle', angle: 200}).length);
   assert.ok(matterErrors({verb: 'magnetic_matter', show: 'atoms', kind: 'soft'}).length);
   assert.ok(matterErrors({verb: 'magnetic_matter', show: 'core', mur: .5}).length);

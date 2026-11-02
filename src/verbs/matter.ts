@@ -2,6 +2,7 @@
 // patterns) and moving_charges (currents) do not show: a dipole's energy, Gauss's law, and what materials do to a field.
 //   needle     a dipole in a uniform field: τ = mB sin θ, U = −mB cos θ and its curve; swing lets it settle
 //   cut        a magnet cut in two: two smaller magnets, never a lone pole
+//   poles      two magnets, like or unlike poles facing: they push apart or pull together
 //   gauss      field lines traced from two poles: a closed surface round a pole has as many lines in as out; a charge's only leave
 //   core       a solenoid with a core: H = nI, M = (μr − 1)H, B = μr μ0 H, the bars μ0H and μ0M
 //   response   a bar in a uniform field, its lines traced: pushed out (diamagnetic), drawn in (paramagnetic, ferromagnetic)
@@ -13,9 +14,9 @@ import {kit} from './potential.ts';
 import {sci} from './electric.ts';
 
 type P2 = [number, number];
-export const MATTER_SHOWS = ['needle', 'cut', 'gauss', 'core', 'response', 'atoms', 'domains', 'hysteresis'] as const;
+export const MATTER_SHOWS = ['needle', 'poles', 'cut', 'gauss', 'core', 'response', 'atoms', 'domains', 'hysteresis'] as const;
 export type MatterSpec = {verb: 'magnetic_matter'; show: (typeof MATTER_SHOWS)[number]; m?: number; B?: number; angle?: number; swing?: boolean;
-  source?: 'magnet' | 'charge'; n?: number; I?: number; mur?: number; kind?: 'diamagnetic' | 'paramagnetic' | 'ferromagnetic' | 'soft' | 'hard'; T?: number; aligned?: boolean; Mspan?: number;
+  source?: 'magnet' | 'charge'; n?: number; I?: number; mur?: number; kind?: 'diamagnetic' | 'paramagnetic' | 'ferromagnetic' | 'soft' | 'hard' | 'like' | 'unlike'; T?: number; aligned?: boolean; heat?: boolean; Mspan?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const MU = 4 * Math.PI * 1e-7, RAD = Math.PI / 180;
@@ -33,11 +34,11 @@ export const stream = (x: number, y: number, mu: number) => { const r2 = x * x +
 export function matterErrors(s: MatterSpec): string[] {
   const e: string[] = [], W = 'magnetic_matter';
   if (!MATTER_SHOWS.includes(s.show)) return [`${W}: show is one of ${MATTER_SHOWS.join(', ')}`];
-  for (const n of ['m', 'B', 'n', 'I', 'T', 'Mspan'] as const) if (s[n] !== undefined && !(isNum(s[n]) && s[n]! > 0)) e.push(`${W}: ${n} is a number above 0`);
+  for (const n of ['m', 'B', 'n', 'I', 'T', 'Mspan'] as const) if (s[n] !== undefined && !(isNum(s[n]) && (s[n]! > 0 || (n === 'B' && s[n] === 0 && (s.show === 'atoms' || s.show === 'domains'))))) e.push(`${W}: ${n} is a number above 0 (atoms and domains also take B 0: no field)`);
   if (s.angle !== undefined && !(isNum(s.angle) && s.angle >= 0 && s.angle <= 180)) e.push(`${W}: angle is 0 to 180 degrees`);
   if (s.mur !== undefined && !(isNum(s.mur) && s.mur > 1)) e.push(`${W}: mur, the core's relative permeability, is above 1`);
   if (s.source !== undefined && !['magnet', 'charge'].includes(s.source)) e.push(`${W}: source is magnet or charge`);
-  const kinds: Record<string, string[]> = {response: ['diamagnetic', 'paramagnetic', 'ferromagnetic'], atoms: ['diamagnetic', 'paramagnetic'], hysteresis: ['soft', 'hard']};
+  const kinds: Record<string, string[]> = {response: ['diamagnetic', 'paramagnetic', 'ferromagnetic'], atoms: ['diamagnetic', 'paramagnetic'], hysteresis: ['soft', 'hard'], poles: ['like', 'unlike']};
   if (s.kind !== undefined && !(kinds[s.show] ?? []).includes(s.kind)) e.push(kinds[s.show] ? `${W}: ${s.show} takes kind ${kinds[s.show].join(', ')}` : `${W}: ${s.show} has no kind`);
   return e;
 }
@@ -74,6 +75,20 @@ export function magneticMatter(s: MatterSpec): Scene {
     facts.push(`τ = mB sin θ = ${short(tau, 'N m')}`, `U = −mB cos θ = ${short(U, 'J')}`, `m = ${short(m, 'A m²')}, B = ${short(B, 'T')}, θ = ${th}°`);
     story = th === 0 ? 'Along the field: no torque and the lowest energy. Stable' : th === 180 ? 'Against the field: no torque, but the highest energy. Unstable' : swing ? 'The torque swings the needle toward B; it overshoots, and settles at the lowest energy' : 'The field turns the needle toward B, down the energy curve';
     second = 'Torque mB sin θ is largest at 90°; energy −mB cos θ is lowest at 0°';
+  } else if (s.show === 'poles') {
+    const like = (s.kind ?? 'like') === 'like', w = bw * .3, h = bh * .13, y = cy - h / 2, g0 = bw * .14, g1 = like ? bw * .26 : 0; dur = 7;
+    const ease = (t: number) => { const f = Math.min(1, Math.max(0, (t - 2) / 2.5)); return like ? f * f * (3 - 2 * f) : f * f; };
+    const dx = (t: number) => (g1 - g0) / 2 * ease(t), L = cx - g0 / 2 - w, Rt = cx + g0 / 2;
+    const piece = (x: number, name: 'N' | 'S', dir: number) => {
+      const keys = keysOf(dur, t => x + dir * dx(t), 12), lab = keysOf(dur, t => x + w / 4 + dir * dx(t), 12);
+      rect(x, y, w / 2, h, name === 'N' ? 'bad' : 'cool', {keys: {x: keys}}); label(x + w / 4, y + h * .68, name, 'paper', 30, {keys: {x: lab}});
+    };
+    piece(L, 'S', -1); piece(L + w / 2, 'N', -1);                     // the left magnet's N faces the gap
+    if (like) { piece(Rt, 'N', 1); piece(Rt + w / 2, 'S', 1); } else { piece(Rt, 'S', 1); piece(Rt + w / 2, 'N', 1); }
+    const a0 = cx - g0 / 2, b0 = cx + g0 / 2, ay = y - 34 * k, A = 90 * k, sh = {show: [.6, 2]};
+    if (like) { arrow([a0, ay], [a0 - A, ay], 'accent', 5, sh); arrow([b0, ay], [b0 + A, ay], 'accent', 5, sh); } else { arrow([a0 - A, ay], [a0, ay], 'accent', 5, sh); arrow([b0 + A, ay], [b0, ay], 'accent', 5, sh); }
+    anchors.gap = [cx, cy]; anchors.left = [L + w / 2, y]; anchors.right = [Rt + w / 2, y];
+    story = like ? 'Like poles repel: the two magnets push apart' : 'Unlike poles attract: the two magnets pull together'; second = 'Each magnet pushes or pulls the other equally';
   } else if (s.show === 'cut') {
     const w = bw * .6, h = bh * .14, x = cx - w / 2, y = cy - bh * .24, y2 = cy + bh * .1, gap = bw * .1;
     magnet(x, y, w, h, {show: [0, 1e9]});
@@ -140,40 +155,42 @@ export function magneticMatter(s: MatterSpec): Scene {
     story = kind === 'diamagnetic' ? 'Field lines are pushed out: the field inside is weaker' : kind === 'paramagnetic' ? 'Field lines are drawn in a little: the field inside is stronger' : 'Field lines crowd into the material: the field inside is far stronger';
     second = kind === 'ferromagnetic' ? 'Bent as computed for a bar across the field; drawn with μr = 9' : 'The bending is exaggerated; in real materials it is too small to see';
   } else if (s.show === 'atoms') {
-    const kind = s.kind ?? 'paramagnetic', B = s.B ?? 1, T = s.T ?? 300, share = kind === 'paramagnetic' ? (s.aligned ? 1 : alignedShare(B, T)) : 0, cols = 9, rows = 7, x0 = bx + bw * .06, gw = bw * .62, y0 = by + bh * .1, gh = bh * .8, on = 2; dur = 9;
+    const kind = s.kind ?? 'paramagnetic', B = s.B ?? 1, noField = B === 0, T = s.T ?? 300, share = kind === 'paramagnetic' ? (s.aligned ? 1 : alignedShare(B, T)) : 0, cols = 9, rows = 7, x0 = bx + bw * .06, gw = bw * .62, y0 = by + bh * .1, gh = bh * .8, on = 2; dur = 9;
     const seed = (i: number) => { const v = Math.sin(i * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
     const barx = bx + bw * .78, barw = bw * .12, base = by + bh * .9, barh = bh * .75;
     let n2 = 0;
     for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
       const X = x0 + gw * (i + .5) / cols, Y = y0 + gh * (j + .5) / rows, L = 26 * k, r = seed(n2++);
-      if (kind === 'diamagnetic') { props.push({id: `at${n2}`, type: 'circle', x: X, y: Y, r: 7 * k, style: {fill: 'faint'}, layer: 2} as Prop); arrow([X + L * .5, Y], [X - L * .5, Y], 'cool', 3, {show: [on, 1e9]}); continue; }
+      if (kind === 'diamagnetic') { props.push({id: `at${n2}`, type: 'circle', x: X, y: Y, r: 7 * k, style: {fill: 'faint'}, layer: 2} as Prop); if (!noField) arrow([X + L * .5, Y], [X - L * .5, Y], 'cool', 3, {show: [on, 1e9]}); continue; }
       const start = r * 2 * Math.PI - Math.PI, spread = (1 - share), end = start * spread;       // the tilt that remains leaves the mean along B at the share
       const a = (t: number) => { const f = Math.min(1, Math.max(0, (t - on) / 2.5)); return start + (end - start) * f * f * (3 - 2 * f) + Math.sin(t * 5 + r * 40) * spread * .35; };
       const hx = (t: number) => X + L * Math.cos(a(t)), hy = (t: number) => Y - L * Math.sin(a(t)), tx = (t: number) => X - L * Math.cos(a(t)), ty = (t: number) => Y + L * Math.sin(a(t));
       props.push({id: `at${n2}`, type: 'arrow', x1: tx(0), y1: ty(0), x2: hx(0), y2: hy(0), head: 9 * k, style: {stroke: 'bad', width: 3 * k}, layer: 2, keys: {x1: keysOf(dur, tx, 12), y1: keysOf(dur, ty, 12), x2: keysOf(dur, hx, 12), y2: keysOf(dur, hy, 12)}} as Prop);
     }
-    arrow([x0, by + bh * .04], [x0 + gw, by + bh * .04], 'accent', 4, {show: [on - .6, 1e9]}); label(x0 + gw + 22 * k, by + bh * .05, 'B', 'accent', 28, {show: [on - .6, 1e9]});
+    if (!noField) { arrow([x0, by + bh * .04], [x0 + gw, by + bh * .04], 'accent', 4, {show: [on - .6, 1e9]}); label(x0 + gw + 22 * k, by + bh * .05, 'B', 'accent', 28, {show: [on - .6, 1e9]}); }
     line([barx - 20 * k, base], [barx + barw + 20 * k, base], 'ink', 3); label(barx + barw / 2, base + 36 * k, 'M', 'ink', 28);
     if (kind === 'paramagnetic') {
       const hh = barh * share;                                         // one scale: full height is every moment along B
       props.push({id: 'M', type: 'rect', x: barx, y: base - 3 * k, w: barw, h: 3 * k, style: {fill: 'bad'}, layer: 2, keys: {y: keysOf(dur, t => base - 3 * k - hh * Math.min(1, Math.max(0, (t - on) / 2.5))), h: keysOf(dur, t => 3 * k + hh * Math.min(1, Math.max(0, (t - on) / 2.5)))}} as Prop);
       anchors.M = [barx + barw / 2, base - hh]; anchors.Mbase = [barx + barw / 2, base];
-      facts.push(`T = ${short(T, 'K')}, B = ${short(B, 'T')}`, 'M ∝ B/T: twice as cold, twice the magnetisation');
-      story = 'The field tilts the atoms\' moments toward it; thermal motion knocks them back'; second = 'A colder sample or a stronger field lines up more: M ∝ B/T, Curie\'s law. The tilt is exaggerated; only the proportion is true';
+      if (noField) { story = 'With no field, thermal motion keeps the moments random, and M is zero'; second = 'Each atom has a moment; together they add up to nothing'; }
+      else if (s.aligned) { story = 'Saturation: every moment lies along B, and M can grow no further'; second = 'It takes a strong field and a low temperature. Beyond this, Curie\'s law no longer holds'; }
+      else { facts.push(`T = ${short(T, 'K')}, B = ${short(B, 'T')}`, 'M ∝ B/T: twice as cold, twice the magnetisation');
+        story = 'The field tilts the atoms\' moments toward it; thermal motion knocks them back'; second = 'A colder sample or a stronger field lines up more: M ∝ B/T, Curie\'s law. The tilt is exaggerated; only the proportion is true'; }
     } else {
-      rect(barx, base, barw, barh * .08, 'cool', {show: [on, 1e9]}); anchors.M = [barx + barw / 2, base + barh * .08];
+      if (!noField) rect(barx, base, barw, barh * .08, 'cool', {show: [on, 1e9]}); anchors.M = [barx + barw / 2, base + barh * .08];
       facts.push('χ is small and negative, and hardly changes with temperature');
       story = 'Atoms with no moment of their own: the field induces small moments against it'; second = 'M points opposite to B, so the material is pushed toward the weaker field';
     }
     anchors.sample = [x0 + gw / 2, y0 + gh / 2];
   } else if (s.show === 'domains') {
-    const cols = 6, rows = 4, x0 = bx + bw * .08, gw = bw * .84, y0 = by + bh * .14, gh = bh * .72, cw = gw / cols, ch = gh / rows, on = 2; dur = 10;
+    const cols = 6, rows = 4, x0 = bx + bw * .08, gw = bw * .84, y0 = by + bh * .14, gh = bh * .72, cw = gw / cols, ch = gh / rows, on = 2, heat = !!s.heat, noField = s.B === 0 && !heat; dur = 10;
     const seed = (i: number) => { const v = Math.sin(i * 91.7 + 13.3) * 43758.5453; return v - Math.floor(v); };
-    arrow([x0, by + bh * .07], [x0 + gw, by + bh * .07], 'accent', 4, {show: [on - .6, 1e9]}); label(x0 + gw + 24 * k, by + bh * .08, 'B', 'accent', 28, {show: [on - .6, 1e9]});
+    if (!heat && !noField) { arrow([x0, by + bh * .07], [x0 + gw, by + bh * .07], 'accent', 4, {show: [on - .6, 1e9]}); label(x0 + gw + 24 * k, by + bh * .08, 'B', 'accent', 28, {show: [on - .6, 1e9]}); }
     for (let i = 0; i < cols * rows; i++) {
       const c0 = i % cols, r0 = Math.floor(i / cols), X = x0 + cw * (c0 + .5), Y = y0 + ch * (r0 + .5), start = seed(i) * 2 * Math.PI, L = Math.min(cw, ch) * .32, flip = on + .4 + seed(i + 50) * 4;
       const start2 = Math.atan2(Math.sin(start), Math.cos(start));
-      const a = (t: number) => { const f = Math.min(1, Math.max(0, (t - flip) / .8)); return start2 * (1 - f); };
+      const a = (t: number) => { const f = noField ? 0 : Math.min(1, Math.max(0, (t - (heat ? on + (flip - on) * .9 : flip)) / (heat ? 2.5 : .8))); return heat ? start2 * f : start2 * (1 - f); };   // heated, order goes gradually: the reverse of lining up
       rect(X - cw / 2, Y - ch / 2, cw, ch, 'paper', {layer: 1}, 'faint');
       const hx = (t: number) => X + L * Math.cos(a(t)), hy = (t: number) => Y - L * Math.sin(a(t)), tx = (t: number) => X - L * Math.cos(a(t)), ty = (t: number) => Y + L * Math.sin(a(t));
       props.push({id: `d${i}`, type: 'arrow', x1: tx(0), y1: ty(0), x2: hx(0), y2: hy(0), head: 13 * k, style: {stroke: 'bad', width: 5 * k}, layer: 2, keys: {x1: keysOf(dur, tx, 12), y1: keysOf(dur, ty, 12), x2: keysOf(dur, hx, 12), y2: keysOf(dur, hy, 12)}} as Prop);
@@ -181,6 +198,7 @@ export function magneticMatter(s: MatterSpec): Scene {
     anchors.sample = [cx, cy];
     story = 'Each domain is already magnetised, each its own way, so the whole adds up to almost nothing';
     second = 'In a field the domains line up along B: a small field gives a huge magnetisation';
+    if (heat) { story = 'Heated, the domains lose their order: gradually, not suddenly'; second = 'Above the Curie temperature the domains are gone: it is a paramagnet'; }
   } else {
     const kind = s.kind ?? 'hard', hc = kind === 'hard' ? .55 : .06, w = .3, hm = kind === 'hard' ? 1.8 : .8, c: P2 = [cx - bw * .04, cy], sx = bw * .34 / hm, sy = bh * .38; dur = 12;
     const up = (H: number) => Math.tanh((H - hc) / w), down = (H: number) => Math.tanh((H + hc) / w), first = (H: number) => Math.tanh(H / (w * 1.2));
