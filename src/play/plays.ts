@@ -296,6 +296,45 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.Mbase[1] - a.M[1], Math.min(1, 30 / n(v, 'T'))]]; },
   },
+  {
+    id: 'push-the-rod', chapter: 'leph1-06', title: 'Push the rod',
+    intro: 'A 0.5 m rod slides on rails through a field of 0.5 T, in a circuit of 1 Ω. Push it faster or slower, and see what it costs you.',
+    controls: [{id: 'v', label: 'Speed of the rod', kind: 'slider', min: .5, max: 4, step: .5, unit: 'm/s', start: 2}],
+    spec: v => ({verb: 'induction', show: 'motional', title: 'A rod on rails', B: .5, l: .5, v: n(v, 'v'), R: 1}),
+    setup: 5,
+    reading: v => { const e = .25 * n(v, 'v'); return [['emf', `${fixed(e, 3)} V`], ['Force you must apply', `${fixed(e * .25, 4)} N`], ['Power you supply', `${fixed(e * e, 4)} W`]]; },
+    predict: {
+      question: 'You double the speed of the rod. What happens to the power you must supply?',
+      options: [{text: 'It becomes four times', right: true}, {text: 'It doubles'}, {text: 'It stays the same'}],
+      runs: [{v: 1}, {v: 2}],
+      why: 'Twice the speed gives twice the emf and twice the current, so twice the opposing force. Twice the force at twice the speed is four times the power.',
+    },
+    challenges: [
+      {text: 'Make an emf of 0.5 V.', start: {v: 1}, hit: v => n(v, 'v') === 2, hint: v => (n(v, 'v') < 2 ? 'ε = Blv: push faster.' : 'ε = Blv: slow down.')},
+      {text: 'Supply exactly 1 W of power.', start: {v: 1}, hit: v => n(v, 'v') === 4, hint: v => 'Power goes as the square of the speed.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.vbase[0] - a.vtip[0], n(v, 'v')]]; },
+  },
+  {
+    id: 'turn-the-coil', chapter: 'leph1-06', title: 'Turn the coil',
+    intro: 'A coil sits between two poles, turning steadily. Stop it at any angle, and find where the flux and the emf are largest. They are not where you might guess.',
+    controls: [{id: 'angle', label: 'Angle of the coil', kind: 'slider', min: 0, max: 360, step: 15, unit: '°', start: 30}],
+    spec: v => ({verb: 'induction', show: 'generator', title: 'A coil in a field', N: 100, B: .01, A: .1, nu: .5, angle: n(v, 'angle')}),
+    setup: 0,
+    reading: v => { const a = n(v, 'angle') * Math.PI / 180; return [['Flux through one turn', `${fixed(1e-3 * Math.cos(a), 5)} Wb`], ['emf', `${fixed(.314 * Math.sin(a), 3)} V`]]; },
+    predict: {
+      question: 'The flux through the coil is at its largest. What is the emf at that moment?',
+      options: [{text: 'Zero', right: true}, {text: 'Its largest value'}, {text: 'Half its largest value'}],
+      runs: [{angle: 0}, {angle: 90}],
+      why: 'The emf follows the rate of change of flux, not the flux. Face-on, the flux has stopped rising and is about to fall, so for that instant it is not changing.',
+    },
+    challenges: [
+      {text: 'Find an angle of largest positive emf.', start: {angle: 0}, hit: v => n(v, 'angle') === 90, hint: v => 'Turn it until the coil lies edge-on to the field.'},
+      {text: 'Find the angle where the emf is largest, but reversed.', start: {angle: 90}, hit: v => n(v, 'angle') === 270, hint: v => 'The other edge-on position.'},
+      {text: 'Make the emf half its largest value, and positive, with the flux negative.', start: {angle: 90}, hit: v => n(v, 'angle') === 150, hint: v => (n(v, 'angle') < 150 ? 'sin θ is still above a half: turn further.' : 'Turn back.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.state[1] - a.peak[1], 1 - Math.sin(n(v, 'angle') * Math.PI / 180)]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);

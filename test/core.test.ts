@@ -1793,6 +1793,28 @@ test('current gets the book right', async () => {
   assert.ok((compile({verb: 'current', show: 'kirchhoff', branches: [{R: 1}]} as never) as any).errors.length);
 });
 
+test('induction gets the book right', async () => {
+  const {inductionErrors, faceSign, regionSense, spinOf, peakEmf, faradayOf, solenoidM, concentricM, selfL, motionalOf} = await import('../src/verbs/induction.ts');
+  const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  const e62 = faradayOf({B: .1, B2: 0, A: .01, angle: 45, dt: .7, R: .5}); near(e62.emf, 1e-3, .02); near(e62.I!, 2e-3, .02);
+  const e63 = faradayOf({B: 3e-5, A: Math.PI * .01, angle: 0, angle2: 180, dt: .25, N: 500, R: 2}); near(e63.emf, 3.8e-3); near(e63.I!, 1.9e-3);
+  near(spinOf(1, 1, 50), 157, .001); near(spinOf(.4e-4, .5, 2), 6.28e-5, .001); near(peakEmf(100, .01, .1, .5), .314, .001);
+  near(solenoidM(1000, 500, .02, .5), 3.95e-4); near(concentricM(.01, .2), 4 * Math.PI * 1e-7 * Math.PI * 1e-4 / .4); near(selfL(1000, 1e-3, .5), 6.28e-4, .001);
+  const m = motionalOf(.5, .5, 2, 1); near(m.e, .5); near(m.F * 2, m.I * m.I * 1);   // the work done by hand becomes heat
+  assert.equal(faceSign('N', 'toward'), 1, 'an approaching N is met by an N face');
+  assert.equal(faceSign('N', 'away'), -1); assert.equal(faceSign('S', 'toward'), -1); assert.equal(faceSign('S', 'away'), 1);
+  assert.equal(regionSense('into', 'out'), -1, 'leaving a field into the page: clockwise'); assert.equal(regionSense('into', 'into'), 1); assert.equal(regionSense('out', 'out'), 1);
+  const scene = (spec: object) => (compile({verb: 'induction', ...spec} as never) as any).scene;
+  const I = scene({show: 'motional'}).props.find((p: any) => p.id === 'I'), F = scene({show: 'motional'}).props.find((p: any) => p.id === 'F'), v = scene({show: 'motional'}).props.find((p: any) => p.id === 'v');
+  assert.ok(I.y2 > I.y1, 'rod moving left, B into the page: current runs down the rod, P to Q'); assert.ok(F.x2 > F.x1 && v.x2 < v.x1, 'the force opposes the motion');
+  for (const show of ['experiment', 'key', 'flux', 'faraday', 'region', 'motional', 'spin', 'mutual', 'self', 'generator']) assert.ok(scene({show}), show);
+  const face = (spec: object) => scene({show: 'experiment', ...spec}).props.some((p: any) => p.text === 'this face: N');
+  assert.ok(face({motion: 'toward'}) && !face({motion: 'away'}) && face({motion: 'away', pole: 'S'}) && !face({motion: 'still'}));
+  const facts = (spec: object) => (compile({verb: 'induction', ...spec} as never) as any).scene.meta.facts.join(' | ');
+  assert.match(facts({show: 'spin'}), /157 V/); assert.match(facts({show: 'generator'}), /0\.31 V/); assert.match(facts({show: 'generator', angle: 90}), /ε = 0\.31 V/);
+  assert.ok(inductionErrors({verb: 'induction', show: 'flux', angle: 200}).length); assert.ok(!inductionErrors({verb: 'induction', show: 'generator', angle: 200}).length); assert.ok(inductionErrors({verb: 'induction', show: 'experiment', pole: 'X' as never}).length);
+});
+
 test('magnetic_matter gets the book right', async () => {
   const {torqueOf, energyOf, coreOf, alignedShare, stream, matterErrors} = await import('../src/verbs/matter.ts');
   const facts = (spec: unknown) => ((compile(spec as never) as any).scene.meta.facts as string[]).join(' | ');
