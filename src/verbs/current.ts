@@ -3,7 +3,7 @@
 //   wire          R = ρl/A, a slab of material: J = I/A = E/ρ, σ = 1/ρ
 //   iv            V against I: ohmic, nonlinear, diode, gaas (double valued)
 //   resistivity   ρ against T: metal, alloy, semiconductor; ρ = ρ₀[1 + α(T − T₀)]
-//   transmission  a town fed through cables: P_c = P²R_c/V², at two line voltages
+//   transmission  a town fed through cables: Pc = P²Rc/V², at two line voltages
 //   cell          emf, internal resistance: V = ε − Ir, V against I
 //   cells         series and parallel cells and the one cell that replaces them
 //   kirchhoff     three branches between two junctions, solved: junction sum, loop walk
@@ -18,7 +18,7 @@ export type Branch = {e?: number; R: number; name?: string};
 export type Cell = {e: number; r: number};
 export type CurrentSpec = {verb: 'current'; show: (typeof CURRENT_SHOWS)[number]; E?: number; tau?: number; I?: number; A?: number; n?: number; rho?: number; l?: number; V?: number;
   kind?: string; alpha?: number; T?: number; T0?: number; P?: number; Rc?: number; V2?: number; emf?: number; r?: number; R?: number; cells?: Cell[]; branches?: Branch[];
-  R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
+  currents?: boolean; R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const QE = 1.602e-19, ME = 9.11e-31, isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -38,11 +38,11 @@ export function solveBranches(b: Branch[]) {
   return {V, I: b.map(x => ((x.e ?? 0) - V) / x.R)};
 }
 
-/** A at emf, C at 0; R1 A–B, R2 B–C, R3 A–D, R4 D–C; Rg B–D. Ig runs from B to D. */
+/** The book's arms: A at emf, C at 0; R2 A–B, R4 B–C, R3 C–D, R1 D–A; Rg B–D. Ig runs from B to D. */
 export function solveBridge(emf: number, R1: number, R2: number, R3: number, R4: number, Rg: number) {
-  const a = 1 / R1 + 1 / R2 + 1 / Rg, b = -1 / Rg, c = -1 / Rg, d = 1 / R3 + 1 / R4 + 1 / Rg, e1 = emf / R1, e2 = emf / R3, det = a * d - b * c;
+  const a = 1 / R2 + 1 / R4 + 1 / Rg, b = -1 / Rg, c = -1 / Rg, d = 1 / R1 + 1 / R3 + 1 / Rg, e1 = emf / R2, e2 = emf / R1, det = a * d - b * c;
   const VB = (e1 * d - b * e2) / det, VD = (a * e2 - c * e1) / det;
-  return {VB, VD, Ig: (VB - VD) / Rg, I1: (emf - VB) / R1, I3: (emf - VD) / R3};
+  return {VB, VD, Ig: (VB - VD) / Rg, I2: (emf - VB) / R2, I1: (emf - VD) / R1};
 }
 
 export function currentErrors(s: CurrentSpec): string[] {
@@ -140,10 +140,10 @@ export function current(s: CurrentSpec): Scene {
       if (num) label(x1 - 110 * k, y - 22 * k, `I = ${fmt(I, 'A')}`, 'muted', 24);
       props.push({id: `bar${i}`, type: 'rect', x: x0, y: y + 22 * k, w: Math.max(2 * k, bar), h: 26 * k, style: {fill: 'bad'}, show: [1.4 + i, 1e9]} as Prop);
       label(x0 + Math.max(2 * k, bar) + 130 * k, y + 44 * k, 'lost in the cables', 'muted', 22, {show: [1.8 + i, 1e9]});
-      facts.push(`at ${fmt(v, 'V')}: I = P/V = ${fmt(I, 'A')}, P_c = I²R_c = ${fmt(pc, 'W')}`);
+      facts.push(`at ${fmt(v, 'V')}: I = P/V = ${fmt(I, 'A')}, Pc = I²Rc = ${fmt(pc, 'W')}`);
     });
-    facts.push(`P = ${fmt(P, 'W')}, R_c = ${fmt(Rc, 'Ω')}`);
-    story = 'The same power at a higher voltage needs less current, and cable loss goes as I²'; second = 'P_c = P²R_c/V²: the loss falls as the square of the line voltage';
+    facts.push(`P = ${fmt(P, 'W')}, Rc = ${fmt(Rc, 'Ω')}`);
+    story = 'The same power at a higher voltage needs less current, and cable loss goes as I²'; second = 'Pc = P²Rc/V²: the loss falls as the square of the line voltage';
   } else if (s.show === 'cell') {
     const emf = s.emf ?? 1.5, r = s.r ?? .5, R = s.R ?? 2.5, I = emf / (R + r), V = emf - I * r, Imax = emf / Math.max(r, 1e-6); dur = 8;
     const lw = bw * .46, x0 = bx + bw * .02, x1 = x0 + lw, yt = cy - bh * .24, yb = cy + bh * .24;
@@ -172,8 +172,8 @@ export function current(s: CurrentSpec): Scene {
       line([x0, ys[0]], [x0, ys[n - 1]], 'muted', 3, early); line([x1, ys[0]], [x1, ys[n - 1]], 'muted', 3, early);
     }
     cell([x0, cy], [x1, cy], 'good', late); label(cx, cy + 76 * k, num ? `ε = ${+eq.e.toPrecision(3)} V, r = ${+eq.r.toPrecision(3)} Ω` : 'one equivalent cell', 'good', 28, late);
-    facts.push(`ε_eq = ${fmt(eq.e, 'V')}`, `r_eq = ${fmt(eq.r, 'Ω')}`);
-    [story, second] = kind === 'series' ? ['In series the emfs add with their signs, and so do the internal resistances', 'A cell turned round takes its emf away, but its r still adds'] : ['In parallel: ε_eq/r_eq = Σε/r and 1/r_eq = Σ1/r', 'Equal cells keep ε and share the current, with a smaller r'];
+    facts.push(`εeq = ${fmt(eq.e, 'V')}`, `req = ${fmt(eq.r, 'Ω')}`);
+    [story, second] = kind === 'series' ? ['In series the emfs add with their signs, and so do the internal resistances', 'A cell turned round takes its emf away, but its r still adds'] : ['In parallel: εeq/req = Σε/r and 1/req = Σ1/r', 'Equal cells keep ε and share the current, with a smaller r'];
     anchors.cell = [cx, cy];
   } else if (s.show === 'kirchhoff') {
     const bs = s.branches ?? [{e: 10, R: 2}, {R: 4}, {e: 5, R: 2}], {V, I} = solveBranches(bs), xs = [cx - bw * .36, cx, cx + bw * .36], yt = cy - bh * .36, yb = cy + bh * .36, top = Math.max(...I.map(Math.abs)); dur = 10;
@@ -197,7 +197,11 @@ export function current(s: CurrentSpec): Scene {
   } else {
     const R1 = s.R1 ?? 100, R2 = s.R2 ?? 10, R3 = s.R3 ?? 300, R4 = s.R4 ?? 30, Rg = s.Rg ?? 50, emf = s.emf ?? 10, sol = solveBridge(emf, R1, R2, R3, R4, Rg), Ig = sol.Ig, gmax = s.gmax ?? Math.max(Math.abs(Ig), 1e-6) * 1.2, balanced = Math.abs(Ig) < 1e-9; dur = 8;
     const a = Math.min(bw * .4, bh * .4 * 1.2), h = bh * .38, A: P2 = [cx - a, cy], C: P2 = [cx + a, cy], B: P2 = [cx, cy - h], D: P2 = [cx, cy + h], R = 34 * k;
-    zig(A, B, num ? `${+R1.toPrecision(3)} Ω` : 'R₁'); zig(B, C, num ? `${+R2.toPrecision(3)} Ω` : 'R₂'); zig(A, D, num ? `${+R3.toPrecision(3)} Ω` : 'R₃'); zig(D, C, num ? `${+R4.toPrecision(3)} Ω` : 'R₄');
+    const arm = (p: P2, q: P2, ohms: number, n: string) => {
+      zig(p, q, num ? `${+ohms.toPrecision(3)} Ω` : `R${n}`);
+      if (s.currents) { const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy); label((p[0] + q[0]) / 2 + dy / L * 44 * k, (p[1] + q[1]) / 2 - dx / L * 44 * k + 8 * k, `I${n}`, 'good', 24); }
+    };
+    arm(A, B, R2, '₂'); arm(B, C, R4, '₄'); arm(C, D, R3, '₃'); arm(D, A, R1, '₁');
     const G: P2 = [cx, cy]; line(B, [cx, cy - R], 'muted', 3); line([cx, cy + R], D, 'muted', 3);
     props.push({id: 'gal', type: 'circle', x: G[0], y: G[1], r: R, style: {fill: 'paper', stroke: 'ink', width: 3 * k}, layer: 3} as Prop);
     const reach = Math.max(-1, Math.min(1, Ig / gmax)), Lg = R * .8, angle = (t: number) => reach * Math.min(1, Math.max(0, (t - 1) / 1.2)) * 1.1;
@@ -205,10 +209,10 @@ export function current(s: CurrentSpec): Scene {
     label(G[0] + R + 26 * k, G[1] + 8 * k, 'G', 'muted', 26);
     const ey = cy + h + 54 * k; line([A[0], A[1]], [A[0], ey], 'muted', 3); line([C[0], C[1]], [C[0], ey], 'muted', 3); cell([C[0], ey], [A[0], ey]);
     label(A[0] - 24 * k, A[1] + 8 * k, 'A', 'ink', 24); label(C[0] + 24 * k, C[1] + 8 * k, 'C', 'ink', 24); label(B[0], B[1] - 18 * k, 'B', 'ink', 24); label(D[0] + 24 * k, D[1] + 24 * k, 'D', 'ink', 24);
-    label(cx, cy - R - 16 * k, balanced ? 'no current' : '', 'good', 22, {show: [2.4, 1e9]});
+    label(cx - R - 76 * k, cy + 8 * k, balanced ? 'no current' : s.currents ? 'Ig' : '', balanced ? 'good' : 'accent', 22, {show: [2.4, 1e9]});
     anchors.G = G; anchors.needle = [G[0] + Lg * reach, G[1]];
-    facts.push(balanced ? 'Balanced: no current through G' : `I_g = ${fmt(Math.abs(Ig), 'A')} from ${Ig > 0 ? 'B to D' : 'D to B'}`, `balance needs R₄ = R₂R₃/R₁ = ${fmt(R2 * R3 / R1, 'Ω')}`, `V_B = ${fmt(sol.VB, 'V')}, V_D = ${fmt(sol.VD, 'V')}`);
-    story = 'B and D at one potential: no current through the galvanometer'; second = 'Balance: R₁/R₂ = R₃/R₄, whatever the cell and whatever G';
+    facts.push(balanced ? 'Balanced: no current through G' : `Ig = ${fmt(Math.abs(Ig), 'A')} from ${Ig > 0 ? 'B to D' : 'D to B'}`, `balance needs R₄ = R₂R₃/R₁ = ${fmt(R2 * R3 / R1, 'Ω')}`, `VB = ${fmt(sol.VB, 'V')}, VD = ${fmt(sol.VD, 'V')}`);
+    story = 'B and D at one potential: no current through the galvanometer'; second = 'Balance: R₂/R₁ = R₄/R₃, whatever the cell and whatever G';
     if (!balanced) story = 'B and D differ in potential, so a current crosses the galvanometer';
   }
   return finish('current', s as never, dur, story, second, facts, anchors, s.illustrative);

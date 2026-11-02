@@ -1753,8 +1753,17 @@ test('current gets the book right', async () => {
   // bridge: balance, and a known unbalanced case by Kirchhoff at B and D
   assert.ok(Math.abs(solveBridge(10, 100, 10, 300, 30, 50).Ig) < 1e-12);
   const un = solveBridge(10, 100, 10, 300, 60, 50);
-  assert.ok(un.Ig < 0, 'R4 too big raises D above B, so the current runs D to B');
-  assert.ok(Math.abs((10 - un.VB) / 100 + (un.VD - un.VB) / 50 - un.VB / 10) < 1e-9);
+  assert.ok(un.Ig > 0, 'R4 (arm BC) too big raises B above D, so the current runs B to D');
+  assert.ok(Math.abs((10 - un.VB) / 10 + (un.VD - un.VB) / 50 - un.VB / 60) < 1e-9);
+  // the book's Example 3.7: AB 100, BC 10, CD 5, DA 60, G 15, 10 V gives 4.87 mA
+  const ex = solveBridge(10, 60, 100, 5, 10, 15);
+  assert.ok(Math.abs(Math.abs(ex.Ig) - 4.87e-3) < 5e-5, String(ex.Ig));
+  // what is drawn says what is computed: no 'no current' on an unbalanced bridge
+  const words = (spec: unknown) => JSON.stringify((compile(spec as never) as any).scene);
+  assert.doesNotMatch(words({verb: 'current', show: 'bridge', R1: 60, R2: 100, R3: 5, R4: 10}), /no current/);
+  assert.match(words({verb: 'current', show: 'bridge'}), /no current/);
+  assert.match(words({verb: 'current', show: 'bridge', R1: 60, R2: 100, R3: 5, R4: 10, currents: true, illustrative: true}), /I₄/);
+  for (const spec of [{show: 'transmission'}, {show: 'cells', kind: 'parallel', cells: [{e: 1.5, r: .1}, {e: 1.4, r: 1}]}, {show: 'bridge', R4: 60}]) assert.doesNotMatch(words({verb: 'current', ...spec}), /"[^"]*[A-Za-zε]_[a-z][^"]*"/, 'no raw underscores on screen');
   // losses go as 1/V²
   assert.match(facts({verb: 'current', show: 'transmission', P: 6e5, Rc: 4, V: 220, V2: 22000}), /2\.98 × 10⁷ W/);
   for (const show of ['drift', 'wire', 'iv', 'resistivity', 'transmission', 'cell', 'kirchhoff', 'bridge']) assert.ok((compile({verb: 'current', show} as never) as any).scene, show);
