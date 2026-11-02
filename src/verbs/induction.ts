@@ -3,7 +3,8 @@
 //   key        tapping a key on a neighbouring coil: a kick on press, none while held, the opposite kick on release
 //   flux       Φ = BA cos θ: a plate turned in a uniform field, the lines through it counted
 //   faraday    Φ against t and ε = −N dΦ/dt beneath it, with I = ε/R
-//   region     a loop entering or leaving a field: current only while the flux changes, its sense from Lenz's law
+//   region     a loop entering or leaving a field: current only while the flux changes, its sense from Lenz's law; `shape` for other loops, `curve` for ε against t
+//   open       a coil with a gap: no continuous current; charges pile up at the ends until the forces balance; a voltmeter reads ε
 //   motional   a rod on rails: ε = Blv, I, and the force that opposes the motion; `lorentz` shows the charge pushed along the rod
 //   spin       a rod or spokes turning about one end: ε = ½Bωl², the same however many spokes
 //   mutual     coaxial solenoids (or concentric coils): M, and a changing current in one, an emf in the other
@@ -14,8 +15,10 @@ import {sci} from './electric.ts';
 import type {Prop, Scene} from '../scene.ts';
 
 type P2 = [number, number];
-export const INDUCTION_SHOWS = ['experiment', 'key', 'flux', 'faraday', 'region', 'motional', 'spin', 'mutual', 'self', 'generator'] as const;
-export type InductionSpec = {verb: 'induction'; show: (typeof INDUCTION_SHOWS)[number]; source?: 'magnet' | 'coil'; motion?: 'toward' | 'away' | 'still'; pole?: 'N' | 'S'; fast?: boolean; iron?: boolean;
+export const INDUCTION_SHOWS = ['experiment', 'key', 'flux', 'faraday', 'region', 'motional', 'spin', 'mutual', 'self', 'generator', 'open'] as const;
+export const OPEN_STAGES = ['gap', 'charge', 'balance', 'meter'] as const;
+export const LOOP_SHAPES = ['rectangle', 'triangle', 'irregular', 'circle'] as const;
+export type InductionSpec = {verb: 'induction'; show: (typeof INDUCTION_SHOWS)[number]; source?: 'magnet' | 'coil'; motion?: 'toward' | 'away' | 'still'; pole?: 'N' | 'S'; fast?: boolean; iron?: boolean; work?: boolean; stage?: (typeof OPEN_STAGES)[number]; shape?: (typeof LOOP_SHAPES)[number]; curve?: boolean;
   B?: number; B2?: number; A?: number; angle?: number; angle2?: number; sweep?: boolean; dt?: number; N?: number; R?: number; move?: 'into' | 'out'; field?: 'into' | 'out'; l?: number; v?: number; lorentz?: boolean;
   nu?: number; spokes?: number; coils?: 'solenoids' | 'concentric'; from?: 1 | 2; n1?: number; n2?: number; r1?: number; r2?: number; I?: number; M?: number; L?: number; n?: number; mur?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
@@ -39,6 +42,12 @@ export const peakEmf = (N: number, B: number, A: number, nu: number) => N * B * 
 /** Which way the coil's face answers: +1 its face toward the source is N (anticlockwise seen from the source). */
 export const faceSign = (pole: 'N' | 'S', motion: 'toward' | 'away') => (pole === 'N' ? 1 : -1) * (motion === 'toward' ? 1 : -1);
 /** Sense of a loop's induced current, seen by the reader: +1 anticlockwise. Field into the page, flux rising: anticlockwise. */
+/** A loop's outline, 0 to 1 across its box. */
+export const loopOutline = (shape: (typeof LOOP_SHAPES)[number]): P2[] => shape === 'triangle' ? [[0, 0], [1, .5], [0, 1]] : shape === 'irregular' ? [[0, .25], [.4, 0], [1, .3], [.8, .85], [.3, 1]] : shape === 'circle' ? Array.from({length: 48}, (_, i) => [.5 + .5 * Math.cos(i * Math.PI / 24), .5 + .5 * Math.sin(i * Math.PI / 24)] as P2) : [[0, 0], [1, 0], [1, 1], [0, 1]];
+/** How much of the loop the field's edge cuts at u across it, 0 to 1: ε follows this at steady speed. */
+export const chordAt = (outline: P2[], u: number) => { const ys: number[] = []; outline.forEach((p, i) => { const q = outline[(i + 1) % outline.length]; if ((p[0] <= u && q[0] > u) || (q[0] <= u && p[0] > u)) ys.push(p[1] + (q[1] - p[1]) * (u - p[0]) / (q[0] - p[0])); }); return ys.length < 2 ? 0 : Math.max(...ys) - Math.min(...ys); };
+/** Which open end gathers the positive charge: the far end when the coil's face answers N (the would-be current runs up the near side, over, and down to the far end). */
+export const openPlusEnd = (pole: 'N' | 'S', motion: 'toward' | 'away') => faceSign(pole, motion) > 0 ? 'far' : 'near';
 export const regionSense = (field: 'into' | 'out', move: 'into' | 'out') => (field === 'into' ? 1 : -1) * (move === 'into' ? 1 : -1);
 
 export function inductionErrors(s: InductionSpec): string[] {
@@ -52,6 +61,9 @@ export function inductionErrors(s: InductionSpec): string[] {
   if (s.pole !== undefined && !['N', 'S'].includes(s.pole)) e.push(`${W}: pole is N or S`);
   if (s.move !== undefined && !['into', 'out'].includes(s.move)) e.push(`${W}: move is into or out`);
   if (s.field !== undefined && !['into', 'out'].includes(s.field)) e.push(`${W}: field is into or out`);
+  if (s.stage !== undefined && !OPEN_STAGES.includes(s.stage)) e.push(`${W}: stage is one of ${OPEN_STAGES.join(', ')}`);
+  if (s.shape !== undefined && !LOOP_SHAPES.includes(s.shape)) e.push(`${W}: shape is one of ${LOOP_SHAPES.join(', ')}`);
+  if (s.show === 'open' && s.motion === 'still') e.push(`${W}: an open coil needs the flux changing: motion toward or away`);
   if (s.coils !== undefined && !['solenoids', 'concentric'].includes(s.coils)) e.push(`${W}: coils is solenoids or concentric`);
   if (s.from !== undefined && ![1, 2].includes(s.from)) e.push(`${W}: from is 1 or 2`);
   if (s.spokes !== undefined && !(Number.isInteger(s.spokes) && s.spokes <= 12)) e.push(`${W}: spokes is a whole number up to 12`);
@@ -73,18 +85,26 @@ export function induction(s: InductionSpec): Scene {
     props.push({id: id('d'), type: 'circle', x: X(0), y: Y(0), r: 9 * k, style: {fill: colour, stroke: 'ink', width: 2 * k}, layer: 4, keys: {x: keysOf(tmax, X), y: keysOf(tmax, Y)}} as Prop);
   };
   /** A galvanometer: its needle leans right for positive rate; `rate` runs from −1 to 1. */
-  const dial = (c0: P2, r: number, rate: (t: number) => number) => {
+  const dial = (c0: P2, r: number, rate: (t: number) => number, name = 'G', anchor = 'galvanometer') => {
     poly(Array.from({length: 41}, (_, i) => { const a = (150 - 120 * i / 40) * RAD; return [c0[0] + r * Math.cos(a), c0[1] - r * Math.sin(a)] as P2; }), 'muted', 3);
-    line([c0[0], c0[1] - r * .92], [c0[0], c0[1] - r * 1.04], 'muted', 3); label(c0[0], c0[1] + 34 * k, 'G', 'ink', 28); dot(c0[0], c0[1], 7, 'ink');
+    line([c0[0], c0[1] - r * .92], [c0[0], c0[1] - r * 1.04], 'muted', 3); label(c0[0], c0[1] + 34 * k, name, 'ink', 28); dot(c0[0], c0[1], 7, 'ink');
     const ang = (t: number) => (90 - 55 * Math.max(-1, Math.min(1, rate(t)))) * RAD;
     props.push({id: 'pointer', type: 'line', x1: c0[0], y1: c0[1], x2: c0[0] + r * .9 * Math.cos(ang(0)), y2: c0[1] - r * .9 * Math.sin(ang(0)), style: {stroke: 'bad', width: 5 * k}, layer: 3, keys: {x2: keysOf(dur, t => c0[0] + r * .9 * Math.cos(ang(t))), y2: keysOf(dur, t => c0[1] - r * .9 * Math.sin(ang(t)))}} as Prop);
-    anchors.galvanometer = c0;
+    anchors[anchor] = c0;
   };
   /** A coil seen from the side, axis across the page. Its right half is the near half. */
   const coil = (x: number, y: number, a: number, b: number, turns = 4, colour = 'accent') => {
     for (let i = 0; i < turns; i++) { const X = x + (i - (turns - 1) / 2) * 16 * k;
       poly(Array.from({length: 25}, (_, j) => { const f = Math.PI / 2 + Math.PI * j / 24; return [X + a * Math.cos(f), y + b * Math.sin(f)] as P2; }), 'faint', 3);
       poly(Array.from({length: 25}, (_, j) => { const f = -Math.PI / 2 + Math.PI * j / 24; return [X + a * Math.cos(f), y + b * Math.sin(f)] as P2; }), colour, 4); }
+  };
+
+  /** A bar magnet, `pole` foremost and facing right; front(t) is its front face. */
+  const magnet = (front: (t: number) => number, y: number, mw: number, mh: number, pole: 'N' | 'S') => {
+    const backX = (t: number) => front(t) - mw, midX = (t: number) => front(t) - mw / 2, back = pole === 'N' ? 'S' : 'N', col = (q: string) => q === 'N' ? 'bad' : 'cool';
+    rect(backX(0), y - mh / 2, mw / 2, mh, col(back), {keys: {x: keysOf(dur, backX)}}); rect(midX(0), y - mh / 2, mw / 2, mh, col(pole), {keys: {x: keysOf(dur, midX)}});
+    label(backX(0) + mw / 4, y + mh * .18, back, 'paper', 30, {keys: {x: keysOf(dur, t => backX(t) + mw / 4)}}); label(midX(0) + mw / 4, y + mh * .18, pole, 'paper', 30, {keys: {x: keysOf(dur, t => midX(t) + mw / 4)}});
+    anchors.source = [midX(dur), y];
   };
 
   if (s.show === 'experiment') {
@@ -102,10 +122,7 @@ export function induction(s: InductionSpec): Scene {
       for (let i = 0; i < 3; i++) props.push({id: `C2-${i}`, type: 'rect', x: X0 - i * 14 * k, y: cyy - b * .7, w: a * .5, h: b * 1.4, style: {stroke: 'cool', width: 4 * k}, layer: 2, keys: {x: keysOf(dur, t => kx(t) - i * 14 * k)}} as Prop);
       label(X0, cyy - b * .7 - 16 * k, 'C2: steady current', 'cool', 24, {keys: {x: keysOf(dur, kx)}}); anchors.source = [X0, cyy];
     } else {
-      const backX = (t: number) => pos(t) - mw, midX = (t: number) => pos(t) - mw / 2, front = pole, back = pole === 'N' ? 'S' : 'N', col = (q: string) => q === 'N' ? 'bad' : 'cool';
-      rect(backX(0), cyy - mh / 2, mw / 2, mh, col(back), {keys: {x: keysOf(dur, backX)}}); rect(midX(0), cyy - mh / 2, mw / 2, mh, col(front), {keys: {x: keysOf(dur, midX)}});
-      label(backX(0) + mw / 4, cyy + mh * .18, back, 'paper', 30, {keys: {x: keysOf(dur, t => backX(t) + mw / 4)}}); label(midX(0) + mw / 4, cyy + mh * .18, front, 'paper', 30, {keys: {x: keysOf(dur, t => midX(t) + mw / 4)}});
-      anchors.source = [midX(dur), cyy];
+      magnet(pos, cyy, mw, mh, pole);
     }
     coil(coilX, cyy, a, b); anchors.coil = [coilX, cyy];
     const mov: [number, number] = [t0, t0 + span], ax = coilX + a + 40 * k, A = b * .55;
@@ -114,6 +131,13 @@ export function induction(s: InductionSpec): Scene {
       const up = sign > 0; arrow([ax, cyy + (up ? A : -A)], [ax, cyy + (up ? -A : A)], 'good', 6, {show: mov}); label(ax + 62 * k, cyy + 9 * k, 'I', 'good', 30, {show: mov});
       label(coilX - a - 40 * k, cyy - b - 22 * k, `this face: ${sign > 0 ? 'N' : 'S'}`, 'good', 26, {show: mov});
       label(coilX + 10 * k, cyy + b + 40 * k, sign > 0 ? 'anticlockwise, seen from the left' : 'clockwise, seen from the left', 'good', 24, {show: mov});
+    }
+    if (s.work && sign && !isCoil) {   // the hand's force and the coil's force on the magnet, equal at steady speed
+      const dir = end > start ? 1 : -1, L = bw * .09, mx = (t: number) => pos(t) - mw / 2, upY = cyy - mh / 2 - 26 * k, dnY = cyy + mh / 2 + 26 * k;
+      const push = (y: number, d: number, colour: string, id: string) => props.push({id, type: 'arrow', x1: mx(0), y1: y, x2: mx(0) + d * L, y2: y, head: 15 * k, style: {stroke: colour, width: 6 * k}, layer: 4, show: mov, keys: {x1: keysOf(dur, mx), x2: keysOf(dur, t => mx(t) + d * L)}} as Prop);
+      push(upY, dir, 'good', 'push'); label(mx(0), upY - 18 * k, 'your force: you do work', 'good', 24, {show: mov, keys: {x: keysOf(dur, mx)}});
+      push(dnY, -dir, 'bad', 'oppose'); label(mx(0), dnY + 36 * k, sign === (dir > 0 ? 1 : -1) ? 'the coil repels' : 'the coil attracts', 'bad', 24, {show: mov, keys: {x: keysOf(dur, mx)}});
+      label(coilX + 10 * k, cyy + b + 80 * k, 'that work becomes Joule heat', 'bad', 24, {show: [t0 + .5, 1e9]}); anchors.push = [mx(dur), upY]; anchors.heat = [coilX + 10 * k, cyy + b + 80 * k];
     }
     dial([bx + bw * .3, by + bh * .92], S * .13, rate);
     facts.push(`Φ grows as the source comes closer: ${motion}, ${pole} pole`);
@@ -170,15 +194,21 @@ export function induction(s: InductionSpec): Scene {
     for (let i = 0; i < 6; i++) for (let j = 0; j < 7; j++) label(bx + (i + .5) * (edge - bx) / 6, top + (j + .5) * h / 7 + 8 * k, field === 'into' ? '×' : '•', 'muted', 28, {layer: 1});
     label(bx + 60 * k, top - 14 * k, 'B', 'muted', 28);
     const a0 = move === 'out' ? in0 : out0, a1 = move === 'out' ? out0 : in0, t0 = 1.5, t1 = 7.5, X = (t: number) => a0 + (a1 - a0) * Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
-    props.push({id: 'loop', type: 'rect', x: X(0), y: ly, w: lw, h: lh, style: {stroke: 'ink', width: 6 * k}, layer: 3, keys: {x: keysOf(dur, X)}} as Prop);
+    const shape = s.shape ?? 'rectangle', outline = loopOutline(shape);
+    if (shape === 'rectangle') props.push({id: 'loop', type: 'rect', x: X(0), y: ly, w: lw, h: lh, style: {stroke: 'ink', width: 6 * k}, layer: 3, keys: {x: keysOf(dur, X)}} as Prop);
+    else outline.forEach((p, i) => { const q = outline[(i + 1) % outline.length]; line([X(0) + p[0] * lw, ly + p[1] * lh], [X(0) + q[0] * lw, ly + q[1] * lh], 'ink', 6, {layer: 3, keys: {x1: keysOf(dur, t => X(t) + p[0] * lw), x2: keysOf(dur, t => X(t) + q[0] * lw)}}); });
     const tA = t0 + (t1 - t0) * (move === 'out' ? (edge - lw - a0) / (a1 - a0) : (edge - a0) / (a1 - a0)), tB = t0 + (t1 - t0) * (move === 'out' ? (edge - a0) / (a1 - a0) : (edge - lw - a0) / (a1 - a0));
     const win: [number, number] = [tA, tB], midX = (t: number) => X(t) + lw / 2, topA = sense > 0 ? -1 : 1;              // anticlockwise: the top side runs leftward
     props.push({id: 'current', type: 'arrow', x1: midX(0) - topA * 50 * k, y1: ly - 26 * k, x2: midX(0) + topA * 50 * k, y2: ly - 26 * k, head: 15 * k, style: {stroke: 'good', width: 6 * k}, layer: 4, show: win, keys: {x1: keysOf(dur, t => midX(t) - topA * 50 * k), x2: keysOf(dur, t => midX(t) + topA * 50 * k)}} as Prop);
     label(midX(0), ly + lh + 44 * k, sense > 0 ? 'I anticlockwise' : 'I clockwise', 'good', 28, {show: win, keys: {x: keysOf(dur, midX)}});
     label(midX(0), ly - 58 * k, 'no current: Φ steady', 'muted', 24, {show: [0, tA], keys: {x: keysOf(dur, midX)}}); label(midX(0), ly - 58 * k, 'no current: Φ steady', 'muted', 24, {show: [tB, 1e9], keys: {x: keysOf(dur, midX)}});
     anchors.loop = [midX(0), cy]; anchors.edge = [edge, cy];
+    if (s.curve) {   // ε at steady speed follows how much of the loop the edge cuts
+      const uAt = (t: number) => (edge - X(t)) / lw, emf = (t: number) => { const u = uAt(t); return u <= 0 || u >= 1 ? 0 : chordAt(outline, u); };
+      strip(edge + bw * .1, by + bh * .86, bw * .36, bh * .12, 'ε', dur, emf, 1, 'bad'); anchors.curve = [edge + bw * .28, by + bh * .86];
+    }
     story = `The flux through the loop is ${move === 'out' ? 'falling' : 'growing'}: the current's field ${move === 'out' ? 'keeps it up, along B' : 'holds it down, against B'}`;
-    second = 'Current flows only while part of the loop is outside: fully in or fully out, the flux is steady';
+    second = s.curve ? (shape === 'rectangle' ? 'The edge cuts the same width all the way: ε stays constant while the loop crosses' : "The edge cuts a changing width: ε changes as the loop crosses") : 'Current flows only while part of the loop is outside: fully in or fully out, the flux is steady';
   } else if (s.show === 'motional') {
     const B = s.B ?? .5, l = s.l ?? .5, v = s.v ?? 2, R = s.R ?? 1, m = motionalOf(B, l, v, R), lor = !!s.lorentz; dur = 9;
     const x0 = bx + bw * .08, x1 = bx + bw * .9, top = cy - S * .25, bot = cy + S * .25, vmax = 4, speed = bw * .06 * v, start = x1 - bw * .06, xr = (t: number) => start - speed * Math.min(1, Math.max(0, (t - 1.5) / 6.5));
@@ -257,7 +287,7 @@ export function induction(s: InductionSpec): Scene {
     facts.push(`L = ${two(L, 'H')}`, `Back emf = L dI/dt = ${two(L * Im / dt, 'V')} for ${two(Im, 'A')} in ${two(dt, 's')}`, `U = ½LI² = ${two(.5 * L * Im * Im, 'J')} at ${two(Im, 'A')}`);
     story = 'The back emf opposes any change in the current, rise or fall. L acts as electrical inertia, as mass does for motion';
     second = 'While the current is steady there is no back emf. The energy ½LI² goes in as it rises, and comes back as it falls, like ½mv²';
-  } else {
+  } else if (s.show === 'generator') {
     const N = s.N ?? 100, B = s.B ?? .01, A = s.A ?? .1, nu = s.nu ?? .5, e0 = peakEmf(N, B, A, nu), fixed = s.angle, turns = 2, spinT = 11, start = .5; dur = fixed !== undefined ? 8 : 12;
     const th = (t: number) => fixed !== undefined ? fixed * RAD : 2 * Math.PI * turns * Math.max(0, t - start) / spinT, U = Math.min(S, bw * .58), c0: P2 = [bx + bw * .25, cy - bh * .02], R = U * .21;
     rect(c0[0] - U * .4, c0[1] - U * .2, U * .1, U * .4, 'bad'); rect(c0[0] + U * .3, c0[1] - U * .2, U * .1, U * .4, 'cool'); label(c0[0] - U * .35, c0[1] + 10 * k, 'N', 'paper', 30); label(c0[0] + U * .35, c0[1] + 10 * k, 'S', 'paper', 30);
@@ -284,6 +314,49 @@ export function induction(s: InductionSpec): Scene {
     facts.push(`ε₀ = NBAω = ${two(e0, 'V')}`, `N = ${N}, B = ${two(B, 'T')}, A = ${two(A, 'm²')}, ν = ${two(nu, 'Hz')}`, ...(fixed !== undefined ? [`at θ = ${fixed}°: ε = ${two(e0 * Math.sin(fixed * RAD), 'V')}`] : []));
     story = fixed !== undefined && Math.abs(Math.sin(fixed * RAD)) < .05 ? 'The coil is face-on to B: the most flux, but it is not changing, so ε = 0' : fixed !== undefined && Math.abs(Math.cos(fixed * RAD)) < .05 ? 'The coil is edge-on: no flux, but it is changing fastest, so ε is largest' : 'ε = NBAω sin ωt: largest when the flux is zero, zero when the flux is largest';
     second = 'Each half-turn the current reverses in each side: alternating current. In India ν = 50 Hz. Drawn slowed down';
+  }
+  if (s.show === 'open') {
+    const stage = s.stage ?? 'meter', at = OPEN_STAGES.indexOf(stage), motion = s.motion === 'away' ? 'away' : 'toward', pole = s.pole ?? 'N'; dur = 12;
+    const side = at === 2, coilX = bx + bw * (side ? .36 : .54), cyy = cy - bh * .14, a = S * .1, b = S * .19, gapD = 24 * RAD, mw = bw * .17, mh = S * .1, near = coilX - a - bw * .03, far = near - bw * .1;
+    const f0 = motion === 'toward' ? far : near, f1 = motion === 'toward' ? near : far, front = (t: number) => f0 + (f1 - f0) * t / dur;
+    magnet(front, cyy, mw, mh, pole);
+    const pt = (f: number): P2 => [coilX + a * Math.cos(f), cyy + b * Math.sin(f)];
+    const FAR = Math.PI / 2 + gapD, NEAR = Math.PI / 2 - gapD;
+    poly(Array.from({length: 41}, (_, i) => pt(FAR + (3 * Math.PI / 2 - FAR) * i / 40)), 'faint', 4);
+    poly(Array.from({length: 41}, (_, i) => pt(-Math.PI / 2 + (NEAR + Math.PI / 2) * i / 40)), 'accent', 5);
+    const endF = pt(FAR), endN = pt(NEAR), ty = cyy + b + S * .07, tF: P2 = [endF[0], ty], tN: P2 = [endN[0], ty];
+    line(endF, tF, 'accent', 4); line(endN, tN, 'accent', 4); dot(tF[0], tF[1], 7, 'paper'); dot(tN[0], tN[1], 7, 'paper');
+    anchors.coil = [coilX, cyy]; anchors.gap = [coilX, ty]; anchors.farEnd = tF; anchors.nearEnd = tN;
+    const plus = openPlusEnd(pole, motion), pEnd = plus === 'far' ? tF : tN, mEnd = plus === 'far' ? tN : tF, out = (e: P2) => e[0] < coilX ? -1 : 1;
+    anchors.plus = pEnd; anchors.minus = mEnd;
+    const fx = (t: number) => 1 - Math.exp(-t / 2.4);   // the charge at the ends, as a fraction of its final amount
+    const T0 = .8, N = 5, arrive = (i: number) => T0 + i * 1.5 + 1.4;
+    if (at === 0) {
+      label(coilX, ty + 44 * k, 'open ends: ε across the gap', 'bad', 26); label(coilX, by + bh * .94, 'no closed path: no continuous current', 'muted', 26);
+    } else {
+      for (let i = 0; i < N; i++) {
+        const start = T0 + i * 1.5, path = (t: number) => { const u = Math.max(0, Math.min(1, (t - start) / 1.4)); return plus === 'far' ? FAR + (2 * Math.PI - 2 * gapD) * (1 - u) : FAR + (2 * Math.PI - 2 * gapD) * u; };
+        label(pt(path(0))[0], pt(path(0))[1] + 8 * k, '+', 'bad', 28, {layer: 5, show: [start, start + 1.4], keys: {x: keysOf(dur, t => pt(path(t))[0]), y: keysOf(dur, t => pt(path(t))[1] + 8 * k)}});
+        const row = (i % 3), col = Math.floor(i / 3), off = 26 * k + row * 24 * k;
+        label(pEnd[0] + out(pEnd) * (off), pEnd[1] + 8 * k - col * 26 * k, '+', 'bad', 30, {show: [arrive(i), 1e9]});
+        label(mEnd[0] + out(mEnd) * (off), mEnd[1] + 8 * k - col * 26 * k, '−', 'cool', 34, {show: [arrive(i), 1e9]});
+      }
+    }
+    if (at === 2) {    // the two forces on a charge in the wire, and what follows from them
+      const px = bx + bw * .62, pw = bw * .36, wy = by + bh * .2, q: P2 = [px + pw / 2, wy], L = pw * .4, dir = 1;
+      line([px, wy], [px + pw, wy], 'accent', 4); label(q[0], wy + 9 * k, '+', 'bad', 34, {layer: 5}); label(px, wy - 72 * k, 'A charge in the wire', 'muted', 24);
+      arrow(q, [q[0] + dir * L, wy], 'good', 6, {}); label(q[0] + L * .55, wy - 22 * k, 'induced force', 'good', 22);
+      props.push({id: 'Fes', type: 'arrow', x1: q[0], y1: wy + 2 * k, x2: q[0] - dir * L * fx(0), y2: wy + 2 * k, head: 15 * k, style: {stroke: 'cool', width: 6 * k}, layer: 4, keys: {x2: keysOf(dur, t => q[0] - dir * L * fx(t))}} as Prop);
+      label(q[0] - L * .55, wy + 40 * k, 'electrostatic force', 'cool', 22);
+      strip(px, by + bh * .5, pw, bh * .12, 'I', dur, t => 1 - fx(t), 1, 'good'); strip(px, by + bh * .86, pw, bh * .17, 'V', dur, fx, 1, 'cool');
+      anchors.force = q; anchors.current = [px + pw, by + bh * .5]; anchors.voltage = [px + pw, by + bh * .69];
+    }
+    if (at === 3) {
+      const c0: P2 = [coilX, by + bh * .94], r = S * .1; line(tF, [c0[0] - r * 1.1, c0[1]], 'ink', 3); line(tN, [c0[0] + r * 1.1, c0[1]], 'ink', 3); line([c0[0] - r * 1.1, c0[1]], [c0[0] - 10 * k, c0[1]], 'ink', 3); line([c0[0] + r * 1.1, c0[1]], [c0[0] + 10 * k, c0[1]], 'ink', 3);
+      dial(c0, r, t => fx(t) * .85, 'V', 'voltmeter'); label(c0[0] + r * 1.3, c0[1] + 8 * k, 'ideal: takes no current', 'muted', 22, {align: 'start'}); label(c0[0] - r * 1.3, c0[1] + 8 * k, 'reads ε', 'bad', 26, {align: 'end', show: [6, 1e9]});
+    }
+    story = ['A gap in the coil: the emf is still there, across the two ends, but no current can keep flowing', 'The changing flux pushes charge round the wire: it can only pile up at the two ends', 'The piled-up charge pushes back harder and harder: when the forces balance, the current stops and the voltage stays', 'An ideal voltmeter across the gap reads the emf, because no current flows to drop any of it'][at];
+    second = 'Drawn much slowed: in a real coil the charge settles almost at once. It holds while the flux keeps changing';
   }
   return finish('induction', s as never, dur, story, second, facts, anchors, s.illustrative);
 }

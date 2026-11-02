@@ -1793,6 +1793,20 @@ test('current gets the book right', async () => {
   assert.ok((compile({verb: 'current', show: 'kirchhoff', branches: [{R: 1}]} as never) as any).errors.length);
 });
 
+test('an open coil and other loops, by Lenz and by the edge they cut', async () => {
+  const {induction, inductionErrors, openPlusEnd, chordAt, loopOutline} = await import('../src/verbs/induction.ts');
+  assert.equal(openPlusEnd('N', 'toward'), 'far'); assert.equal(openPlusEnd('N', 'away'), 'near'); assert.equal(openPlusEnd('S', 'toward'), 'near');
+  const us = [.1, .3, .5, .7, .9], rect = loopOutline('rectangle'), tri = loopOutline('triangle'), circ = loopOutline('circle');
+  for (const u of us) assert.ok(Math.abs(chordAt(rect, u) - 1) < 1e-9, 'a rectangle cuts one width: ε constant');
+  assert.ok(Math.abs(chordAt(tri, .25) - .75) < 1e-9); assert.ok(chordAt(circ, .5) > chordAt(circ, .1) * 1.5, 'a circle does not');
+  assert.deepEqual(inductionErrors({verb: 'induction', show: 'open', stage: 'balance'}), []);
+  assert.ok(inductionErrors({verb: 'induction', show: 'open', stage: 'nope' as never}).length); assert.ok(inductionErrors({verb: 'induction', show: 'open', motion: 'still'}).length); assert.ok(inductionErrors({verb: 'induction', show: 'region', shape: 'nope' as never}).length);
+  // each show draws only its own picture: no generator behind an open coil
+  for (const stage of ['gap', 'charge', 'balance', 'meter'] as const) assert.ok(!induction({verb: 'induction', show: 'open', stage}).props.some(p => p.id === 'state'));
+  assert.ok(induction({verb: 'induction', show: 'generator'}).props.some(p => p.id === 'state'));
+  assert.ok(induction({verb: 'induction', show: 'experiment', work: true}).props.some(p => p.id === 'push')); assert.ok(induction({verb: 'induction', show: 'open', stage: 'balance'}).props.some(p => p.id === 'Fes'));
+});
+
 test('induction gets the book right', async () => {
   const {inductionErrors, faceSign, regionSense, spinOf, peakEmf, faradayOf, solenoidM, concentricM, selfL, motionalOf} = await import('../src/verbs/induction.ts');
   const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
