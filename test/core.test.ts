@@ -1,4 +1,5 @@
 import {fieldAt, shareElectricScale, traceLines} from '../src/verbs/electric.ts';
+import {contour, pairEnergy, potentialAt, seriesC, shareCapacitorScale} from '../src/verbs/potential.ts';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -1680,4 +1681,36 @@ test('electric panels side by side share one scale, and a negative sheet pulls i
   assert.match((compile({verb: 'electric', show: 'gauss', system: 'point', outside: true} as never) as any).scene.meta.facts.join(' '), /charge outside is 0/);
   const right = sheets.props.filter((p: any) => p.type === 'arrow' && p.x1 > 960);
   assert.ok(right.length && right.every((p: any) => p.x2 < p.x1), 'field points in to a negative sheet');
+});
+
+test('potential and capacitor get the book right', () => {
+  const facts = (o: object) => { const r = compile(o as never) as any; assert.deepEqual(r.errors, []); return r.scene.meta.facts.join(' | '); };
+  // Example 2.1: 4 × 10⁻⁷ C at 9 cm gives 4 × 10⁴ V
+  assert.ok(Math.abs(potentialAt([{q: 4e-7, x: 0, y: 0}], 0.09, 0) - 4e4) < 100);
+  // Example 2.2: +3 × 10⁻⁸ C and −2 × 10⁻⁸ C, 15 cm apart: V = 0 at 9 cm between them
+  assert.ok(Math.abs(potentialAt([{q: 3e-8, x: 0, y: 0}, {q: -2e-8, x: 0.15, y: 0}], 0.09, 0)) < 1);
+  // Example 2.5: 7 μC and −2 μC, 18 cm apart: U = −0.7 J
+  assert.ok(Math.abs(pairEnergy([{q: 7e-6, x: -0.09, y: 0}, {q: -2e-6, x: 0.09, y: 0}]) + 0.7) < 0.01);
+  assert.match(facts({verb: 'potential', show: 'assemble', charges: [{q: 7e-6, x: -0.09, y: 0}, {q: -2e-6, x: 0.09, y: 0}]}), /U = -0\.699 J/);
+  // Example 2.7: three 10 μF in series, one across them: 13.3 μF, 500 V
+  assert.match(facts({verb: 'capacitor', show: 'combine', kind: 'series', caps: [1e-5, 1e-5, 1e-5], across: 1e-5, V: 500}), /13\.3 μF/);
+  assert.ok(Math.abs(seriesC([1e-5, 1e-5, 1e-5]) - 1e-5 / 3) < 1e-9);
+  // Example 2.9: 900 pF to 100 V stores 4.5 × 10⁻⁶ J
+  assert.match(facts({verb: 'capacitor', show: 'charging', C: 9e-10, V: 100}), /4\.5 × 10⁻⁶ J/);
+  // Example 2.8: K = 6, 6 × 10⁻³ m², 3 mm: 18 pF rises to 106 pF
+  assert.match(facts({verb: 'capacitor', show: 'insert', A: 6e-3, d: 3e-3, K: 6, V: 100}), /17\.7 pF rises to 106 pF/);
+  // a dipole's V vanishes on its equator
+  assert.ok(Math.abs(potentialAt([{q: 1e-9, x: 0.01, y: 0}, {q: -1e-9, x: -0.01, y: 0}], 0, 0.2)) < 1e-9);
+  // equipotentials of a point charge are circles of the right radius
+  const paths = contour((x, y) => potentialAt([{q: 1e-9, x: 0, y: 0}], x, y), 90, 0.3, 0.3);
+  assert.equal(paths.length, 1);
+  for (const p of paths[0]) assert.ok(Math.abs(Math.hypot(p[0], p[1]) - 8.988e9 * 1e-9 / 90) < 0.003);
+  // compared capacitors share a drawn gap
+  const near = {verb: 'capacitor', show: 'plates', d: 1e-3}, far = {verb: 'capacitor', show: 'plates', d: 2e-3};
+  shareCapacitorScale([near, far]);
+  const gap = (o: any) => { const r = (compile({...o, illustrative: true} as never) as any).scene.props; return r.find((p: any) => p.id === 'minus').x - r.find((p: any) => p.id === 'plus').x; };
+  assert.ok(Math.abs((gap(far) + 0) / (gap(near) + 0) - 2) < 0.15);
+  // errors a planner can act on
+  assert.ok((compile({verb: 'capacitor', show: 'combine', caps: [1e-6]} as never) as any).errors.length >= 2);
+  assert.ok((compile({verb: 'potential', show: 'system', charges: [{q: 1, x: 0, y: 0}], at: [0, 0]} as never) as any).errors.join().includes('on a charge'));
 });

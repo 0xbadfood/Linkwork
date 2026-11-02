@@ -6,6 +6,7 @@ import type {Prop, Scene, ScenePart} from './scene.ts';
 import type {Vec} from './vec.ts';
 import {shareWaveScale} from './verbs/waves.ts';
 import {shareElectricScale} from './verbs/electric.ts';
+import {shareCapacitorScale} from './verbs/potential.ts';
 
 type Box = [number, number, number, number];
 export type PartSpec = {id: string; box?: Box; spec?: {verb: string; [k: string]: unknown}; scene?: Scene;
@@ -71,6 +72,7 @@ export function compose(c: CompoundSpec, compile: (spec: {verb: string}) => {sce
   const specs = new Map(c.parts.map(p => [p.id, p.spec ? structuredClone(p.spec) : undefined]));
   shareWaveScale([...specs.values()]);
   shareElectricScale([...specs.values()]);
+  shareCapacitorScale([...specs.values()]);
   const build = (p: PartSpec): string[] => {
     const box = p.box ?? [0, 0, W, H];
     if (p.scene) { scenes.set(p.id, p.scene); return []; }

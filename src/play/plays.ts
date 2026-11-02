@@ -184,6 +184,24 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.P[0] - a.O[0], n(v, 'x') / 100 - 0.15]]; },
   },
+  {
+    id: 'zero-potential', chapter: 'leph1-02', title: 'Find where the potential vanishes',
+    intro: 'A +30 nC and a −20 nC charge, 15 cm apart (the book\'s Example 2.2). Move P along the line between them. V adds with signs, so somewhere it comes to zero, though the field there does not.',
+    controls: [{id: 'x', label: 'P from the +30 nC charge', kind: 'slider', min: 3, max: 12, step: 1, unit: 'cm', start: 4}],
+    spec: v => ({verb: 'potential', show: 'system', title: 'Potential on the line', charges: [{q: 3e-8, x: -0.075, y: 0, name: '+30 nC'}, {q: -2e-8, x: 0.075, y: 0, name: '−20 nC'}], at: [n(v, 'x') / 100 - 0.075, 0], reach: 0.11}),
+    setup: 1,
+    reading: v => { const x = n(v, 'x') / 100, V = 8.988e9 * (3e-8 / x - 2e-8 / (0.15 - x)); return [['Potential at P', `${fixed(V, 0)} V`]]; },
+    predict: {
+      question: 'Where between the charges is V zero?',
+      options: [{text: 'Nearer the −20 nC charge', right: true}, {text: 'Exactly halfway'}, {text: 'Nearer the +30 nC charge'}],
+      runs: [{x: 7}, {x: 9}],
+      why: 'V goes as q/r. The smaller charge needs a smaller distance to match: 30/x = 20/(15 − x) gives x = 9 cm from +30 nC, 6 cm from −20 nC.',
+    },
+    challenges: [
+      {text: 'Put P where the potential is zero.', start: {x: 4}, hit: v => n(v, 'x') === 9, hint: v => (n(v, 'x') < 9 ? 'V is still positive: move toward the negative charge.' : 'V is negative now: move back.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.P[0] - a.O[0], n(v, 'x') / 100 - 0.075]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);
