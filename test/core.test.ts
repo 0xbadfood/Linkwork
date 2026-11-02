@@ -1792,3 +1792,21 @@ test('current gets the book right', async () => {
   for (const show of ['drift', 'wire', 'iv', 'resistivity', 'transmission', 'cell', 'kirchhoff', 'bridge']) assert.ok((compile({verb: 'current', show} as never) as any).scene, show);
   assert.ok((compile({verb: 'current', show: 'kirchhoff', branches: [{R: 1}]} as never) as any).errors.length);
 });
+
+test('magnetic_matter gets the book right', async () => {
+  const {torqueOf, energyOf, coreOf, alignedShare, stream, matterErrors} = await import('../src/verbs/matter.ts');
+  const facts = (spec: unknown) => ((compile(spec as never) as any).scene.meta.facts as string[]).join(' | ');
+  assert.ok(Math.abs(torqueOf(.06, .44, 90) - .0264) < 1e-9); assert.ok(Math.abs(torqueOf(.06, .44, 0)) < 1e-9);
+  assert.ok(energyOf(.06, .44, 0) < 0 && energyOf(.06, .44, 180) > 0 && Math.abs(energyOf(.06, .44, 90)) < 1e-9);
+  const c = coreOf(1000, 2, 400);                       // Example 5.5: H = 2 × 10³, B = 1.0 T, M ≈ 8 × 10⁵
+  assert.equal(c.H, 2000); assert.equal(c.M, 798000); assert.ok(Math.abs(c.B - 1.005) < .001);
+  assert.equal(alignedShare(1, 100) / alignedShare(1, 200), 2);   // Curie
+  assert.ok(stream(0, .5, 9) > .5 && stream(0, .5, .35) < .5, 'a ferromagnet draws lines in, a diamagnet pushes them out');
+  assert.match(facts({verb: 'magnetic_matter', show: 'gauss'}), /lines out: 10, lines in: 10/);
+  assert.match(facts({verb: 'magnetic_matter', show: 'gauss', source: 'charge'}), /lines in: 0/);
+  for (const show of ['needle', 'cut', 'gauss', 'core', 'response', 'atoms', 'domains', 'hysteresis']) assert.ok((compile({verb: 'magnetic_matter', show} as never) as any).scene, show);
+  for (const kind of ['paramagnetic', 'ferromagnetic']) assert.ok((compile({verb: 'magnetic_matter', show: 'response', kind} as never) as any).scene, kind);
+  assert.ok(matterErrors({verb: 'magnetic_matter', show: 'needle', angle: 200}).length);
+  assert.ok(matterErrors({verb: 'magnetic_matter', show: 'atoms', kind: 'soft'}).length);
+  assert.ok(matterErrors({verb: 'magnetic_matter', show: 'core', mur: .5}).length);
+});

@@ -36,6 +36,7 @@ import {wave, waveErrors, type WaveSpec} from './waves.ts';
 import {electric, electricErrors, type ElectricSpec} from './electric.ts';
 import {current, currentErrors, type CurrentSpec} from './current.ts';
 import {movingCharges, movingErrors, type MovingSpec} from './moving.ts';
+import {magneticMatter, matterErrors, type MatterSpec} from './matter.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -119,6 +120,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'work done by a constant force, computed: a body pulled or pushed through a displacement d at θ to the motion, with kinetic friction; W = F d cos θ (positive, zero or negative), −f d for friction, none for N and mg; bars of the net work done and the kinetic energy grow together (the work-energy theorem); the final speed, time and power'} as Verb<WorkSpec>,
   potential: {errors: potentialErrors, compile: potential,
     about: 'electrostatic potential, computed: work against a field, V and E against r, a dipole\'s V, V adding over charges, equipotentials traced from V, E = −δV/δl, energy of assembled charges, the electron volt, U = −pE cos θ'},
+  magnetic_matter: {errors: matterErrors, compile: magneticMatter,
+    about: 'Class 12 magnetism and matter, computed: a needle in a field with τ = mB sin θ and its energy curve, a cut magnet, Gauss\'s law with lines traced through a closed surface, a solenoid\'s core with H, M and B, field lines in dia-, para- and ferromagnetic bars, atomic moments and Curie\'s law, domains, and a sketch of the hysteresis loop'},
   moving_charges: {errors: movingErrors, compile: movingCharges,
     about: 'Class 12 moving charges and magnetism, computed: F = qv × B in 3-D, the force on a wire against its weight, circle and helix paths, Biot–Savart, a loop on its axis, Ampère round a wire, the solenoid, parallel currents, torque on a coil, the moving coil galvanometer with shunt and series R'},
   current: {errors: currentErrors, compile: current,

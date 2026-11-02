@@ -257,6 +257,45 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.wire[1] - a.force[1], .98 * n(v, 'I')]]; },
   },
+  {
+    id: 'turn-the-needle', chapter: 'leph1-05', title: 'Turn the needle',
+    intro: 'A needle of moment 0.06 A m² sits in a field of 0.44 T. Turn it and watch its energy move along the curve.',
+    controls: [{id: 'angle', label: 'Angle to the field', kind: 'slider', min: 0, max: 180, step: 15, unit: '°', start: 60}],
+    spec: v => ({verb: 'magnetic_matter', show: 'needle', title: 'A needle in a field', m: 0.06, B: 0.44, angle: n(v, 'angle')}),
+    setup: 0,
+    reading: v => [['Torque', `${fixed(.0264 * Math.sin(n(v, 'angle') * Math.PI / 180), 4)} N m`], ['Energy', `${fixed(-.0264 * Math.cos(n(v, 'angle') * Math.PI / 180), 4)} J`]],
+    predict: {
+      question: 'At which angle does the field twist the needle hardest?',
+      options: [{text: '90°', right: true}, {text: '0°'}, {text: '180°'}],
+      runs: [{angle: 0}, {angle: 90}],
+      why: 'τ = mB sin θ is largest at 90°. At 0° and 180° there is no twist at all, though only 0° is stable.',
+    },
+    challenges: [
+      {text: 'Find the lowest energy.', start: {angle: 90}, hit: v => n(v, 'angle') === 0, hint: v => 'Turn the needle toward the field.'},
+      {text: 'Find the angle with no torque and the highest energy.', start: {angle: 45}, hit: v => n(v, 'angle') === 180, hint: v => 'It balances, but one nudge would flip it.'},
+      {text: 'Make the torque half its largest value, past 90°.', start: {angle: 90}, hit: v => n(v, 'angle') === 150, hint: v => (n(v, 'angle') < 150 ? 'sin θ is still above a half: turn further.' : 'sin θ is below a half: turn back.')},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.state[1] - a.highest[1], .0264 * (1 + Math.cos(n(v, 'angle') * Math.PI / 180))]]; },
+  },
+  {
+    id: 'cool-the-sample', chapter: 'leph1-05', title: 'Cool the sample',
+    intro: 'A paramagnetic sample sits in a field of 1 T. Cool it or warm it, and watch thermal motion lose to the field.',
+    controls: [{id: 'T', label: 'Temperature', kind: 'slider', min: 50, max: 400, step: 50, unit: 'K', start: 300}],
+    spec: v => ({verb: 'magnetic_matter', show: 'atoms', title: 'A paramagnet', kind: 'paramagnetic', B: 1, T: n(v, 'T')}),
+    setup: 5,
+    reading: v => [['M compared with 400 K', `${fixed(400 / n(v, 'T'), 1)} times`]],
+    predict: {
+      question: 'You cool the sample from 200 K to 100 K. What happens to its magnetisation?',
+      options: [{text: 'It doubles', right: true}, {text: 'It halves'}, {text: 'Nothing: the field is the same'}],
+      runs: [{T: 200}, {T: 100}],
+      why: 'M ∝ B/T, Curie\'s law. Half the thermal motion lets twice as many moments line up.',
+    },
+    challenges: [
+      {text: 'Make M twice what it is at 400 K.', start: {T: 400}, hit: v => n(v, 'T') === 200, hint: v => (n(v, 'T') > 200 ? 'Too warm: cool it.' : 'Too cold: warm it.')},
+      {text: 'Make M eight times what it is at 400 K.', start: {T: 400}, hit: v => n(v, 'T') === 50, hint: v => 'Colder still.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.Mbase[1] - a.M[1], Math.min(1, 30 / n(v, 'T'))]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);
