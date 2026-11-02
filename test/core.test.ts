@@ -1,4 +1,4 @@
-import {fieldAt, traceLines} from '../src/verbs/electric.ts';
+import {fieldAt, shareElectricScale, traceLines} from '../src/verbs/electric.ts';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -1667,4 +1667,17 @@ test('electric keeps its point and arrows inside the frame', () => {
       assert.ok(a.x2 >= 0 && a.x2 <= 1920 && a.y1 >= 90 && a.y2 >= 90 && a.y2 <= 1080, JSON.stringify([a.x1, a.y1, a.x2, a.y2]));
     }
   }
+});
+
+test('electric panels side by side share one scale, and a negative sheet pulls inward', () => {
+  const q = [{q: 1e-6, x: 0, y: 0}];
+  const longest = (o: any) => Math.max(...(compile(o as never) as any).scene.props.filter((p: any) => p.type === 'arrow').map((p: any) => Math.hypot(p.x2 - p.x1, p.y2 - p.y1)));
+  const near = {verb: 'electric', show: 'superposition', charges: q, at: [0.25, 0]}, far = {...near, at: [0.5, 0]};
+  shareElectricScale([near, far]);
+  assert.ok(Math.abs(longest(near) / longest(far) - 4) < 0.01, 'twice as far, a quarter of the field');
+  const sheets = (compile({verb: 'electric', show: 'gauss', system: 'plane', sigma: -1e-6} as never) as any).scene;
+  assert.match(sheets.meta.facts.join(' '), /flux enters/);
+  assert.match((compile({verb: 'electric', show: 'gauss', system: 'point', outside: true} as never) as any).scene.meta.facts.join(' '), /charge outside is 0/);
+  const right = sheets.props.filter((p: any) => p.type === 'arrow' && p.x1 > 960);
+  assert.ok(right.length && right.every((p: any) => p.x2 < p.x1), 'field points in to a negative sheet');
 });

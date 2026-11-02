@@ -27,8 +27,9 @@ export const ELECTRIC_SHOWS = ['rubbing', 'pith', 'electroscope', 'induction', '
 export type ElectricSpec = {verb: 'electric'; show: (typeof ELECTRIC_SHOWS)[number]; q?: number; q1?: number; q2?: number; r?: number; r2?: number; charges?: Charge[];
   at?: [number, number]; quantity?: 'force' | 'field'; test?: number; on?: number; reach?: number; full?: number; rings?: boolean;
   E?: number; d?: number; particle?: 'electron' | 'proton'; field?: 'up' | 'down' | 'uniform' | 'nonuniform'; v0?: number; A?: number; theta?: number; a?: number; place?: 'axis' | 'equator' | 'both';
-  system?: 'point' | 'wire' | 'plane' | 'shell' | 'cylinder'; R?: number; lambda?: number; sigma?: number; inside?: boolean; kind?: 'line' | 'surface' | 'volume'; sign?: 1 | -1; like?: boolean;
-  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+  system?: 'point' | 'wire' | 'plane' | 'shell' | 'cylinder'; R?: number; lambda?: number; sigma?: number; inside?: boolean; outside?: boolean; kind?: 'line' | 'surface' | 'volume'; sign?: 1 | -1; like?: boolean;
+  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean;
+  span?: number; closest?: number}; // set by shareElectricScale: the largest distance or radius among compared panels, and the closest unlike pair
 
 const K = 8.988e9, EPS0 = 8.854e-12, QE = 1.602e-19, ME = 9.11e-31, MP = 1.673e-27;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -117,6 +118,38 @@ export function electricErrors(s: ElectricSpec): string[] {
   return e;
 }
 
+// Panels side by side are compared, so they share one scale: near and far, or small and large charges, must not come out identical.
+export function shareElectricScale(specs: unknown[]) {
+  const all = (specs as ElectricSpec[]).filter(s => s?.verb === 'electric');
+  const pairs = all.filter(s => s.show === 'coulomb');
+  if (pairs.length > 1) {
+    const small = (s: ElectricSpec) => Math.min(s.r ?? 0.1, s.r2 ?? s.r ?? 0.1), force = (s: ElectricSpec) => K * Math.abs((s.q1 ?? 1e-6) * (s.q2 ?? 1e-6)) / small(s) ** 2;
+    const full = Math.max(...pairs.map(force)), span = Math.max(...pairs.map(s => Math.max(s.r ?? 0.1, s.r2 ?? s.r ?? 0.1))), unlike = pairs.filter(s => (s.q1 ?? 1e-6) * (s.q2 ?? 1e-6) < 0);
+    for (const s of pairs) { s.full = Math.max(s.full ?? 0, full); s.span = span; if (unlike.length) s.closest = Math.min(...unlike.map(small)); }
+  }
+  const pictured = all.filter(s => (s.show === 'superposition' || s.show === 'lines') && s.charges?.length);
+  if (pictured.length > 1) {
+    const needed = (s: ElectricSpec) => { const far = Math.max(...[...s.charges!.map(c => [c.x, c.y]), ...(s.at ? [s.at] : [])].flat().map(Math.abs)); return Math.max(s.reach ?? 0, far * (s.reach === undefined ? 1.7 : 1.15)); };
+    const reach = Math.max(...pictured.map(needed));
+    for (const s of pictured) s.reach = reach;
+  }
+  for (const force of [false, true]) {
+    const arrows = all.filter(s => s.show === 'superposition' && s.charges?.length && (s.on !== undefined || s.at) && ((s.on !== undefined || (s.quantity ?? 'field') === 'force') === force));
+    if (arrows.length < 2) continue;
+    const top = (s: ElectricSpec) => {
+      const target = s.on !== undefined ? s.charges![s.on] : undefined, others = target ? s.charges!.filter(c => c !== target) : s.charges!, P = target ? [target.x, target.y] : s.at!;
+      const q0 = target ? target.q : force ? s.test ?? 1 : 1, each = others.map(c => fieldAt([c], P[0], P[1]).map(v => q0 * v));
+      return Math.max(Math.hypot(each.reduce((a, v) => a + v[0], 0), each.reduce((a, v) => a + v[1], 0)), ...each.map(v => Math.hypot(v[0], v[1])));
+    };
+    const full = Math.max(...arrows.map(s => Math.max(s.full ?? 0, top(s))));
+    for (const s of arrows) s.full = full;
+  }
+  for (const system of ['point', 'shell'] as const) {
+    const closed = all.filter(s => s.show === 'gauss' && s.system === system), size = (s: ElectricSpec) => system === 'point' ? s.r ?? 0.1 : s.R ?? 0.1;
+    if (closed.length > 1) { const span = Math.max(...closed.map(size)); for (const s of closed) s.span = span; }
+  }
+}
+
 export function electric(s: ElectricSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles];
@@ -194,8 +227,8 @@ export function electric(s: ElectricSpec): Scene {
     facts.push('electrostatic induction separates charge without contact', 'a neutral body is attracted to a charged one');
   } else if (s.show === 'coulomb') {
     const q1 = s.q1 ?? 1e-6, q2 = s.q2 ?? 1e-6, r = s.r ?? 0.1, r2 = s.r2, like = q1 * q2 > 0, big = Math.max(r, r2 ?? r), small = Math.min(r, r2 ?? r);
-    const F = (d: number) => K * Math.abs(q1 * q2) / (d * d), ppm = bw * 0.62 / big, rad = 24 * k;
-    const longest = like ? bw * 0.17 : Math.min(bw * 0.17, small * ppm / 2 - rad - 8 * k), scale = longest / F(small);
+    const F = (d: number) => K * Math.abs(q1 * q2) / (d * d), ppm = bw * 0.62 / (s.span ?? big), rad = 24 * k;
+    const closest = s.closest ?? (like ? undefined : small), longest = closest === undefined ? bw * 0.17 : Math.min(bw * 0.17, closest * ppm / 2 - rad - 8 * k), scale = longest / (s.full ?? F(small));
     dur = r2 ? 9 : 6;
     const dist = (t: number) => (!r2 ? r : t < 3.5 ? r : t > 5.5 ? r2 : r + (r2 - r) * (t - 3.5) / 2);
     const x1 = (t: number) => cx - dist(t) * ppm / 2, x2 = (t: number) => cx + dist(t) * ppm / 2;
@@ -344,28 +377,33 @@ export function electric(s: ElectricSpec): Scene {
     const sys = s.system!, q = s.q ?? 1e-9, r = s.r ?? 0.1, R = s.R ?? 0.1; dur = 8;
     const dash = {dash: [10 * k, 8 * k]};
     const radial = (c: P2, r0: number, r1: number, count: number, t0 = 1.5) => { for (let i = 0; i < count; i++) { const th = 2 * Math.PI * i / count, a: P2 = [c[0] + r0 * Math.cos(th), c[1] + r0 * Math.sin(th)], b: P2 = [c[0] + r1 * Math.cos(th), c[1] + r1 * Math.sin(th)]; q > 0 ? arrow(a, b, 'accent', 4, on(t0)) : arrow(b, a, 'accent', 4, on(t0)); } };
-    if (sys === 'point') {
-      const G = S * 0.3; charge(cx, cy, q, 22); ring([cx, cy], G, G, 'good', 3, true); radial([cx, cy], G, G + S * 0.13, 12);
+    if (sys === 'point' && s.outside) {
+      const G = S * 0.26, x0 = cx - bw * 0.1, qx = x0 + G + bw * 0.14; charge(qx, cy, q, 22); ring([x0, cy], G, G, 'good', 3, true);
+      for (const f of [-0.45, 0, 0.45]) { const y = cy + f * G, half = Math.sqrt(G * G - (f * G) ** 2), a: P2 = [x0 + half + bw * 0.03, y], b: P2 = [x0 - half - bw * 0.03, y]; q > 0 ? arrow(a, b, 'accent', 4, on(1.5)) : arrow(b, a, 'accent', 4, on(1.5)); }
+      facts.push('flux through the surface from a charge outside is 0: what enters also leaves');
+      story = 'Field from a charge outside crosses the surface, in on one side and out on the other'; second = 'It adds nothing to the total flux: q/ε₀ counts only the charge enclosed';
+    } else if (sys === 'point') {
+      const G = S * 0.3 * (s.span ? Math.max(0.25, r / s.span) : 1); charge(cx, cy, q, 22); ring([cx, cy], G, G, 'good', 3, true); radial([cx, cy], G, G + S * 0.13, 12);
       const E0 = K * q / (r * r); facts.push(`E = kq/r² = ${sci(Math.abs(E0), 'N/C')} at r = ${sci(r, 'm')}`, `φ = q/ε₀ = ${sci(q / EPS0, 'N m²/C')}, whatever the radius`);
-      story = 'E is the same all over a sphere round the charge and leaves it at right angles'; second = 'E × 4πr² = q/ε₀';
+      story = `E is the same all over a sphere round the charge and ${q > 0 ? 'leaves' : 'enters'} it at right angles`; second = 'E × 4πr² = q/ε₀';
     } else if (sys === 'wire') {
       const l = s.lambda ?? 1e-9, G = bw * 0.24, ry = 34 * k, h = bh * 0.3;
-      line([cx, by], [cx, by + bh], 'bad', 9); label(cx + 44 * k, by + 22 * k, 'λ', 'bad', 30);
+      const c = l > 0 ? 'bad' : 'cool'; line([cx, by], [cx, by + bh], c, 9); label(cx + 44 * k, by + 22 * k, 'λ', c, 30);
       ring([cx, cy - h], G, ry, 'good', 3, true); ring([cx, cy + h], G, ry, 'good', 3, true); line([cx - G, cy - h], [cx - G, cy + h], 'good', 3, {style: {stroke: 'good', width: 3 * k, ...dash}}); line([cx + G, cy - h], [cx + G, cy + h], 'good', 3, {style: {stroke: 'good', width: 3 * k, ...dash}});
-      for (const f of [-0.5, 0, 0.5]) for (const side of [-1, 1]) arrow([cx + side * G, cy + f * h], [cx + side * (G + bw * 0.15), cy + f * h], 'accent', 4, on(1.5));
+      for (const f of [-0.5, 0, 0.5]) for (const side of [-1, 1]) { const a: P2 = [cx + side * G, cy + f * h], b: P2 = [cx + side * (G + bw * 0.15), cy + f * h]; l > 0 ? arrow(a, b, 'accent', 4, on(1.5)) : arrow(b, a, 'accent', 4, on(1.5)); }
       facts.push(`E = λ/(2πε₀r) = ${sci(Math.abs(l) / (2 * Math.PI * EPS0 * r), 'N/C')} at r = ${sci(r, 'm')}`, 'no flux through the end caps: E runs along them');
-      story = 'E points straight out from the wire, through the curved side only'; second = 'E × 2πrl = λl/ε₀, so E falls as 1/r';
+      story = `E points straight ${l > 0 ? 'out from' : 'in to'} the wire, through the curved side only`; second = 'E × 2πrl = λl/ε₀, so E falls as 1/r';
     } else if (sys === 'plane') {
       const g = s.sigma ?? 1e-9, wb = bw * 0.26, hb = bh * 0.2;
-      line([cx, by], [cx, by + bh], 'bad', 9); for (let i = 0; i < 8; i++) label(cx + 26 * k, by + bh * (i + .6) / 8, '+', 'bad', 26);
+      const c = g > 0 ? 'bad' : 'cool'; line([cx, by], [cx, by + bh], c, 9); for (let i = 0; i < 8; i++) label(cx + 26 * k, by + bh * (i + .6) / 8, g > 0 ? '+' : '−', c, 26);
       props.push({id: 'box', type: 'rect', x: cx - wb, y: cy - hb, w: 2 * wb, h: 2 * hb, style: {stroke: 'good', width: 3 * k, fill: 'none', ...dash}} as Prop);
-      for (const f of [-0.6, 0, 0.6]) { arrow([cx + wb, cy + f * hb], [cx + wb + bw * 0.14, cy + f * hb], 'accent', 4, on(1.5)); arrow([cx - wb, cy + f * hb], [cx - wb - bw * 0.14, cy + f * hb], 'accent', 4, on(1.5)); }
-      facts.push(`E = σ/2ε₀ = ${sci(Math.abs(g) / (2 * EPS0), 'N/C')}, the same at every distance`, 'flux leaves through both faces, none through the sides');
-      story = 'Flux leaves through both flat faces of the box'; second = 'E × 2A = σA/ε₀: E does not depend on the distance';
+      for (const f of [-0.6, 0, 0.6]) for (const side of [-1, 1]) { const a: P2 = [cx + side * wb, cy + f * hb], b: P2 = [cx + side * (wb + bw * 0.14), cy + f * hb]; g > 0 ? arrow(a, b, 'accent', 4, on(1.5)) : arrow(b, a, 'accent', 4, on(1.5)); }
+      facts.push(`E = σ/2ε₀ = ${sci(Math.abs(g) / (2 * EPS0), 'N/C')}, the same at every distance`, `flux ${g > 0 ? 'leaves' : 'enters'} through both faces, none through the sides`);
+      story = `Flux ${g > 0 ? 'leaves' : 'enters'} through both flat faces of the box`; second = 'E × 2A = σA/ε₀: E does not depend on the distance';
     } else if (sys === 'shell') {
-      const Rp = S * 0.26, inside = s.inside === true, G = inside ? Rp * 0.55 : Rp * 1.35;
+      const Rp = S * 0.26 * (s.span ? Math.max(0.25, R / s.span) : 1), inside = s.inside === true, G = inside ? Rp * 0.55 : Rp * 1.35;
       ring([cx, cy], Rp, Rp, 'bad', 7);
-      for (let i = 0; i < 12; i++) { const th = i * Math.PI / 6; label(cx + (Rp + 2 * k) * Math.cos(th), cy + (Rp + 2 * k) * Math.sin(th) + 8 * k, '+', 'paper', 22); }
+      for (let i = 0; i < 12; i++) { const th = i * Math.PI / 6; label(cx + (Rp + 2 * k) * Math.cos(th), cy + (Rp + 2 * k) * Math.sin(th) + 8 * k, q > 0 ? '+' : '−', 'paper', 22); }
       ring([cx, cy], G, G, 'good', 3, true);
       if (!inside) radial([cx, cy], G, G + S * 0.1, 12);
       facts.push(inside ? 'inside the shell E = 0: the surface encloses no charge' : `outside, E = kq/r² = ${sci(K * Math.abs(q) / (r * r), 'N/C')} at r = ${sci(r, 'm')}, as if all charge were at the centre`, `R = ${sci(R, 'm')}`);
