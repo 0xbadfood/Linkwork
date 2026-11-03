@@ -60,6 +60,18 @@ test('the energy ladder gets hydrogen right', () => {
   assert.equal(wavelengthColour(656.4), '#ff0000');
 });
 
+test('the energy ladder figure stays below the title band on the highest rung it reaches, rungs at true energies', async () => {
+  // 2026-11-04, leph2-04 C4: lifted to n = 4, the figure's head and its e⁻ were in the film's title band
+  const {compile} = await import('../src/index.ts');
+  for (const top of [2, 3, 4, 6]) {
+    const sc: any = compile({verb: 'energy_ladder', start: 1, levels: [1, 2, 3, 4, 5, 6], events: [{at: 2, kind: 'absorb', from: 1, to: top}]} as never).scene;
+    const y = (n: number) => sc.surfaces[n - 1].y;
+    assert.ok(y(top) - 176 * 0.8 - 44 >= 0.1 * 1080 - 1, `standing on n = ${top}, the e⁻ is at ${y(top) - 176 * 0.8 - 44}`);
+    const inf = sc.props.find((p: any) => p.id === 'infinity').y1;
+    assert.ok(Math.abs((y(1) - y(2)) / (y(1) + 3.5 - inf) - .75) < 1e-3, 'E₂ − E₁ is three quarters of the way to 0 eV');
+  }
+});
+
 test('the energy ladder refuses impossible events', () => {
   const bad = compile({verb: 'energy_ladder', events: [{at: 2, kind: 'absorb', from: 2, to: 1}, {at: 3, kind: 'emit', from: 1, to: 9}]} as any);
   assert.equal(bad.scene, undefined);
@@ -1511,6 +1523,15 @@ test('a mark at a large disc is written beside it, not across it', () => {
   const ball = r.scene.props.find((p: any) => p.type === 'circle' && p.r >= 40 && p.style?.fill);
   assert.ok(ball, 'the radiating body is a filled disc');
   for (const p of r.scene.props.filter((q: any) => q.id.endsWith('-label'))) assert.ok(p.x >= ball.x + ball.r, `${p.text} starts at ${p.x}, inside the disc`);
+  // 2026-11-04, leph2-04 C2: "alpha-particle, 2e" and "gold nucleus, Ze" were written across charges of radius 22
+  const c: any = compile({verb: 'electric', show: 'coulomb', q1: 3.2e-19, q2: 1.26e-17, r: 1e-14, illustrative: true,
+    annotate: [{text: 'alpha-particle, 2e', at: 'q1'}, {text: 'gold nucleus, Ze', at: 'q2'}]} as never);
+  const qs = c.scene.props.filter((p: any) => p.type === 'circle' && p.r >= 12 && p.style?.fill).sort((a: any, b: any) => a.x - b.x);
+  for (const [i, id] of [[0, 'note0-label'], [1, 'note1-label']] as const) {
+    const t = c.scene.props.find((p: any) => p.id === id), q = qs[i], w = t.text.length * t.size * .58;
+    const [x0, x1] = t.align === 'end' ? [t.x - w, t.x] : [t.x, t.x + w];
+    assert.ok(x1 <= q.x - q.r || x0 >= q.x + q.r || t.y <= q.y - q.r, `${t.text} [${x0}, ${x1}] at y ${t.y} crosses the charge at ${q.x}±${q.r}`);
+  }
 });
 
 test('Marks: words at a point too narrow to carry them go where the verb says, and none run from a graph into its cylinder', () => {
@@ -2116,6 +2137,32 @@ test('atoms verbs get the book right (leph2-04)', async () => {
   assert.match(facts({verb: 'rutherford', show: 'closest', energy: 7.7}), /29\.5 fm/);
   assert.match(facts({verb: 'bohr', show: 'classical'}), /5\.29 × 10⁻¹¹ m.*13\.6 eV.*2\.19 × 10⁶ m\/s/);
   assert.match(facts({verb: 'bohr', show: 'spectrum'}), /656\.4 nm.*364\.7 nm/);
+  // 2026-11-04, leph2-04 C2: one path at b = 5 fm drew a bracket shorter than its two heads. The bracket's two arrows
+  // never overlap: inside for a readable b, pointing in from outside for a small one
+  for (const impacts of [[2], [5], [60], undefined]) {
+    const sc = compile({verb: 'rutherford', show: 'scattering', energy: 5.5, ...(impacts ? {impacts} : {})} as any).scene!;
+    const br = (sc.props as any[]).filter(p => p.type === 'arrow' && p.x1 === p.x2);
+    assert.equal(br.length, 2, JSON.stringify(impacts));
+    const span = (a: any) => [Math.min(a.y1, a.y2), Math.max(a.y1, a.y2)];
+    const [a, b] = br.map(span).sort((p, q) => p[0] - q[0]);
+    const inside = a[0] === b[0] && a[1] === b[1] && a[1] - a[0] >= 40, outside = a[1] <= b[0] + 1e-6 && Math.min(a[1] - a[0], b[1] - b[0]) >= 25;
+    assert.ok(inside || outside, `${JSON.stringify(impacts)}: ${JSON.stringify(br.map(span))}`);
+  }
+  // v and the Coulomb pull stayed at the top while the electron went round, v against its
+  // motion. Both arrows start on the electron at every key; v points where it goes next, the pull at the proton
+  {
+    const sc = compile({verb: 'bohr', show: 'classical'} as any).scene!, props = sc.props as any[];
+    const e = props.find(p => p.id === 'electron'), arrows = props.filter(p => p.type === 'arrow');
+    assert.equal(arrows.length, 2);
+    const pr = (sc.meta as any).anchors.proton;
+    e.keys.x.forEach(([t, x]: number[], i: number) => {
+      const y = e.keys.y[i][1], [nx, ny] = [e.keys.x[(i + 1) % e.keys.x.length][1], e.keys.y[(i + 1) % e.keys.y.length][1]];
+      for (const a of arrows) { near(a.keys.x1[i][1] + 1, x + 1, 1e-6); near(a.keys.y1[i][1] + 1, y + 1, 1e-6); assert.equal(a.keys.x1[i][0], t); }
+      const dir = arrows.map(a => [a.keys.x2[i][1] - x, a.keys.y2[i][1] - y]);
+      if (i + 1 < e.keys.x.length) assert.ok(dir[0][0] * (nx - x) + dir[0][1] * (ny - y) > 0, `v points along the motion at t=${t}`);
+      assert.ok(dir[1][0] * (pr[0] - x) + dir[1][1] * (pr[1] - y) > 0, `the pull points at the proton at t=${t}`);
+    });
+  }
   // one scale: with span held, the drawn d is in proportion to the true one (the play's probe)
   const drawn = (K: number) => { const a = (compile({verb: 'rutherford', show: 'closest', energy: K, span: 120} as any).scene!.meta as any).anchors; return a.nucleus[0] - a.alpha[0]; };
   near(drawn(3) / drawn(6), 2);

@@ -180,12 +180,16 @@ export function rutherford(s: RutherfordSpec): Scene {
       label(lx, ly, num ? `θ = ${Math.round(deg(th))}°` : 'θ', tones[j], 22, halo(k, tones[j], {show: [6.4, 1e9]}));
       facts.push(`b = ${sig(b)} fm: θ = ${Math.round(deg(th))}°`);
     });
-    // b of the second path, as a measuring bracket at the start
-    const bb = bs.find(b => b > 0);
+    // b as a measuring bracket at the start, on the first path tall enough to read; a b too small for two heads between
+    // them (5 fm against d = 41 fm, leph2-04 C2, 2026-11-04) is marked as a dimension, its arrows pointing in from outside
+    const pos = bs.filter(b => b > 0), bb = pos.find(b => b * sc >= 40 * k) ?? pos[pos.length - 1];
     if (bb !== undefined) {
-      const x = bx + bw * .22;
-      arrow([x, cy], [x, cy - bb * sc], 'muted', 2.5, {show: [.5, 1e9]}); arrow([x, cy - bb * sc], [x, cy], 'muted', 2.5, {show: [.5, 1e9]});
-      label(x + 12 * k, cy - bb * sc / 2 + 8 * k, 'b', 'muted', 24, {align: 'start', show: [.5, 1e9]});
+      const x = bx + bw * .22, h = bb * sc, at = {show: [.5, 1e9]};
+      if (h >= 40 * k) { arrow([x, cy], [x, cy - h], 'muted', 2.5, at); arrow([x, cy - h], [x, cy], 'muted', 2.5, at); }
+      else { arrow([x, cy + 30 * k], [x, cy], 'muted', 2.5, at); arrow([x, cy - h - 30 * k], [x, cy - h], 'muted', 2.5, at); }
+      // beside the bracket, or under the axis by the lower arrow when the gap is too narrow for the letter
+      label(x + 12 * k, h >= 40 * k ? cy - h / 2 + 8 * k : cy + 28 * k, 'b', 'muted', 24, {align: 'start', ...at});
+      anchors.b = [x, cy - h / 2];
     }
     label(bx + bw, by + bh - 4 * k, num ? `α at ${sig(K)} MeV; scale: ${sig(2 * L, 2)} fm across` : '', 'faint', 20, {align: 'end'});
     anchors.nucleus = [cx, cy];
@@ -276,10 +280,17 @@ export function bohr(s: BohrSpec): Scene {
     const r = s.radius ?? E * E / (8 * Math.PI * EPS0 * (s.energy ?? E1) * E), {v, K, nu} = classical(r), R = Math.min(bw * .3, bh * .36);
     proton(); ring([cx, cy], R, R, 'faint', 2, true);
     dur = 7; orbiter('electron', R, 3.5, Math.PI / 2);
-    // at the top of the circle (shown for the first lap's start): the velocity along it, the pull towards the proton
-    const top: P2 = [cx, cy - R];
-    arrow(top, [cx + R * .55, cy - R], 'good', 4); label(cx + R * .55 + 10 * k, cy - R + 8 * k, 'v', 'good', 26, {align: 'start'});
-    arrow(top, [cx, cy - R * .45], 'bad', 4); label(cx + 12 * k, cy - R * .62, 'Coulomb pull', 'bad', 22, {align: 'start'});
+    // the velocity along the circle and the pull towards the proton ride with the electron (leph2-04 C1 drew them
+    // fixed at the top while it went round, v pointing against its motion); their names sit in a key below
+    const ang = (t: number) => Math.PI / 2 + 2 * Math.PI * t / 3.5, top: P2 = [cx, cy - R];
+    const at = (t: number, rr: number): P2 => [cx + rr * Math.cos(ang(t)), cy - rr * Math.sin(ang(t))];
+    const tip = (t: number): P2 => [at(t, R)[0] - R * .55 * Math.sin(ang(t)), at(t, R)[1] - R * .55 * Math.cos(ang(t))];
+    const ride = (to: (t: number) => P2) => ({keys: {x1: keysOf(dur, t => at(t, R)[0], 48), y1: keysOf(dur, t => at(t, R)[1], 48),
+      x2: keysOf(dur, t => to(t)[0], 48), y2: keysOf(dur, t => to(t)[1], 48)}});
+    arrow(top, tip(0), 'good', 4, ride(tip));
+    arrow(top, at(0, R * .45), 'bad', 4, ride(t => at(t, R * .45)));
+    const ky = cy + R + 44 * k;
+    label(cx - R * .55, ky, 'v, along the orbit', 'good', 22); label(cx + R * .55, ky, 'Coulomb pull', 'bad', 22);
     // K, U and E as bars on one energy scale, zero at the line
     const zx0 = bx + bw * .82, zy = by + bh * .32, sc = bh * .5 / (2 * K), bwid = bw * .045;
     line([zx0 - bwid, zy], [zx0 + 3 * bwid * 1.6, zy], 'ink', 2);

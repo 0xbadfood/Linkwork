@@ -63,9 +63,13 @@ export function energyLadder(spec: LadderSpec): Scene {
   const levels = spec.levels ?? [1, 2, 3, 4, 5, 6];
   const facts = ladderFacts(spec);
   const cx = 0.36 * W, half = 0.07 * W;
-  const yTop = 0.17 * H, yBottom = 0.86 * H;
+  const rung = 7 * k, figureX = cx - 0.012 * W, scale = 0.8 * k, yBottom = 0.86 * H;
+  // The top (0 eV) comes down far enough for the figure, with its e⁻, to stand on the highest rung it reaches below the
+  // film's title band (leph2-04 C4, 2026-11-04: on n = 4 its head was in the band). The rungs keep their true energies.
+  const reached = [spec.start ?? levels[0], ...(spec.events ?? []).map(e => e.to)].filter(n => typeof n === 'number' && n > 0);
+  const fTop = Math.min(...reached.map(n => 1 / (n * n)), 1), room = 0.1 * H + 176 * scale + 44 * k + rung / 2;
+  const yTop = Math.max(0.17 * H, fTop < 1 ? (room - fTop * yBottom) / (1 - fTop) : 0.17 * H);
   const yOf = (n: number) => yTop + (-hydrogenLevel(n) / 13.6) * (yBottom - yTop);
-  const rung = 7 * k, figureX = cx - 0.012 * W, scale = 0.8 * k;
   const stand = (n: number): Vec => [figureX, yOf(n) - rung / 2];
   const body = (n: number) => yOf(n) - 0.45 * 176 * scale;         // where a photon meets the figure: the middle of its body
   const props: Prop[] = [];
