@@ -87,7 +87,7 @@ export function emWaves(s: EmWavesSpec): Scene {
     if (surfaces) {
       ring(P, 22 * k, S * .12, 'accent', 4, false, {show: [1, 1e9]}); label(P[0], wy + S * .12 + 34 * k, 'loop at P', 'accent', 24, {show: [1, 1e9]});
       props.push({id: 'flat', type: 'polyline', points: Array.from({length: 73}, (_, j) => [P[0] + 22 * k * Math.cos(j * Math.PI / 36), wy + S * .12 * Math.sin(j * Math.PI / 36)] as P2), closed: true, style: {fill: 'good', opacity: .25, stroke: 'good', width: 2 * k}, layer: 1, show: [2, 5]} as Prop);
-      label(P[0] + 60 * k, wy - S * .12 - 30 * k, 'flat surface: i passes through', 'good', 24, {align: 'start', show: [2, 5]});
+      label(P[0], wy + S * .12 + 70 * k, 'flat surface: i crosses it', 'good', 24, {show: [2, 5]});
       const pot: P2[] = [...Array.from({length: 19}, (_, j) => { const a = -Math.PI / 2 + Math.PI * j / 18; return [P[0] + (xL + gap * .55 - P[0]) * Math.cos(a), wy + S * .12 * Math.sin(a)] as P2; })];
       poly(pot, 'bad', 4, {show: [5, 8.5]}, true); label(bx + bw * .02, yB + 50 * k, 'pot surface, through the gap: no conduction current', 'bad', 24, {align: 'start', show: [5, 8.5]});
       label(bx + bw * .3, by + bh * .06, '∮B·dl = μ0 i ... or 0?', 'muted', 26, {show: [5, 8.5]});
