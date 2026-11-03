@@ -117,3 +117,7 @@ The first convection pot circulated both cells downward through the middle while
 ## A picture that fits itself hides the physics
 
 Capillary rise looked right in every film, yet a single tube's column stays the same height whatever the radius: the drawing refits to the frame. Nobody notices until a student moves a slider. Fitting suits one still picture; comparing settings needs one fixed scale, so a verb should offer both and a test should measure drawn length against the real quantity across the range.
+
+## Symbol names lose their digits in illustrative mode
+
+Illustrative mode drops any text with an ASCII digit, so a label written φ0, V0 or ν1 vanishes from a film whose narration states no numbers, and a story line that names "100 V" vanishes with it. Write symbol subscripts as Unicode (φ₀, V₀, ν₁), which illustrative keeps, and keep the story and second lines free of numbers; numbers belong in facts and readouts.

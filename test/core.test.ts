@@ -2031,3 +2031,48 @@ test('ray optics verbs get the book right (leph2-01)', async () => {
   assert.match(err({verb: 'optical_instrument', show: 'compound_microscope', fo: 2, fe: 6.25, L: 7}), /lengthen L/);
   assert.match(err({verb: 'optical_instrument', show: 'reflecting_telescope', d: 120}), /d < R1\/2/);
 });
+
+test('dual nature verbs get the book right (leph2-03)', async () => {
+  const dn = await import('../src/verbs/dual-nature.ts');
+  const {compile, check} = await import('../src/index.ts');
+  const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  // Example 11.1: a 6.0 × 10¹⁴ Hz laser of 2.0 mW: E = 3.98 × 10⁻¹⁹ J, 5.0 × 10¹⁵ photons a second
+  near(dn.photonEv(6) * dn.E, 3.98e-19); near(2e-3 / (dn.photonEv(6) * dn.E), 5.0e15);
+  // Example 11.2: caesium, φ₀ 2.14 eV: ν₀ = 5.16 × 10¹⁴ Hz; a stopping potential of 0.60 V means λ = 454 nm
+  near(dn.thresholdNu(2.14), 5.16); near(dn.C / (dn.thresholdNu(2.14 + .6) * 1e14) * 1e9, 454);
+  // Exercise 11.2: caesium at 6 × 10¹⁴ Hz: Kmax 0.345 eV, V₀ 0.345 V, vmax 345 km/s (the book takes h 6.63e-34, e 1.6e-19)
+  near(dn.kmax(6, 2.14), .345, .02); near(dn.vmax(dn.kmax(6, 2.14)), 3.45e5, .02);
+  // Example 11.3: an electron at 5.4 × 10⁶ m/s: 0.135 nm; a 150 g ball at 30 m/s: 1.47 × 10⁻³⁴ m; and λ = 1.227/√V nm
+  near(dn.lambdaOf(dn.ME, 5.4e6) * 1e9, .135); near(dn.lambdaOf(.15, 30), 1.47e-34); near(dn.electronLambdaNm(100), .1227);
+  // the photocurrent: none past the stopping potential, saturation at large accelerating potential, rising in between
+  assert.equal(dn.photocurrent(-1, .8), 0); assert.ok(dn.photocurrent(3, .8) > .99);
+  for (let v = -.8; v < 3; v += .1) assert.ok(dn.photocurrent(v + .1, .8) >= dn.photocurrent(v, .8));
+  const shows: object[] = [{verb: 'photoelectric', show: 'emission'}, {verb: 'photoelectric', show: 'emission', metal: 'sodium', frequency: 5},
+    {verb: 'photoelectric', show: 'apparatus', frequency: 7}, {verb: 'photoelectric', show: 'apparatus', frequency: 7, potential: -.5, intensity: 3},
+    {verb: 'photoelectric', show: 'curves'}, {verb: 'photoelectric', show: 'curves', vary: 'frequency'}, {verb: 'photoelectric', show: 'stopping', metals: ['caesium', 'sodium', 'copper']},
+    {verb: 'photoelectric', show: 'photons', power: 2e-3}, {verb: 'photoelectric', show: 'photons', intensity: 2, wavelength: 400},
+    {verb: 'matter_wave', show: 'electron'}, {verb: 'matter_wave', show: 'electron', speed: 5.4e6}, {verb: 'matter_wave', show: 'scale'}];
+  for (const spec of shows) { const r = compile(spec as any); assert.deepEqual(r.errors, [], JSON.stringify(spec)); assert.deepEqual(check(r.scene!), [], JSON.stringify(spec)); }
+  const facts = (spec: object) => (compile(spec as any).scene!.meta as any).facts.join(' | ');
+  assert.match(facts({verb: 'photoelectric', show: 'photons', power: 2e-3}), /3\.98 × 10⁻¹⁹ J.*5\.03 × 10¹⁵ photons per second/);
+  assert.match(facts({verb: 'photoelectric', show: 'emission', metal: 'sodium', frequency: 5}), /no emission/);
+  assert.match(facts({verb: 'matter_wave', show: 'scale'}), /1\.47 × 10⁻³⁴ m/);
+  assert.match(facts({verb: 'photoelectric', show: 'stopping'}), /slope h\/e = 4\.14 × 10⁻¹⁵ V s/);
+  // a retarding potential beyond V₀ collects no electron; an accelerating one collects them all
+  assert.match(facts({verb: 'photoelectric', show: 'apparatus', frequency: 7, potential: -1}), /0 of 6 electrons/);
+  assert.match(facts({verb: 'photoelectric', show: 'apparatus', frequency: 7, potential: 1}), /6 of 6 electrons/);
+  // the planner's slips are named
+  const err = (spec: object) => compile(spec as any).errors.join(' | ');
+  assert.match(err({verb: 'photoelectric', show: 'apparatus', metal: 'sodium', frequency: 5}), /below sodium's threshold/);
+  assert.match(err({verb: 'photoelectric', show: 'emission', metal: 'gold'}), /metal is one of/);
+  assert.match(err({verb: 'photoelectric', show: 'emission', frequency: 6, wavelength: 500}), /not both/);
+  assert.match(err({verb: 'photoelectric', show: 'emission', frequency: 6e14}), /units of 10\^14 Hz/);
+  assert.match(err({verb: 'photoelectric', show: 'curves', vary: 'frequency', frequencies: [4, 7, 9]}), /above caesium's threshold/);
+  assert.match(err({verb: 'photoelectric', show: 'stopping', potential: 1}), /potential is not used by show stopping/);
+  assert.match(err({verb: 'photoelectric', show: 'emission', frequency: 30}), /Kmax above 5 eV/);
+  assert.match(err({verb: 'matter_wave', show: 'electron', voltage: 1e5}), /20 to 5000 V/);
+  assert.match(err({verb: 'matter_wave', show: 'electron', mass: 1}), /mass is not used/);
+  // illustrative hides every number but keeps the picture and its words
+  const ill = compile({verb: 'photoelectric', show: 'emission', illustrative: true} as any).scene!;
+  for (const p of ill.props) if (p.type === 'text' && p.id !== 'title') assert.doesNotMatch(p.text, /\d/, p.text);
+});

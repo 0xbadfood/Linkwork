@@ -99,6 +99,8 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `diffraction` (trial): the single slit's pattern from (sin β/β)², minima at nλ/a, and the slit cut into halves,
   thirds or quarters that cancel in pairs.
 - `polaroid` (trial): Malus' law with the pass axes in perspective and I against θ, and a polaroid between crossed ones.
+- `photoelectric` (trial): the photoelectric effect from h, e and a metal's work function: the energy picture (Kmax = hν − φ₀, or no emission below ν₀), the apparatus with a retarding potential, photocurrent against collector potential, V₀ against ν (slope h/e), and photons.
+- `matter_wave` (trial): de Broglie's λ = h/p for an electron, drawn to one scale against a crystal's atoms, and a ruler of lengths placing a ball's λ beside a nucleus.
 
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.

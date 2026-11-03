@@ -435,7 +435,31 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors, f = malusAt(n(v, 'theta')); return [[f < 1e-3 ? NaN : a.base[1] - a.bar[1], f]]; },   // crossed: no bar to measure
   },
+  {
+    id: 'photoelectric', chapter: 'leph2-03', title: 'Free an electron from sodium',
+    intro: 'Light falls on sodium, whose work function is 2.75 eV. Each photon gives all its energy hν to one electron. Change the light\'s frequency and see whether the electron gets out, and how much energy it leaves with.',
+    controls: [{id: 'nu', label: 'Frequency ν of the light', kind: 'slider', min: 3, max: 14, step: .1, unit: '× 10¹⁴ Hz', start: 5}],
+    spec: v => ({verb: 'photoelectric', title: 'Light on sodium', show: 'emission', metal: 'sodium', frequency: n(v, 'nu'), top: 6.5}),
+    setup: 1.8,
+    reading: v => { const hv = photonEvAt(n(v, 'nu')), K = hv - 2.75; return [['Photon energy hν', `${fixed(hv, 2)} eV`], ['Kmax = hν − φ₀', K > 0 ? `${fixed(K, 2)} eV` : 'no electron leaves']]; },
+    predict: {
+      question: 'Red light of 4 × 10¹⁴ Hz shines on sodium, very brightly, for a long time. What happens?',
+      options: [{text: 'No electron ever leaves', right: true}, {text: 'Electrons leave once enough energy has built up'}, {text: 'A few slow electrons leave at once'}],
+      runs: [{nu: 4}, {nu: 8}],
+      why: 'An electron takes one photon\'s energy at a time, all of it or none. A 4 × 10¹⁴ Hz photon has 1.65 eV, less than sodium\'s 2.75 eV work function, so no electron gets out, however bright the light or however long it shines. Brighter light only means more such photons.',
+    },
+    challenges: [
+      {text: 'Find the lowest frequency that frees an electron (within 0.1 × 10¹⁴ Hz of the threshold).', start: {nu: 5}, hit: v => { const d = n(v, 'nu') - thresholdAt(2.75); return d > 0 && d <= .1; }, hint: v => 'At the threshold hν equals φ₀: ν₀ = φ₀/h.'},
+      {text: 'Make the fastest electrons leave with Kmax = 1 eV (within 0.05 eV).', start: {nu: 7}, hit: v => Math.abs(photonEvAt(n(v, 'nu')) - 2.75 - 1) < .05, hint: v => 'You need hν = φ₀ + 1 eV = 3.75 eV.'},
+      {text: 'Set a stopping potential of 2 V (within 0.05 V).', start: {nu: 9}, hit: v => Math.abs(photonEvAt(n(v, 'nu')) - 2.75 - 2) < .05, hint: v => 'eV₀ = Kmax, so Kmax must be 2 eV: hν = 4.75 eV.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors, K = photonEvAt(n(v, 'nu')) - 2.75; return [[K <= 0 || !a.kmax ? NaN : a.barrier[1] - a.kmax[1], K]]; },   // below threshold: nothing leaves to measure
+  },
 ];
+
+/** A photon's energy in eV at ν (10¹⁴ Hz), and the threshold ν₀ (10¹⁴ Hz) of a work function in eV (as the photoelectric verb computes them). */
+const photonEvAt = (nu: number) => 6.626e-34 * nu * 1e14 / 1.602e-19;
+const thresholdAt = (phi: number) => phi * 1.602e-19 / 6.626e-34 / 1e14;
 
 /** Malus' law: the share of the light leaving P1 that passes P2 at θ degrees (as the polaroid verb computes it). */
 const malusAt = (theta: number) => Math.cos(theta * Math.PI / 180) ** 2;
