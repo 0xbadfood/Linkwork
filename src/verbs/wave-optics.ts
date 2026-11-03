@@ -38,13 +38,14 @@ export const refractionAngle = (n1: number, n2: number, i: number) => { const s 
 /** Young's fringe width in mm: β = λD/d, λ in nm, D in m, d in mm. */
 export const fringeWidth = (lambdaNm: number, D: number, dMm: number) => lambdaNm * 1e-9 * D / (dMm * 1e-3) * 1e3;
 /** Two-source intensity as a fraction of the brightest, at path difference Δ (in wavelengths): cos²(πΔ). */
-export const twoSource = (delta: number) => Math.cos(Math.PI * delta) ** 2;
+// rounded at 1e-12: a dark fringe is 0, not cos²(2.5π) = 9.4e-32 (leph2-02 C4 printed that on screen)
+export const twoSource = (delta: number) => { const v = Math.cos(Math.PI * delta) ** 2; return v < 1e-12 ? 0 : v; };
 /** The single slit's intensity as a fraction of the centre's, at angle θ (rad), slit a and wavelength λ in the same units. */
 export const singleSlit = (theta: number, a: number, lambda: number) => { const b = Math.PI * a * Math.sin(theta) / lambda; return Math.abs(b) < 1e-9 ? 1 : (Math.sin(b) / b) ** 2; };
 /** Malus: the fraction of the light after P1 that passes P2 at θ degrees. */
-export const malus = (theta: number) => Math.cos(rad(theta)) ** 2;
+export const malus = (theta: number) => { const v = Math.cos(rad(theta)) ** 2; return v < 1e-12 ? 0 : v; };
 /** A polaroid at θ between crossed ones: the fraction of the light after P1 that leaves P3, (1/4) sin² 2θ. */
-export const crossedThree = (theta: number) => Math.sin(rad(2 * theta)) ** 2 / 4;
+export const crossedThree = (theta: number) => { const v = Math.sin(rad(2 * theta)) ** 2 / 4; return v < 1e-12 ? 0 : v; };
 /** The first distance from the centre (in mm) where bright fringes of two wavelengths fall together: m1 λ1 = m2 λ2. */
 export function coincidence(l1: number, l2: number, D: number, d: number) {
   for (let m = 1; m <= 60; m++) { const m2 = m * l1 / l2; if (Math.abs(m2 - Math.round(m2)) < 1e-6) return {m1: m, m2: Math.round(m2), y: m * fringeWidth(l1, D, d)}; }

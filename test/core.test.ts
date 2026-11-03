@@ -1951,6 +1951,7 @@ test('wave optics verbs get the book right (leph2-02)', async () => {
   const wo = await import('../src/verbs/wave-optics.ts');
   const {compile, check} = await import('../src/index.ts');
   const near = (a: number, b: number, tol = .005) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  const facts0 = (spec: object) => (compile(spec as any).scene!.meta as any).facts.join(' | ');
   // Young: d 0.28 mm, D 1.4 m, 600 nm: β 3 mm, the fourth bright fringe 1.2 cm out; 650 and 520 nm (d 2 mm, D 1.2 m): third
   // bright fringe of 650 nm at 1.17 mm, both first together at 1.56 mm; intensity at λ/3 is a quarter of that at λ
   near(wo.fringeWidth(600, 1.4, .28), 3); near(3 * wo.fringeWidth(650, 1.2, 2), 1.17);
@@ -1961,6 +1962,7 @@ test('wave optics verbs get the book right (leph2-02)', async () => {
   assert.ok(wo.refractionAngle(1.5, 1, 30) > 30); assert.ok(Number.isNaN(wo.refractionAngle(1.5, 1, 45)));
   // single slit: the first side maximum near 3λ/2a has about 4.7 % of the centre; polaroids: Malus, and Example 10.2
   near(wo.singleSlit(Math.asin(1.4303 * 600e-6 / .1), .1, 600e-6), .0472, .01);
+  assert.equal(wo.twoSource(2.5), 0); assert.equal(wo.malus(90), 0); assert.doesNotMatch(facts0({verb: 'interference', show: 'intensity', mark: 2.5}), /e-\d/);
   near(wo.malus(60), .25); near(wo.crossedThree(45), .25); assert.ok(wo.crossedThree(30) < .25 && wo.crossedThree(90) < 1e-12);
   // every show compiles cleanly, and the facts carry the book's numbers
   const shows: object[] = [{verb: 'huygens', show: 'spherical'}, {verb: 'huygens', show: 'plane'}, {verb: 'huygens', show: 'lens'}, {verb: 'huygens', show: 'refraction'},
