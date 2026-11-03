@@ -146,7 +146,7 @@ export function induction(s: InductionSpec): Scene {
     }
     if (s.bulb) {   // a small bulb in place of the galvanometer: it glows while the flux changes, as brightly as the rate
       const c0: P2 = [bx + bw * .3, by + bh * .84], r = S * .05;
-      props.push({id: 'glow', type: 'circle', x: c0[0], y: c0[1], r: r * 1.5, style: {fill: 'accent'}, layer: 2, opacity: keysOf(dur, t => Math.min(1, Math.abs(rate(t)) * 1.6))} as Prop);
+      props.push({id: 'glow', type: 'circle', x: c0[0], y: c0[1], r: r * 1.5, style: {fill: 'accent'}, layer: 2, keys: {opacity: keysOf(dur, t => Math.min(1, Math.abs(rate(t)) * 1.6))}} as Prop);
       props.push({id: 'bulb', type: 'circle', x: c0[0], y: c0[1], r, style: {stroke: 'ink', width: 3 * k}, layer: 3} as Prop);
       rect(c0[0] - r * .4, c0[1] + r, r * .8, r * .5, 'muted'); label(c0[0], c0[1] + r * 2.2, 'bulb', 'ink', 24); anchors.bulb = c0;
     } else dial([bx + bw * .3, by + bh * .92], S * .13, rate);

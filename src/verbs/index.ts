@@ -38,6 +38,7 @@ import {current, currentErrors, type CurrentSpec} from './current.ts';
 import {movingCharges, movingErrors, type MovingSpec} from './moving.ts';
 import {magneticMatter, matterErrors, type MatterSpec} from './matter.ts';
 import {induction, inductionErrors, type InductionSpec} from './induction.ts';
+import {ac, acErrors, type AcSpec} from './ac.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -121,6 +122,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'work done by a constant force, computed: a body pulled or pushed through a displacement d at θ to the motion, with kinetic friction; W = F d cos θ (positive, zero or negative), −f d for friction, none for N and mg; bars of the net work done and the kinetic energy grow together (the work-energy theorem); the final speed, time and power'} as Verb<WorkSpec>,
   potential: {errors: potentialErrors, compile: potential,
     about: 'electrostatic potential, computed: work against a field, V and E against r, a dipole\'s V, V adding over charges, equipotentials traced from V, E = −δV/δl, energy of assembled charges, the electron volt, U = −pE cos θ'},
+  ac: {errors: acErrors, compile: ac,
+    about: 'Class 12 alternating current, computed: rotating phasors and their waves for R, L, C and series LCR, rms values, lamps in ac and dc circuits, reactance against frequency, impedance triangle, resonance curves, power factor and its correction, energy in a coil over a cycle, the transformer'},
   induction: {errors: inductionErrors, compile: induction,
     about: 'Class 12 electromagnetic induction, computed: Faraday\'s experiments with a magnet, coil and galvanometer, the tapping key, Φ = BA cos θ, ε = −N dΦ/dt with its graph, Lenz\'s law for a coil and for a loop crossing a field\'s edge, the rod on rails ε = Blv, a turning rod ε = ½Bωl², mutual and self inductance, back emf, ½LI², and the ac generator.'},
   magnetic_matter: {errors: matterErrors, compile: magneticMatter,

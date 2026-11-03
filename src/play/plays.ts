@@ -335,6 +335,46 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.state[1] - a.peak[1], 1 - Math.sin(n(v, 'angle') * Math.PI / 180)]]; },
   },
+  {
+    id: 'tune-the-circuit', chapter: 'leph1-07', title: 'Tune the circuit',
+    intro: 'A series circuit of L = 25.48 mH and C = 796 μF on a source of 283 V peak, whose frequency you can turn, like tuning a radio. Find the station.',
+    controls: [{id: 'nu', label: 'Frequency', kind: 'slider', min: 20, max: 50, step: 1, unit: 'Hz', start: 50}, {id: 'R', label: 'Resistance', kind: 'slider', min: 2, max: 8, step: 1, unit: 'Ω', start: 3}],
+    spec: v => ({verb: 'ac', show: 'resonance', title: 'Tuning a series LCR', L: 25.48e-3, C: 796e-6, R: n(v, 'R'), vm: 283, nu: n(v, 'nu'), full: 141.5}),
+    setup: 8,
+    reading: v => { const w = 2 * Math.PI * n(v, 'nu'), xl = w * 25.48e-3, xc = 1 / (w * 796e-6), z = Math.hypot(n(v, 'R'), xl - xc); return [['XL', `${fixed(xl, 1)} Ω`], ['XC', `${fixed(xc, 1)} Ω`], ['Impedance', `${fixed(z, 1)} Ω`], ['Peak current', `${fixed(283 / z, 1)} A`]]; },
+    predict: {
+      question: 'You double the resistance. What happens to the frequency of the peak?',
+      options: [{text: 'It stays where it is', right: true}, {text: 'It moves higher'}, {text: 'It moves lower'}],
+      runs: [{nu: 35, R: 3}, {nu: 35, R: 6}],
+      why: 'The peak is where XL = XC, and that depends only on L and C: ω₀ = 1/√(LC). More resistance lowers the peak and flattens it, but does not move it.',
+    },
+    challenges: [
+      {text: 'Find the resonance: the largest current at R = 3 Ω.', start: {nu: 50, R: 3}, hit: v => n(v, 'nu') === 35 && n(v, 'R') === 3, hint: v => (n(v, 'nu') > 35 ? 'XL is larger than XC: lower the frequency.' : 'XC is larger than XL: raise the frequency.')},
+      {text: 'At 50 Hz, the book\'s Example 7.8: make the impedance 5 Ω.', start: {nu: 50, R: 8}, hit: v => n(v, 'nu') === 50 && n(v, 'R') === 3, hint: v => 'XL − XC is 4 Ω here: which R gives a 3-4-5 triangle?'},
+      {text: 'Make the peak current more than 100 A.', start: {nu: 35, R: 8}, hit: v => { const w = 2 * Math.PI * n(v, 'nu'); return 283 / Math.hypot(n(v, 'R'), w * 25.48e-3 - 1 / (w * 796e-6)) > 100; }, hint: v => 'Stay at resonance: there the current is limited only by R.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors, w = 2 * Math.PI * n(v, 'nu'); return [[a.base[1] - a.state[1], 283 / Math.hypot(n(v, 'R'), w * 25.48e-3 - 1 / (w * 796e-6))]]; },
+  },
+  {
+    id: 'wind-the-transformer', chapter: 'leph1-07', title: 'Wind the transformer',
+    intro: 'A primary of 100 turns takes 10 A at 220 V. Wind the secondary yourself, and see what you get, and what you pay for it.',
+    controls: [{id: 'Ns', label: 'Turns on the secondary', kind: 'slider', min: 25, max: 400, step: 25, unit: 'turns', start: 200}],
+    spec: v => ({verb: 'ac', show: 'transformer', title: 'Winding a transformer', Np: 100, Ns: n(v, 'Ns'), Vp: 220, Ip: 10, full: 880}),
+    setup: 8,
+    reading: v => { const r = n(v, 'Ns') / 100; return [['Output voltage', `${fixed(220 * r, 0)} V`], ['Output current', `${fixed(10 / r, 2)} A`], ['Output power', '2200 W']]; },
+    predict: {
+      question: 'You double the turns on the secondary. What happens to the power you get out?',
+      options: [{text: 'It stays the same', right: true}, {text: 'It doubles'}, {text: 'It halves'}],
+      runs: [{Ns: 100}, {Ns: 200}],
+      why: 'Twice the turns give twice the voltage, but half the current. A transformer cannot make energy: an ideal one hands on all the power it takes, and no more.',
+    },
+    challenges: [
+      {text: 'Make 440 V for a long-distance line.', start: {Ns: 100}, hit: v => n(v, 'Ns') === 200, hint: v => 'Vs/Vp = Ns/Np.'},
+      {text: 'Step down to 55 V.', start: {Ns: 200}, hit: v => n(v, 'Ns') === 25, hint: v => 'A quarter of the voltage takes a quarter of the turns.'},
+      {text: 'Get 40 A out.', start: {Ns: 200}, hit: v => n(v, 'Ns') === 25, hint: v => 'More current means less voltage: fewer turns.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.vsbase[1] - a.vs[1], 220 * n(v, 'Ns') / 100]]; },
+  },
 ];
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);

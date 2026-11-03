@@ -1793,6 +1793,23 @@ test('current gets the book right', async () => {
   assert.ok((compile({verb: 'current', show: 'kirchhoff', branches: [{R: 1}]} as never) as any).errors.length);
 });
 
+test('ac gets the book right', async () => {
+  const {acErrors, ac, reactanceL, reactanceC, seriesOf, resonantOmega, transformerOf, addPhasors, AC_SHOWS} = await import('../src/verbs/ac.ts');
+  const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  near(reactanceL(25e-3, 50), 7.85); near(220 / reactanceL(25e-3, 50), 28);                       // Example 7.2
+  near(reactanceC(15e-6, 50), 212); near(220 / reactanceC(15e-6, 50), 1.04);                      // Example 7.4
+  const e76 = seriesOf(200, 0, reactanceC(15e-6, 50)); near(e76.Z, 291.5); near(220 / e76.Z * 200, 151);   // Example 7.6
+  const e78 = seriesOf(3, reactanceL(25.48e-3, 50), reactanceC(796e-6, 50)); near(e78.Z, 5); near(e78.phi, -53.1); near(e78.pf, .6);   // Example 7.8: φ below zero, the current lags
+  near(resonantOmega(25.48e-3, 796e-6), 222.1);                                                    // Example 7.9
+  near(transformerOf(220, 100, 200, 10).Vs, 440); near(transformerOf(220, 100, 200, 10).Is!, 5);
+  near(addPhasors(10, 10, 90).a, 14.14); near(addPhasors(10, 10, 90).phase, 45);
+  assert.equal(seriesOf(0, 10, 0).phi, -90); assert.equal(seriesOf(0, 0, 10).phi, 90);             // L lags, C leads
+  for (const show of AC_SHOWS) { assert.deepEqual(acErrors({verb: 'ac', show}), [], show); const sc = ac({verb: 'ac', show}); assert.ok(sc.props.length > 5, show); }
+  assert.ok(acErrors({verb: 'ac', show: 'circuit', iron: true, elements: ['R']}).length); assert.ok(acErrors({verb: 'ac', show: 'nope' as never}).length);
+  const texts = (sc: {props: unknown[]}) => (sc.props as {text?: string}[]).map(p => p.text ?? '').join(' | ');
+  assert.ok(texts(ac({verb: 'ac', show: 'rms', V: 220, P: 100})).includes('311 V')); assert.ok(texts(ac({verb: 'ac', show: 'rms', V: 220, P: 100})).includes('484 Ω'));
+});
+
 test('an open coil and other loops, by Lenz and by the edge they cut', async () => {
   const {induction, inductionErrors, openPlusEnd, chordAt, loopOutline} = await import('../src/verbs/induction.ts');
   assert.equal(openPlusEnd('N', 'toward'), 'far'); assert.equal(openPlusEnd('N', 'away'), 'near'); assert.equal(openPlusEnd('S', 'toward'), 'near');
