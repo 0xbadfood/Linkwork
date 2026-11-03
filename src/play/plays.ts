@@ -415,7 +415,30 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.point[0] - a.origin[0], n(v, 'i')]]; },
   },
+  {
+    id: 'malus', chapter: 'leph2-02', title: 'Turn the second polaroid',
+    intro: 'Unpolarised light passes a polaroid P1 and leaves polarised along its pass axis. Turn a second polaroid, P2, and watch how much light gets through it.',
+    controls: [{id: 'theta', label: 'Angle θ between the pass axes', kind: 'slider', min: 0, max: 180, step: 1, unit: '°', start: 0}],
+    spec: v => ({verb: 'polaroid', title: 'Two polaroids', show: 'malus', angle: n(v, 'theta')}),
+    setup: .5,
+    reading: v => [['Angle θ', `${n(v, 'theta')}°`], ['Light through P2', `${fixed(100 * malusAt(n(v, 'theta')), 0)}% of what leaves P1`]],
+    predict: {
+      question: 'You turn P2 from 0° to 180°. What does the light coming through it do?',
+      options: [{text: 'It fades to darkness at 90°, then comes back', right: true}, {text: 'It fades steadily and is darkest at 180°'}, {text: 'It stays the same: P2 only turns the light'}],
+      runs: [{theta: 0}, {theta: 90}, {theta: 180}],
+      why: 'P2 passes only the part of the field along its own axis, E cos θ, so the intensity goes as cos²θ (Malus\' law). At 90° the axes are crossed and nothing passes; at 180° the axis lines up with P1 again.',
+    },
+    challenges: [
+      {text: 'Let through exactly a quarter of the light leaving P1 (within 1%).', start: {theta: 0}, hit: v => Math.abs(malusAt(n(v, 'theta')) - .25) < .01, hint: v => 'cos²θ = 1/4 means cos θ = 1/2.'},
+      {text: 'Make it dark: let through less than 1%.', start: {theta: 30}, hit: v => malusAt(n(v, 'theta')) < .01, hint: v => 'Cross the pass axes.'},
+      {text: 'Find an angle above 90° that lets through three quarters (within 1%).', start: {theta: 120}, hit: v => n(v, 'theta') > 90 && Math.abs(malusAt(n(v, 'theta')) - .75) < .01, hint: v => 'cos²θ = 3/4 at 30°; past 90° the same light comes back at 180° − 30°.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors, f = malusAt(n(v, 'theta')); return [[f < 1e-3 ? NaN : a.base[1] - a.bar[1], f]]; },   // crossed: no bar to measure
+  },
 ];
+
+/** Malus' law: the share of the light leaving P1 that passes P2 at θ degrees (as the polaroid verb computes it). */
+const malusAt = (theta: number) => Math.cos(theta * Math.PI / 180) ** 2;
 
 /** δ through the play's 60° prism of n = 1.5 (as prism_deviation computes it). */
 const deviationAt = (i: number) => { const r1 = Math.asin(Math.sin(i * Math.PI / 180) / 1.5) * 180 / Math.PI; return i + Math.asin(1.5 * Math.sin((60 - r1) * Math.PI / 180)) * 180 / Math.PI - 60; };

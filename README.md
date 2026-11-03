@@ -92,6 +92,13 @@ A verb turns a short spec into a full scene and checks the spec first.
   minimum deviation with the symmetric ray, n = sin[(A + Dm)/2]/sin(A/2), and the prism in water.
 - `optical_instrument` (trial): the simple and compound microscope, the refracting and the Cassegrain telescope, true
   to scale, with their magnifying powers.
+- `huygens` (trial): secondary wavelets and their envelope from a spherical or plane wavefront, a point source at a
+  lens's focus leaving on plane wavefronts, and the book's constructions of refraction and reflection of a plane wave.
+- `interference` (trial): two sources' bright and dark lines traced, Young's fringes from 4I0 cos²(πxd/λD) with
+  β = λD/d (one or two wavelengths, or white light), and intensity against path difference beside 2I0.
+- `diffraction` (trial): the single slit's pattern from (sin β/β)², minima at nλ/a, and the slit cut into halves,
+  thirds or quarters that cancel in pairs.
+- `polaroid` (trial): Malus' law with the pass axes in perspective and I against θ, and a polaroid between crossed ones.
 
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.

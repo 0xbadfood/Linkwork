@@ -1947,6 +1947,41 @@ test('a picture names no adjustment the narration has not stated, and every card
   assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], formula: true, illustrative: true} as any).errors.join(), /formula shows the numbers/);
 });
 
+test('wave optics verbs get the book right (leph2-02)', async () => {
+  const wo = await import('../src/verbs/wave-optics.ts');
+  const {compile, check} = await import('../src/index.ts');
+  const near = (a: number, b: number, tol = .005) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  // Young: d 0.28 mm, D 1.4 m, 600 nm: β 3 mm, the fourth bright fringe 1.2 cm out; 650 and 520 nm (d 2 mm, D 1.2 m): third
+  // bright fringe of 650 nm at 1.17 mm, both first together at 1.56 mm; intensity at λ/3 is a quarter of that at λ
+  near(wo.fringeWidth(600, 1.4, .28), 3); near(3 * wo.fringeWidth(650, 1.2, 2), 1.17);
+  const c = wo.coincidence(650, 520, 1.2, 2)!; assert.deepEqual([c.m1, c.m2], [4, 5]); near(c.y, 1.56);
+  near(wo.twoSource(1 / 3) / wo.twoSource(1), .25);
+  // refraction: 589 nm into water (1.33) is 443 nm long; sin i / sin r = n2/n1; from glass to air the ray bends away
+  near(589 / 1.33, 442.9); near(Math.sin(40 * Math.PI / 180) / Math.sin(wo.refractionAngle(1, 1.5, 40) * Math.PI / 180), 1.5);
+  assert.ok(wo.refractionAngle(1.5, 1, 30) > 30); assert.ok(Number.isNaN(wo.refractionAngle(1.5, 1, 45)));
+  // single slit: the first side maximum near 3λ/2a has about 4.7 % of the centre; polaroids: Malus, and Example 10.2
+  near(wo.singleSlit(Math.asin(1.4303 * 600e-6 / .1), .1, 600e-6), .0472, .01);
+  near(wo.malus(60), .25); near(wo.crossedThree(45), .25); assert.ok(wo.crossedThree(30) < .25 && wo.crossedThree(90) < 1e-12);
+  // every show compiles cleanly, and the facts carry the book's numbers
+  const shows: object[] = [{verb: 'huygens', show: 'spherical'}, {verb: 'huygens', show: 'plane'}, {verb: 'huygens', show: 'lens'}, {verb: 'huygens', show: 'refraction'},
+    {verb: 'huygens', show: 'refraction', n1: 1.5, n2: 1, i: 30}, {verb: 'huygens', show: 'reflection'}, {verb: 'interference', show: 'ripples'},
+    {verb: 'interference', show: 'ripples', coherent: false}, {verb: 'interference', show: 'young'}, {verb: 'interference', show: 'young', lambda: [650, 520], d: 2, D: 1.2},
+    {verb: 'interference', show: 'young', white: true}, {verb: 'interference', show: 'intensity', mark: 1 / 3}, {verb: 'diffraction', show: 'pattern'},
+    {verb: 'diffraction', show: 'halves', order: 1.5}, {verb: 'polaroid', show: 'malus'}, {verb: 'polaroid', show: 'crossed', angle: 45}];
+  for (const spec of shows) { const r = compile(spec as any); assert.deepEqual(r.errors, [], JSON.stringify(spec)); assert.deepEqual(check(r.scene!), [], JSON.stringify(spec)); }
+  const facts = (spec: object) => (compile(spec as any).scene!.meta as any).facts.join(' | ');
+  assert.match(facts({verb: 'interference', show: 'young'}), /β = λD\/d = 3 mm.*|4β = 12 mm/);
+  assert.match(facts({verb: 'interference', show: 'young', lambda: [650, 520], d: 2, D: 1.2}), /1\.56 mm from the centre: 4 × 650 nm = 5 × 520 nm/);
+  assert.match(facts({verb: 'huygens', show: 'refraction', n1: 1, n2: 1.33, i: 40}), /λ2 = λ1 × n1\/n2 = 0\.752 λ1/);
+  assert.match(facts({verb: 'polaroid', show: 'crossed', angle: 45}), /0\.25 I1/);
+  // the slips a planner makes are named
+  const err = (spec: object) => compile(spec as any).errors.join(' | ');
+  assert.match(err({verb: 'huygens', show: 'refraction', n1: 1.5, n2: 1, i: 50}), /past the critical angle/);
+  assert.match(err({verb: 'interference', show: 'young', white: true, lambda: 600}), /white light has every wavelength/);
+  assert.match(err({verb: 'interference', show: 'ripples', d: 1}), /d is not used by show ripples/);
+  assert.match(err({verb: 'diffraction', show: 'halves', order: 3}), /order is 1, 1\.5 or 2/);
+});
+
 test('ray optics verbs get the book right (leph2-01)', async () => {
   const ro = await import('../src/verbs/ray-optics.ts');
   const {compile} = await import('../src/verbs/index.ts');

@@ -42,6 +42,8 @@ import {ac, acErrors, type AcSpec} from './ac.ts';
 import {emWaves, emWavesErrors, type EmWavesSpec} from './em-waves.ts';
 import {tir, tirErrors, type TirSpec, refractingSurface, refractingSurfaceErrors, type RefractingSurfaceSpec, prismDeviation, prismDeviationErrors, type DeviationSpec,
   opticalInstrument, opticalInstrumentErrors, type InstrumentSpec} from './ray-optics.ts';
+import {huygens, huygensErrors, type HuygensSpec, interference, interferenceErrors, type InterferenceSpec, diffraction, diffractionErrors, type DiffractionSpec,
+  polaroid, polaroidErrors, type PolaroidSpec} from './wave-optics.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -137,6 +139,14 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'Class 12 refraction through a prism, computed: the ray at several angles of incidence with each deviation plotted (the i–δ curve), the minimum deviation with the symmetric ray, n = sin[(A + Dm)/2]/sin(A/2), and the prism in water'} as Verb<DeviationSpec>,
   optical_instrument: {errors: opticalInstrumentErrors, compile: opticalInstrument,
     about: 'Class 12 optical instruments, true to scale: the simple microscope, the compound microscope (objective and eyepiece images), the refracting telescope (angles α and β) and the Cassegrain reflecting telescope, with their magnifying powers'} as Verb<InstrumentSpec>,
+  huygens: {errors: huygensErrors, compile: huygens,
+    about: 'Class 12 Huygens\' principle, computed: secondary wavelets and their envelope from a spherical or plane wavefront, a point source at a lens\'s focus giving plane wavefronts, and the book\'s constructions of refraction (sin i / sin r = v1/v2, a shorter wavelength in the slower medium) and reflection of a plane wave'} as Verb<HuygensSpec>,
+  interference: {errors: interferenceErrors, compile: interference,
+    about: 'Class 12 interference, computed: two coherent sources in water with their bright and dark lines traced, incoherent sources with none, Young\'s double slit with its fringes on the screen and β = λD/d (one or two wavelengths, or white light), and intensity against path difference, 4I0 cos²(φ/2) beside 2I0'} as Verb<InterferenceSpec>,
+  diffraction: {errors: diffractionErrors, compile: diffraction,
+    about: 'Class 12 single-slit diffraction, computed: the screen\'s pattern and intensity curve, minima at θ = nλ/a and a central maximum twice as wide; and the slit cut into halves, thirds or quarters whose paired parts cancel'} as Verb<DiffractionSpec>,
+  polaroid: {errors: polaroidErrors, compile: polaroid,
+    about: 'Class 12 polarisation by polaroids, computed: unpolarised light through P1 (I0/2), then P2 at θ, Malus\' law I = I1 cos²θ, the pass axes in perspective and the intensity against θ; and a polaroid turned between crossed ones, I = (I1/4) sin² 2θ'} as Verb<PolaroidSpec>,
   induction: {errors: inductionErrors, compile: induction,
     about: 'Class 12 electromagnetic induction, computed: Faraday\'s experiments with a magnet, coil and galvanometer, the tapping key, Φ = BA cos θ, ε = −N dΦ/dt with its graph, Lenz\'s law for a coil and for a loop crossing a field\'s edge, the rod on rails ε = Blv, a turning rod ε = ½Bωl², mutual and self inductance, back emf, ½LI², and the ac generator.'},
   magnetic_matter: {errors: matterErrors, compile: magneticMatter,
