@@ -126,14 +126,14 @@ export function kit(s: {width?: number; height?: number; title?: string}) {
     if (name) label(x, y - (r + 14) * k, name, 'ink', 26, extra);
   };
   const keysOf = (end: number, fn: (t: number) => number, per = 24): Key[] => { const m = Math.ceil(end * per); return Array.from({length: m + 1}, (_, i) => { const t = end * i / m; return (i ? [t, fn(t), 'linear'] : [t, fn(t)]) as Key; }); };
-  const finish = (verb: string, spec: never, dur: number, story: string, second: string, facts: string[], anchors: Record<string, P2>, illustrative?: boolean): Scene => {
+  const finish = (verb: string, spec: never, dur: number, story: string, second: string, facts: string[], anchors: Record<string, P2>, illustrative?: boolean, extra: Record<string, unknown> = {}): Scene => {
     const px = fr.px, ptext = panel(W, k); let row = fr.row;
     const say = (i: string, t: string, when: number, extra: Record<string, unknown> = {}) => { props.push(ptext(i, px, row, t, 28 * k, {show: [when, 1e9], ...extra} as never)); row += wrapText(t, 28 * k, W - px - 40 * k).length * 1.28 * 28 * k + 8 * k; };
     say('s1', story, 0.3, {weight: 700});
     if (second) say('s2', second, 1.3, {style: {fill: 'muted'}});
     if (!illustrative) facts.filter(t => /\d/.test(t)).slice(0, 3).forEach((t, i) => say(`f${i}`, t, 2.3 + i * 0.5));
     const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
-    return scene(spec, W, H, dur, plane, props, [], {verb, facts, anchors});
+    return scene(spec, W, H, dur, plane, props, [], {verb, facts, anchors, ...extra});
   };
   return {k, props, bx, by, bw, bh, cx, cy, S, on, arrow, line, poly, label, ring, charge, keysOf, finish};
 }

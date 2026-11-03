@@ -67,7 +67,7 @@ export function emWavesErrors(s: EmWavesSpec): string[] {
 
 export function emWaves(s: EmWavesSpec): Scene {
   const {k, props, bx, by, bw, bh, cx, cy, S, arrow, line, poly, label, ring, charge, keysOf, finish} = kit(s);
-  const facts: string[] = [], anchors: Record<string, P2> = {}; let dur = 10, story = '', second = '', c = 0;
+  const facts: string[] = [], anchors: Record<string, P2> = {}, labelAt: Record<string, P2> = {}; let dur = 10, story = '', second = '', c = 0;
   const id = (p: string) => `em${p}${c++}`, num = !s.illustrative;
   const rect = (x: number, y: number, w: number, h: number, fill: string, extra: Record<string, unknown> = {}, stroke = 'ink') => props.push({id: id('r'), type: 'rect', x, y, w, h, style: {fill, stroke, width: 2 * k}, layer: 2, ...extra} as Prop);
   const keyed = (p: Record<string, unknown>) => props.push({id: id('k'), layer: 3, ...p} as Prop);
@@ -132,6 +132,9 @@ export function emWaves(s: EmWavesSpec): Scene {
     arrow([o[0] + L * (sign > 0 ? .78 : .98), by + bh * .08], [o[0] + L * (sign > 0 ? .98 : .78), by + bh * .08], 'good', 5); label(o[0] + L * .88, by + bh * .08 - 18 * k, medium ? 'v' : 'c', 'good', 28);
     const l0 = o[0] + lamPx * 1.25, l1 = l0 + lamPx; if (!medium) { line([l0, o[1] + amp * 1.3], [l1, o[1] + amp * 1.3], 'muted', 2); label((l0 + l1) / 2, o[1] + amp * 1.3 + 32 * k, num ? `λ = ${sig(w.lambda, 'm')}` : 'λ', 'muted', 26); }
     anchors.origin = o; anchors.E = [o[0] + lamPx * .25, o[1] - amp]; anchors.B = [o[0] + lamPx * .25 + oblique[0] * amp * .75, o[1] + oblique[1] * amp * .75]; anchors.travel = [o[0] + L, o[1]];
+    // a note at the travel end or the origin would sit on the axis among the moving fields (leph1-08 C3): its words go
+    // to the clear row above the wave, left of the c arrow
+    labelAt.travel = labelAt.origin = [o[0], by + bh * .08];
     if (medium) { anchors.glass = [glassX, o[1] - amp]; anchors.vacuum = [o[0] + L * .2, o[1] - amp]; }
     if (medium) {
       story = 'In glass the wave keeps its frequency but slows: v = c/√(εr μr), so each wavelength is shorter';
@@ -206,5 +209,5 @@ export function emWaves(s: EmWavesSpec): Scene {
     if (s.band) { const b = BANDS.find(([n]) => n === s.band)!; facts.push(`${b[0]}: λ from ${sig(b[1], 'm')} to ${sig(b[2], 'm')}`); story = `${b[0][0].toUpperCase() + b[0].slice(1)}: ${b[0] === 'visible' ? 'the narrow band the eye detects, 700 to 400 nm' : `λ from ${sig(b[1], 'm')} to ${sig(b[2], 'm')}`}`; }
     anchors.bar = [cx, yb]; anchors.long = [x0, yb];
   }
-  return finish('em_waves', s as never, dur, story, second, facts, anchors, s.illustrative);
+  return finish('em_waves', s as never, dur, story, second, facts, anchors, s.illustrative, {labelAt});
 }

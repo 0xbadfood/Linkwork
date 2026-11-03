@@ -1899,6 +1899,14 @@ test('magnetic_matter gets the book right', async () => {
   assert.ok(matterErrors({verb: 'magnetic_matter', show: 'core', mur: .5}).length);
 });
 
+test('em_waves: a note at the travel end or the origin reads above the wave, not on its axis', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const sc = compile({verb: 'em_waves', show: 'plane', annotate: [{text: 'Speed c, for all wavelengths', at: 'travel'}, {text: 'origin note', at: 'origin'}]} as any).scene!;
+  const o = (sc.meta as any).anchors.origin, notes = sc.props.filter(p => p.id.startsWith('note')) as any[];
+  assert.equal(notes.length, 2);
+  for (const n of notes) assert.ok(n.y < o[1] - sc.height * .2, `${n.text} at y ${n.y}, axis at ${o[1]}`);
+});
+
 test('em_waves gets the book right', async () => {
   const {emWaves, emWavesErrors, EM_SHOWS, axesOf, waveOf, fieldAt, capacitance, bandOf, photonEV, C_LIGHT} = await import('../src/verbs/em-waves.ts');
   const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
