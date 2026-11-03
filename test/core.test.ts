@@ -1944,7 +1944,8 @@ test('a picture names no adjustment the narration has not stated, and every card
   for (const [name, c] of Object.entries(cards(['trusted', 'trial']))) if (!c.numeric) assert.ok(c.fields.illustrative, name);
   const lens = texts({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], illustrative: true});
   assert.match(lens, /Convex lens/); assert.doesNotMatch(lens.replace(/\d?[A-Z][₀-₉0-9]*/g, ''), /\d/);
-  assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], formula: true, illustrative: true} as any).errors.join(), /formula shows the numbers/);
+  // a published spec keeps compiling: illustrative with formula or with is allowed, its numbers hidden
+  assert.deepEqual(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], formula: true, illustrative: true} as any).errors, []);
 });
 
 test('cells: joined cells alone, with the book\'s junctions, up to six (Class 12 cells film)', async () => {

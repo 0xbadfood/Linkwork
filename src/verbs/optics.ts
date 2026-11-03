@@ -125,7 +125,6 @@ export function rayDiagramErrors(s: RaySpec): string[] {
   if (s.window !== undefined && !(Array.isArray(s.window.x) && s.window.x.length === 2 && s.window.x[0] < 0 && s.window.x[1] > 0 && isNum(s.window.y) && s.window.y > 0))
     return ['ray_diagram: window is {x: [from, to] around the mirror or lens at 0, y: how far up and down from the axis}, in cm'];
   if (s.with !== undefined) {
-    if (s.illustrative) return ['ray_diagram: lenses in contact are drawn with their powers; leave illustrative out'];
     const w = s.with as {device?: string; focal_length?: number};
     if (!(s.device === 'convex_lens' || s.device === 'concave_lens')) return ['ray_diagram: with (a lens in contact) goes with a convex or concave lens'];
     if (!w || !['convex_lens', 'concave_lens'].includes(w.device ?? '') || !(isNum(w.focal_length) && w.focal_length >= 1 && w.focal_length <= 200))
@@ -137,7 +136,8 @@ export function rayDiagramErrors(s: RaySpec): string[] {
     return inner.map(x => x.replace('ray_diagram:', 'ray_diagram (the pair in contact):'));
   }
   if (!DEVICES.includes(s.device)) return [`ray_diagram: device is one of ${DEVICES.join(', ')}`];
-  if (s.illustrative) for (const k of ['formula', 'power'] as const) if (s[k]) e.push(`ray_diagram: ${k} shows the numbers; leave it out of an illustrative picture`);
+  // illustrative with formula, power or with: compile's illustrate() hides their numbers; never an error (2026-11-03:
+  // making it one broke published films' specs, and doctor refused to re-render Power of a Lens)
   const plane = s.device === 'plane_mirror', f = s.focal_length;
   if (plane && f !== undefined) e.push('ray_diagram: a plane mirror has no focal_length; leave it out');
   if (!plane && !(isNum(f) && f >= 1 && f <= 200)) return ['ray_diagram: focal_length is the size of f in cm, 1 to 200 (no sign: the device gives it)'];
