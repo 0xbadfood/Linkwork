@@ -45,6 +45,7 @@ import {tir, tirErrors, type TirSpec, refractingSurface, refractingSurfaceErrors
 import {huygens, huygensErrors, type HuygensSpec, interference, interferenceErrors, type InterferenceSpec, diffraction, diffractionErrors, type DiffractionSpec,
   polaroid, polaroidErrors, type PolaroidSpec} from './wave-optics.ts';
 import {photoelectric, photoelectricErrors, type PhotoelectricSpec, matterWave, matterWaveErrors, type MatterWaveSpec} from './dual-nature.ts';
+import {rutherford, rutherfordErrors, type RutherfordSpec, bohr, bohrErrors, type BohrSpec} from './atoms.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -152,6 +153,10 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "Class 12 photoelectric effect, computed from h, e and the metal's work function: the energy picture (hν, φ₀, Kmax = hν − φ₀, or no emission below ν₀), the apparatus of Fig. 11.1 with electrons turned back by a retarding potential, photocurrent against collector potential for three intensities or frequencies, V₀ against ν for metals (slope h/e), and photons (E = hν, N = P/E)"} as Verb<PhotoelectricSpec>,
   matter_wave: {errors: matterWaveErrors, compile: matterWave,
     about: "Class 12 de Broglie matter waves, computed: an electron's λ = h/p (accelerated through V or at a speed) drawn to one scale against a crystal's atoms, and a ruler of lengths in powers of ten placing a ball's and an electron's λ beside a nucleus, an atom and light"} as Verb<MatterWaveSpec>,
+  rutherford: {errors: rutherfordErrors, compile: rutherford,
+    about: "Class 12 Rutherford's nuclear atom, computed from Coulomb's law: Thomson's and Rutherford's models crossed by α-particles, α paths past a gold nucleus at several impact parameters (cot(θ/2) = 2b/d), and a head-on α stopping at the distance of closest approach d = 2Ze²/4πε₀K"} as Verb<RutherfordSpec>,
+  bohr: {errors: bohrErrors, compile: bohr,
+    about: "Class 12 Bohr model of hydrogen, computed from e, h, m and ε₀: the classical orbit (K, U, E), the classical spiral into the nucleus, Bohr's orbits to one scale (rₙ = n²a₀, vₙ = v₁/n), de Broglie's standing wave round an orbit (2πr = nλ), the energy levels with the Lyman to Pfund series, and a series' lines on a wavelength strip"} as Verb<BohrSpec>,
   induction: {errors: inductionErrors, compile: induction,
     about: 'Class 12 electromagnetic induction, computed: Faraday\'s experiments with a magnet, coil and galvanometer, the tapping key, Φ = BA cos θ, ε = −N dΦ/dt with its graph, Lenz\'s law for a coil and for a loop crossing a field\'s edge, the rod on rails ε = Blv, a turning rod ε = ½Bωl², mutual and self inductance, back emf, ½LI², and the ac generator.'},
   magnetic_matter: {errors: matterErrors, compile: magneticMatter,

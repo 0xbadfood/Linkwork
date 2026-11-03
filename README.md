@@ -101,6 +101,8 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `polaroid` (trial): Malus' law with the pass axes in perspective and I against θ, and a polaroid between crossed ones.
 - `photoelectric` (trial): the photoelectric effect from h, e and a metal's work function: the energy picture (Kmax = hν − φ₀, or no emission below ν₀), the apparatus with a retarding potential, photocurrent against collector potential, V₀ against ν (slope h/e), and photons.
 - `matter_wave` (trial): de Broglie's λ = h/p for an electron, drawn to one scale against a crystal's atoms, and a ruler of lengths placing a ball's λ beside a nucleus.
+- `rutherford` (trial): Thomson's and Rutherford's atoms crossed by α-particles, α paths past a gold nucleus integrated under Coulomb repulsion (cot(θ/2) = 2b/d), and a head-on α stopping at the distance of closest approach.
+- `bohr` (trial): hydrogen's classical orbit (K, U, E) and its spiral collapse, Bohr's orbits to one scale, de Broglie's standing wave round an orbit, the energy levels with the Lyman to Pfund series, and a series' lines on a wavelength strip.
 
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.

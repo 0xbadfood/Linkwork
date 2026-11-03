@@ -2090,6 +2090,49 @@ test('dual nature verbs get the book right (leph2-03)', async () => {
   assert.ok(Math.abs(notes[0].y - notes[1].y) >= 36, 'stacked, not on top of each other');
 });
 
+test('atoms verbs get the book right (leph2-04)', async () => {
+  const at = await import('../src/verbs/atoms.ts');
+  const {compile, check} = await import('../src/index.ts');
+  const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  // e²/4πε₀ = 1.44 MeV fm; Example 12.2: a 7.7 MeV α stops 29.5 fm from a gold nucleus (about 30 fm)
+  near(at.COULOMB_MEV_FM, 1.44); near(at.closestFm(7.7, 79), 29.5);
+  // Example 12.3: 13.6 eV binding: r = 5.3 × 10⁻¹¹ m, v = 2.2 × 10⁶ m/s; Example 12.4: ν = 6.6 × 10¹⁵ Hz
+  near(at.E1, 13.6); near(at.A0, 5.29e-11); near(at.bohrSpeed(1), 2.19e6); near(at.classical(at.A0).nu, 6.6e15, .02); near(at.classical(at.A0).K, 13.6);
+  // rₙ = n²a₀, vₙ = v₁/n; Hα 656.3 nm, the Balmer limit 364.6 nm, Lyman α 121.6 nm
+  near(at.bohrRadius(3), 9 * at.A0); near(at.bohrSpeed(4), at.bohrSpeed(1) / 4);
+  near(at.lineNm(3, 2), 656.3, .002); near(at.lineNm(1e9, 2), 364.6, .002); near(at.lineNm(2, 1), 121.6, .002);
+  // Rutherford: head-on comes straight back; b = d/2 gives 90°; and the integrated path agrees with cot(θ/2) = 2b/d
+  near(at.deflection(0, 40), Math.PI); near(at.deflection(20, 40), Math.PI / 2);
+  for (const b of [10, 20, 40]) {
+    const {pts} = at.alphaPath(b, 40, 2000, [-2000, -2000, 2000, 2000]), [p, q] = pts.slice(-2);
+    near(Math.atan2(q[1] - p[1], q[0] - p[0]), at.deflection(b, 40), .02);
+  }
+  const shows: object[] = [{verb: 'rutherford', show: 'models'}, {verb: 'rutherford', show: 'scattering'}, {verb: 'rutherford', show: 'scattering', impacts: [-40, 0, 40], energy: 7.7},
+    {verb: 'rutherford', show: 'closest', energy: 7.7}, {verb: 'rutherford', show: 'closest', energy: 3, span: 120},
+    {verb: 'bohr', show: 'classical'}, {verb: 'bohr', show: 'spiral'}, {verb: 'bohr', show: 'orbits', n: 4}, {verb: 'bohr', show: 'standing'}, {verb: 'bohr', show: 'standing', n: 3.5},
+    {verb: 'bohr', show: 'levels', series: ['balmer']}, {verb: 'bohr', show: 'levels'}, {verb: 'bohr', show: 'spectrum'}, {verb: 'bohr', show: 'spectrum', series: 'lyman'}];
+  for (const spec of shows) { const r = compile(spec as any); assert.deepEqual(r.errors, [], JSON.stringify(spec)); assert.deepEqual(check(r.scene!), [], JSON.stringify(spec)); }
+  const facts = (spec: object) => (compile(spec as any).scene!.meta as any).facts.join(' | ');
+  assert.match(facts({verb: 'rutherford', show: 'closest', energy: 7.7}), /29\.5 fm/);
+  assert.match(facts({verb: 'bohr', show: 'classical'}), /5\.29 × 10⁻¹¹ m.*13\.6 eV.*2\.19 × 10⁶ m\/s/);
+  assert.match(facts({verb: 'bohr', show: 'spectrum'}), /656\.4 nm.*364\.7 nm/);
+  // one scale: with span held, the drawn d is in proportion to the true one (the play's probe)
+  const drawn = (K: number) => { const a = (compile({verb: 'rutherford', show: 'closest', energy: K, span: 120} as any).scene!.meta as any).anchors; return a.nucleus[0] - a.alpha[0]; };
+  near(drawn(3) / drawn(6), 2);
+  const err = (spec: object) => compile(spec as any).errors.join(' | ');
+  assert.match(err({verb: 'rutherford', show: 'closest', energy: 2, span: 100}), /does not fit a span/);
+  assert.match(err({verb: 'rutherford', show: 'models', energy: 5}), /energy is not used/);
+  assert.match(err({verb: 'rutherford', show: 'scattering', impacts: [0, 500]}), /barely deflected/);
+  assert.match(err({verb: 'bohr', show: 'orbits', n: 6}), /2 to 4 orbits/);
+  assert.match(err({verb: 'bohr', show: 'levels', series: ['humphreys']}), /series is one or more of/);
+  assert.match(err({verb: 'bohr', show: 'classical', energy: 13.6, radius: 5e-11}), /not both/);
+  // illustrative hides every number but keeps the picture and its words
+  for (const spec of shows) {
+    const sc = compile({...spec, illustrative: true} as any).scene!;
+    for (const p of sc.props) if (p.type === 'text' && p.id !== 'title' && (p as any).text) assert.doesNotMatch((p as any).text, /\d/, `${JSON.stringify(spec)}: ${(p as any).text}`);
+  }
+});
+
 test('a graph can be drawn against a Greek letter (leph2-03 C5)', async () => {
   // the graph of Kmax against ν had to call its axis n, which read on screen as 'n (Hz)'
   const {compile} = await import('../src/index.ts');

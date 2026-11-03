@@ -455,11 +455,34 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors, K = photonEvAt(n(v, 'nu')) - 2.75; return [[K <= 0 || !a.kmax ? NaN : a.barrier[1] - a.kmax[1], K]]; },   // below threshold: nothing leaves to measure
   },
+  {
+    id: 'closest-approach', chapter: 'leph2-04', title: 'Stop an α-particle at a gold nucleus',
+    intro: 'An α-particle heads straight at a gold nucleus. The nucleus pushes it back, so it slows, stops for an instant and returns. Change its kinetic energy and see how close it gets.',
+    controls: [{id: 'K', label: 'Kinetic energy K of the α-particle', kind: 'slider', min: 2.4, max: 10, step: .05, unit: 'MeV', start: 5}],
+    spec: v => ({verb: 'rutherford', title: 'Head-on at gold', show: 'closest', energy: n(v, 'K'), span: 120}),
+    setup: 1.8,
+    reading: v => [['Distance of closest approach d', `${fixed(closestAt(n(v, 'K')), 1)} fm`]],
+    predict: {
+      question: 'You double the α-particle\'s kinetic energy. What happens to its distance of closest approach d?',
+      options: [{text: 'It halves', right: true}, {text: 'It doubles'}, {text: 'It falls to a quarter'}],
+      runs: [{K: 3}, {K: 6}],
+      why: 'At the stopping point all of K has become potential energy 2Ze²/4πε₀d, so d = 2Ze²/4πε₀K: twice the energy, half the distance.',
+    },
+    challenges: [
+      {text: 'Bring the α-particle to 50 fm from the nucleus (within 1 fm).', start: {K: 3}, hit: v => Math.abs(closestAt(n(v, 'K')) - 50) < 1, hint: v => 'd = 2 × 79 × 1.44 MeV fm / K, so K = 227.5/50 MeV.'},
+      {text: 'Example 12.2: natural α-particles reach 7.7 MeV. Set that energy and read d.', start: {K: 4}, hit: v => Math.abs(n(v, 'K') - 7.7) < .03, hint: v => 'd comes out near 30 fm: the gold nucleus is smaller than that.'},
+      {text: 'Get it closer than 25 fm.', start: {K: 6}, hit: v => closestAt(n(v, 'K')) < 25, hint: v => 'Halving d needs twice the energy.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.nucleus[0] - a.alpha[0], closestAt(n(v, 'K'))]]; },
+  },
 ];
 
 /** A photon's energy in eV at ν (10¹⁴ Hz), and the threshold ν₀ (10¹⁴ Hz) of a work function in eV (as the photoelectric verb computes them). */
 const photonEvAt = (nu: number) => 6.626e-34 * nu * 1e14 / 1.602e-19;
 const thresholdAt = (phi: number) => phi * 1.602e-19 / 6.626e-34 / 1e14;
+
+/** The distance of closest approach in fm of an α of K MeV head-on to gold (as the rutherford verb computes it). */
+const closestAt = (K: number) => 2 * 79 * 1.44 / K;
 
 /** Malus' law: the share of the light leaving P1 that passes P2 at θ degrees (as the polaroid verb computes it). */
 const malusAt = (theta: number) => Math.cos(theta * Math.PI / 180) ** 2;
