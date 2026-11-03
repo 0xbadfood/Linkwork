@@ -1801,6 +1801,15 @@ test('an open coil and other loops, by Lenz and by the edge they cut', async () 
   assert.ok(Math.abs(chordAt(tri, .25) - .75) < 1e-9); assert.ok(chordAt(circ, .5) > chordAt(circ, .1) * 1.5, 'a circle does not');
   assert.deepEqual(inductionErrors({verb: 'induction', show: 'open', stage: 'balance'}), []);
   assert.ok(inductionErrors({verb: 'induction', show: 'open', stage: 'nope' as never}).length); assert.ok(inductionErrors({verb: 'induction', show: 'open', motion: 'still'}).length); assert.ok(inductionErrors({verb: 'induction', show: 'region', shape: 'nope' as never}).length);
+  // the panel says what the book says: a coil turned over keeps its field, and the flux goes through zero to minus
+  const texts = (sc: {props: unknown[]}) => (sc.props as {text?: string}[]).map(p => p.text ?? '').join(' | ');
+  const e63 = texts(induction({verb: 'induction', show: 'faraday', B: 3e-5, A: .0314, angle: 0, angle2: 180, dt: .25, N: 500, R: 2}));
+  assert.ok(e63.includes('1.9 × 10⁻⁶ Wb'), e63); assert.ok(e63.includes('3.8 × 10⁻³ V'), e63); assert.ok(e63.includes('1.9 × 10⁻³ A'), e63);
+  assert.ok(texts(induction({verb: 'induction', show: 'faraday'})).includes('1.4 × 10⁻³') || texts(induction({verb: 'induction', show: 'faraday'})).includes('1 × 10⁻³ V'), 'Example 6.2 still falls to zero');
+  assert.ok(induction({verb: 'induction', show: 'experiment', bulb: true}).props.some(p => p.id === 'bulb'));
+  assert.ok(!induction({verb: 'induction', show: 'experiment', bulb: true}).props.some(p => p.id === 'pointer'));
+  const rev = induction({verb: 'induction', show: 'experiment', reversed: true, pole: 'N'});
+  assert.ok(rev.props.some(p => p.id === 'pull')); assert.ok(texts(rev).includes('this face: S'));
   // each show draws only its own picture: no generator behind an open coil
   for (const stage of ['gap', 'charge', 'balance', 'meter'] as const) assert.ok(!induction({verb: 'induction', show: 'open', stage}).props.some(p => p.id === 'state'));
   assert.ok(induction({verb: 'induction', show: 'generator'}).props.some(p => p.id === 'state'));

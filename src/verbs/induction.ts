@@ -18,7 +18,7 @@ type P2 = [number, number];
 export const INDUCTION_SHOWS = ['experiment', 'key', 'flux', 'faraday', 'region', 'motional', 'spin', 'mutual', 'self', 'generator', 'open'] as const;
 export const OPEN_STAGES = ['gap', 'charge', 'balance', 'meter'] as const;
 export const LOOP_SHAPES = ['rectangle', 'triangle', 'irregular', 'circle'] as const;
-export type InductionSpec = {verb: 'induction'; show: (typeof INDUCTION_SHOWS)[number]; source?: 'magnet' | 'coil'; motion?: 'toward' | 'away' | 'still'; pole?: 'N' | 'S'; fast?: boolean; iron?: boolean; work?: boolean; stage?: (typeof OPEN_STAGES)[number]; shape?: (typeof LOOP_SHAPES)[number]; curve?: boolean;
+export type InductionSpec = {verb: 'induction'; show: (typeof INDUCTION_SHOWS)[number]; source?: 'magnet' | 'coil'; motion?: 'toward' | 'away' | 'still'; pole?: 'N' | 'S'; fast?: boolean; iron?: boolean; work?: boolean; bulb?: boolean; reversed?: boolean; stage?: (typeof OPEN_STAGES)[number]; shape?: (typeof LOOP_SHAPES)[number]; curve?: boolean;
   B?: number; B2?: number; A?: number; angle?: number; angle2?: number; sweep?: boolean; dt?: number; N?: number; R?: number; move?: 'into' | 'out'; field?: 'into' | 'out'; l?: number; v?: number; lorentz?: boolean;
   nu?: number; spokes?: number; coils?: 'solenoids' | 'concentric'; from?: 1 | 2; n1?: number; n2?: number; r1?: number; r2?: number; I?: number; M?: number; L?: number; n?: number; mur?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
@@ -64,6 +64,7 @@ export function inductionErrors(s: InductionSpec): string[] {
   if (s.stage !== undefined && !OPEN_STAGES.includes(s.stage)) e.push(`${W}: stage is one of ${OPEN_STAGES.join(', ')}`);
   if (s.shape !== undefined && !LOOP_SHAPES.includes(s.shape)) e.push(`${W}: shape is one of ${LOOP_SHAPES.join(', ')}`);
   if (s.show === 'open' && s.motion === 'still') e.push(`${W}: an open coil needs the flux changing: motion toward or away`);
+  if (s.reversed && s.motion !== undefined && s.motion !== 'toward') e.push(`${W}: reversed is the magnet pushed toward the coil`);
   if (s.coils !== undefined && !['solenoids', 'concentric'].includes(s.coils)) e.push(`${W}: coils is solenoids or concentric`);
   if (s.from !== undefined && ![1, 2].includes(s.from)) e.push(`${W}: from is 1 or 2`);
   if (s.spokes !== undefined && !(Number.isInteger(s.spokes) && s.spokes <= 12)) e.push(`${W}: spokes is a whole number up to 12`);
@@ -108,10 +109,10 @@ export function induction(s: InductionSpec): Scene {
   };
 
   if (s.show === 'experiment') {
-    const motion = s.motion ?? 'toward', pole = s.pole ?? 'N', fast = !!s.fast, isCoil = s.source === 'coil'; dur = 9;
-    const coilX = bx + bw * .72, cyy = cy - bh * .08, a = S * .05, b = S * .17, near = coilX - bw * .14, far = coilX - bw * .42, mw = bw * .24, mh = S * .1, t0 = 2, span = fast ? 1.5 : 3;
-    const sign = motion === 'still' ? 0 : faceSign(pole, motion), start = motion === 'away' ? near : far, end = motion === 'away' ? far : near;
-    const ease = (t: number) => { const f = Math.min(1, Math.max(0, (t - t0) / span)); return f * f * (3 - 2 * f); };
+    const motion = s.motion ?? 'toward', pole = s.pole ?? 'N', fast = !!s.fast, isCoil = s.source === 'coil', rev = !!s.reversed; dur = 9;
+    const coilX = bx + bw * .72, cyy = cy - bh * .08, a = S * .05, b = S * .17, near = coilX - bw * .14, far = coilX - bw * .42, mw = bw * .24, mh = S * .1, t0 = 2, span = rev ? 5 : fast ? 1.5 : 3;
+    const sign = motion === 'still' ? 0 : faceSign(pole, motion) * (rev ? -1 : 1), start = motion === 'away' ? near : far, end = motion === 'away' ? far : near;
+    const ease = (t: number) => { const f = Math.min(1, Math.max(0, (t - t0) / span)); return rev ? f * f * f : f * f * (3 - 2 * f); };   // reversed: attracted, ever faster
     const pos = (t: number) => motion === 'still' ? (near + far) / 2 : start + (end - start) * ease(t);   // the magnet's front face
     const flux = (x: number) => { const d = (coilX - x) / S; return 1 / (.09 + d * d) ** 1.5; };          // on-axis dipole: Φ ∝ a²/(a² + d²)^3/2
     const rawRate = (t: number) => (flux(pos(t + .02)) - flux(pos(t - .02))) / .04;
@@ -139,10 +140,21 @@ export function induction(s: InductionSpec): Scene {
       push(dnY, -dir, 'bad', 'oppose'); label(mx(0), dnY + 36 * k, sign === (dir > 0 ? 1 : -1) ? 'the coil repels' : 'the coil attracts', 'bad', 24, {show: mov, keys: {x: keysOf(dur, mx)}});
       label(coilX + 10 * k, cyy + b + 80 * k, 'that work becomes Joule heat', 'bad', 24, {show: [t0 + .5, 1e9]}); anchors.push = [mx(dur), upY]; anchors.heat = [coilX + 10 * k, cyy + b + 80 * k];
     }
-    dial([bx + bw * .3, by + bh * .92], S * .13, rate);
+    if (rev) { const mx = (t: number) => pos(t) - mw / 2, L = bw * .09, dnY = cyy + mh / 2 + 26 * k;
+      props.push({id: 'pull', type: 'arrow', x1: mx(0), y1: dnY, x2: mx(0) + L, y2: dnY, head: 15 * k, style: {stroke: 'bad', width: 6 * k}, layer: 4, keys: {x1: keysOf(dur, mx), x2: keysOf(dur, t => mx(t) + L)}} as Prop);
+      label(mx(0), dnY + 36 * k, 'attracted: faster and faster', 'bad', 24, {keys: {x: keysOf(dur, mx)}}); label(cx, by + bh * .06, 'If the current were reversed', 'bad', 28); anchors.pull = [mx(dur), dnY];
+    }
+    if (s.bulb) {   // a small bulb in place of the galvanometer: it glows while the flux changes, as brightly as the rate
+      const c0: P2 = [bx + bw * .3, by + bh * .84], r = S * .05;
+      props.push({id: 'glow', type: 'circle', x: c0[0], y: c0[1], r: r * 1.5, style: {fill: 'accent'}, layer: 2, opacity: keysOf(dur, t => Math.min(1, Math.abs(rate(t)) * 1.6))} as Prop);
+      props.push({id: 'bulb', type: 'circle', x: c0[0], y: c0[1], r, style: {stroke: 'ink', width: 3 * k}, layer: 3} as Prop);
+      rect(c0[0] - r * .4, c0[1] + r, r * .8, r * .5, 'muted'); label(c0[0], c0[1] + r * 2.2, 'bulb', 'ink', 24); anchors.bulb = c0;
+    } else dial([bx + bw * .3, by + bh * .92], S * .13, rate);
     facts.push(`Φ grows as the source comes closer: ${motion}, ${pole} pole`);
-    story = motion === 'still' ? 'Nothing moves, nothing changes: no current, however strong the magnet' : `The flux through the coil is ${motion === 'toward' ? 'growing' : 'falling'}: the current's own field opposes that`;
-    second = motion === 'still' ? 'The deflection lasts only as long as the flux changes' : `${fast ? 'Faster: a larger deflection' : 'Move it faster and the deflection is larger'}. It stops the moment the motion stops`;
+    if (!rev) story = motion === 'still' ? 'Nothing moves, nothing changes: no current, however strong the magnet' : `The flux through the coil is ${motion === 'toward' ? 'growing' : 'falling'}: the current's own field opposes that`;
+    if (rev) { story = 'A gentle push would give ever more kinetic energy with no energy put in: a perpetual-motion machine'; }
+    if (rev) second = 'This violates conservation of energy, so the current cannot flow this way';
+    else second = motion === 'still' ? 'The deflection lasts only as long as the flux changes' : `${fast ? 'Faster: a larger deflection' : 'Move it faster and the deflection is larger'}. It stops the moment the motion stops`;
   } else if (s.show === 'key') {
     const iron = !!s.iron, gain = iron ? 1 : .35, press = 2, rel = 7, tmax = 10; dur = tmax;
     const I = (t: number) => (t < press ? 0 : 1 - Math.exp(-(t - press) * 6)) * (t < rel ? 1 : Math.exp(-(t - rel) * 6));
@@ -179,7 +191,7 @@ export function induction(s: InductionSpec): Scene {
     story = sweep ? 'Turn the plate edge-on and fewer lines pass through it, until none do' : th === 90 ? 'Edge-on: no lines pass through, and Φ = 0' : th > 90 ? 'The lines pass through from the other side: Φ is negative' : th === 0 ? 'Face-on: the most lines pass through' : 'Φ = BA cos θ, and θ is measured from the area vector A, not from the plate';
     second = 'Flux is a scalar: it can be positive, negative or zero. Unit: the weber, 1 Wb = 1 T m²';
   } else if (s.show === 'faraday') {
-    const f = faradayOf({B: s.B ?? .1, B2: s.B2 ?? 0, A: s.A ?? .01, angle: s.angle ?? 45, angle2: s.angle2, dt: s.dt ?? .7, N: s.N, R: s.R ?? .5}), tmax = 8, t0 = 2, t1 = 6; dur = tmax;
+    const f = faradayOf({B: s.B ?? .1, B2: s.B2 ?? (s.angle2 !== undefined ? s.B ?? .1 : 0), A: s.A ?? .01, angle: s.angle ?? 45, angle2: s.angle2, dt: s.dt ?? .7, N: s.N, R: s.R ?? .5}), tmax = 8, t0 = 2, t1 = 6; dur = tmax;
     const big = Math.max(Math.abs(f.p0), Math.abs(f.p1)) || 1, phi = (t: number) => t <= t0 ? f.p0 : t >= t1 ? f.p1 : f.p0 + (f.p1 - f.p0) * (t - t0) / (t1 - t0);
     const emf = (t: number) => t > t0 && t < t1 ? -Math.sign(f.p1 - f.p0) : 0, gx = bx + bw * .08, gw = bw * .82;
     strip(gx, cy - bh * .2, gw, bh * .2, 'Φ', tmax, phi, big, 'cool'); strip(gx, cy + bh * .26, gw, bh * .18, 'ε', tmax, emf, 1, 'bad');
