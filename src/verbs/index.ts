@@ -196,7 +196,14 @@ export const VERBS: Record<string, Verb<any>> = {
 /** Each verb with its card, for a planner choosing among them (statuses below `trusted` only when asked). */
 export function cards(statuses: Card['status'][] = ['trusted']): Record<string, Card & {about: string}> {
   return Object.fromEntries(Object.entries(VERBS).filter(([name]) => statuses.includes(CARDS[name]?.status))
-    .map(([name, verb]) => [name, {about: verb.about, ...withMarks(name, CARDS[name])}]));
+    .map(([name, verb]) => [name, {about: verb.about, ...withIllustrative(withMarks(name, CARDS[name]))}]));
+}
+
+/** Every verb but a numeric one takes illustrative (compile hides its numbers), and its card says so: 2026-11-03, a
+ * reviewer read ray_diagram's card, found no such field, and struck the invented f and u until the plan ran out of tries. */
+function withIllustrative(card: Card): Card {
+  if (card.numeric || card.fields?.illustrative) return card;
+  return {...card, fields: {...card.fields, illustrative: 'true hides every number: the values only shape the picture, for a narration that states none'}};
 }
 
 const MARKABLE = new Map<string, ReturnType<typeof markable> | null>();

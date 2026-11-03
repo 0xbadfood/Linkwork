@@ -57,6 +57,8 @@ export type RaySpec = Common & {
   image?: boolean;
   /** A second thin lens in contact with the first: the pair acts as one lens of power P = P1 + P2. */
   with?: {device: 'convex_lens' | 'concave_lens'; focal_length: number};
+  /** No numbers on screen: f and the distances only place the object and shape the picture; the panel says where in words. */
+  illustrative?: boolean;
 };
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -123,6 +125,7 @@ export function rayDiagramErrors(s: RaySpec): string[] {
   if (s.window !== undefined && !(Array.isArray(s.window.x) && s.window.x.length === 2 && s.window.x[0] < 0 && s.window.x[1] > 0 && isNum(s.window.y) && s.window.y > 0))
     return ['ray_diagram: window is {x: [from, to] around the mirror or lens at 0, y: how far up and down from the axis}, in cm'];
   if (s.with !== undefined) {
+    if (s.illustrative) return ['ray_diagram: lenses in contact are drawn with their powers; leave illustrative out'];
     const w = s.with as {device?: string; focal_length?: number};
     if (!(s.device === 'convex_lens' || s.device === 'concave_lens')) return ['ray_diagram: with (a lens in contact) goes with a convex or concave lens'];
     if (!w || !['convex_lens', 'concave_lens'].includes(w.device ?? '') || !(isNum(w.focal_length) && w.focal_length >= 1 && w.focal_length <= 200))
@@ -134,6 +137,7 @@ export function rayDiagramErrors(s: RaySpec): string[] {
     return inner.map(x => x.replace('ray_diagram:', 'ray_diagram (the pair in contact):'));
   }
   if (!DEVICES.includes(s.device)) return [`ray_diagram: device is one of ${DEVICES.join(', ')}`];
+  if (s.illustrative) for (const k of ['formula', 'power'] as const) if (s[k]) e.push(`ray_diagram: ${k} shows the numbers; leave it out of an illustrative picture`);
   const plane = s.device === 'plane_mirror', f = s.focal_length;
   if (plane && f !== undefined) e.push('ray_diagram: a plane mirror has no focal_length; leave it out');
   if (!plane && !(isNum(f) && f >= 1 && f <= 200)) return ['ray_diagram: focal_length is the size of f in cm, 1 to 200 (no sign: the device gives it)'];
@@ -208,6 +212,7 @@ function lensesInContact(s: RaySpec): Scene {
 
 export function rayDiagram(s: RaySpec): Scene {
   if (s.with) return lensesInContact(s);
+  const num = !s.illustrative;
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const dev = s.device, mirror = isMirror(dev), plane = dev === 'plane_mirror';
   const finite = s.objects.filter(isNum) as number[];
@@ -358,7 +363,7 @@ export function rayDiagram(s: RaySpec): Scene {
     props.push({id: 'title', type: 'text', x: px, y: row, text: s.title, size: 44 * k, weight: 700, width: pw});
     row += wrapText(s.title, 44 * k, pw).length * 1.25 * 44 * k + 18 * k;
   }
-  if (panel) props.push({id: 'device', type: 'text', x: px, y: row, text: plane ? 'Plane mirror' : `${NAME[dev][0].toUpperCase()}${NAME[dev].slice(1)}, f = ${fmt(f)} cm`,
+  if (panel) props.push({id: 'device', type: 'text', x: px, y: row, text: plane ? 'Plane mirror' : `${NAME[dev][0].toUpperCase()}${NAME[dev].slice(1)}${num ? `, f = ${fmt(f)} cm` : ''}`,
     size: 30 * k, style: {fill: 'muted'}, width: pw});
   row += 1.6 * 30 * k;
   const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
@@ -422,8 +427,8 @@ export function rayDiagram(s: RaySpec): Scene {
       props.push({id: `${tag}-dist-o`, type: 'line', x1: Xo, y1: Y, x2: Xm, y2: Y, ...draw(s0 + 3.6, s0 + 4.2), show, fade: 0.3, style: {stroke: 'accent', width: 3 * k}, layer: 6},
         {id: `${tag}-dist-i`, type: 'line', x1: Xm, y1: Y, x2: Xi, y2: Y, ...draw(s0 + 4.2, s0 + 4.8), show, fade: 0.3, style: {stroke: 'accent', width: 3 * k}, layer: 6},
         ...ticks((Xo + Xm) / 2, `${tag}-tick-o`), ...ticks((Xm + Xi) / 2, `${tag}-tick-i`),
-        {id: `${tag}-dist-o-label`, type: 'text', x: (Xo + Xm) / 2, y: Y + 40 * k, text: `${fmt(p.d)} cm`, size: 28 * k, align: 'middle', show: [s0 + 4.2, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6},
-        {id: `${tag}-dist-i-label`, type: 'text', x: (Xm + Xi) / 2, y: Y + 40 * k, text: `${fmt(p.d)} cm`, size: 28 * k, align: 'middle', show: [s0 + 4.8, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6});
+        {id: `${tag}-dist-o-label`, type: 'text', x: (Xo + Xm) / 2, y: Y + 40 * k, text: num ? `${fmt(p.d)} cm` : '', size: 28 * k, align: 'middle', show: [s0 + 4.2, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6},
+        {id: `${tag}-dist-i-label`, type: 'text', x: (Xm + Xi) / 2, y: Y + 40 * k, text: num ? `${fmt(p.d)} cm` : '', size: 28 * k, align: 'middle', show: [s0 + 4.8, show[1]], fade: 0.3, style: {fill: 'accent'}, layer: 6});
     }
     const shownImage: [number, number] = [s0 + 3.3, show[1]];
     if (!img.atInfinity && isFinite(img.v) && !s.exact && s.image !== false) {      // exact rays meet at no single point
@@ -449,8 +454,8 @@ export function rayDiagram(s: RaySpec): Scene {
       anchors[`focus_edge${i ? i + 1 : ''}`] = P([(real ? -1 : 1) * edge, 0]); anchors[`focus_centre${i ? i + 1 : ''}`] = P([(real ? -1 : 1) * centre, 0]);
       facts.push(`traced exactly off the sphere (R = ${fmt(R)} cm), a beam out to ${fmt(reach)} cm from the axis: the edge rays ${real ? 'cross the axis' : 'seem to diverge from'} ${fmt(edge, 1)} cm from P and the central ones ${fmt(centre, 1)} cm, against the small-aperture focus at ${fmt(f)} cm`);
     }
-    if (plane) lines.push([`${fmt(p.d)} cm in front, image ${fmt(p.d)} cm behind`, 'ink', s0 + 3.8]);
-    if (angleLine) lines.push([angleLine, 'accent', s0 + 3.3]);
+    if (plane && num) lines.push([`${fmt(p.d)} cm in front, image ${fmt(p.d)} cm behind`, 'ink', s0 + 3.8]);
+    if (angleLine && num) lines.push([angleLine, 'accent', s0 + 3.3]);
     if (s.formula && isFinite(p.d)) {
       const u = img.u;
       if (plane) lines.push([`u = ${signed(u)} cm, v = ${signed(img.v)} cm, m = +1`, 'ink', s0 + 3.9]);

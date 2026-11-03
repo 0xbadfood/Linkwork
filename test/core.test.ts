@@ -1927,6 +1927,21 @@ test('em_waves gets the book right', async () => {
   const quiet = texts(emWaves({verb: 'em_waves', show: 'source', motion: 'still'})); assert.ok(/no wave|nothing travels/i.test(quiet));
 });
 
+test('a picture names no adjustment the narration has not stated, and every card offers illustrative (leph2-01 C8)', async () => {
+  const {compile, cards} = await import('../src/verbs/index.ts');
+  const texts = (spec: object) => compile(spec as any).scene!.props.filter(p => p.type === 'text').map(p => (p as any).text).join(' | ');
+  for (const show of ['simple_microscope', 'compound_microscope']) {
+    const plain = texts({verb: 'optical_instrument', show}), told = texts({verb: 'optical_instrument', show, image_at: 'near_point'});
+    assert.doesNotMatch(plain, /(?<![\d.])25 cm|near point|1 \+ D/, show);
+    assert.match(told, /25 cm|near point/, show);
+  }
+  // the reviewer reads the cards: a verb that can hide its numbers says so
+  for (const [name, c] of Object.entries(cards(['trusted', 'trial']))) if (!c.numeric) assert.ok(c.fields.illustrative, name);
+  const lens = texts({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], illustrative: true});
+  assert.match(lens, /Convex lens/); assert.doesNotMatch(lens.replace(/\d?[A-Z][₀-₉0-9]*/g, ''), /\d/);
+  assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], formula: true, illustrative: true} as any).errors.join(), /formula shows the numbers/);
+});
+
 test('ray optics verbs get the book right (leph2-01)', async () => {
   const ro = await import('../src/verbs/ray-optics.ts');
   const {compile} = await import('../src/verbs/index.ts');

@@ -454,6 +454,9 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
   const drawn = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
   let story = '', second = '', dur = 9;
   const at = s.image_at ?? (s.show === 'refracting_telescope' ? 'infinity' : 'near_point');
+  // image_at left out: the rays are traced for the default, but the words name no adjustment (2026-11-03: a reviewer struck a
+  // near-point picture on the sentence that only introduced the lens, three times, until the plan ran out of tries)
+  const told = s.image_at !== undefined;
   // physical cm (y up) → screen, one scale both ways: the drawing is true to scale
   let ppc = 1, xl = 0;
   const X = (x: number) => bx + bw * .03 + (x - xl) * ppc, Y = (y: number) => cy - y * ppc, P = (q: P2): P2 => [X(q[0]), Y(q[1])];
@@ -501,7 +504,7 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
     if (Number.isFinite(vFinal)) {
       const hf = rays[0].pts.at(-1)![1] + rays[0].slope * (vFinal - rays[0].pts.at(-1)![0]);
       objectArrow(vFinal, hf, 'muted', true, [compound ? 6 : 4.4, 1e9]);
-      label(Math.max(X(vFinal), bx + 150 * k), Y(hf) + (hf > 0 ? -18 : 36) * k, num ? 'final image, 25 cm from the eye' : 'final image (virtual)', 'muted', 22, {show: [compound ? 6 : 4.4, 1e9]});
+      label(Math.max(X(vFinal), bx + 150 * k), Y(hf) + (hf > 0 ? -18 : 36) * k, num && told ? 'final image, 25 cm from the eye' : 'final image (virtual)', 'muted', 22, {show: [compound ? 6 : 4.4, 1e9]});
       anchors.image = P([vFinal, hf]);
     }
     const eye = compound ? L : 0;
@@ -510,13 +513,14 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
     Object.assign(anchors, {object: P([u, h]), objective: P([0, 0]), lens: P([0, 0]), eye: [X(eye) + 34 * k, cy] as P2});
     if (compound) {
       story = 'The objective makes a real, enlarged, inverted image; the eyepiece, used as a magnifier, enlarges it again';
-      second = at === 'near_point' ? 'm = mo × me: mo = vo/|uo|, and me = 1 + D/fe with the final image at the near point' : 'With the final image at infinity, me = D/fe';
-      facts.push(`fo = ${fo} cm, fe = ${fe} cm, lenses ${L} cm apart: place the object ${f1(-u, 2)} cm from the objective`,
-        `the objective's image is ${f1(c!.vo, 2)} cm behind it: mo = ${f1(Math.abs(c!.mo), 2)}; the eyepiece gives me = ${f1(c!.me, 2)}`, `magnifying power m = ${f1(m, 1)}`);
+      second = !told ? 'm = mo × me: each lens magnifies in turn' : at === 'near_point' ? 'm = mo × me: mo = vo/|uo|, and me = 1 + D/fe with the final image at the near point' : 'With the final image at infinity, me = D/fe';
+      facts.push(`fo = ${fo} cm, fe = ${fe} cm, lenses ${L} cm apart: place the object ${f1(-u, 2)} cm from the objective`);
+      if (told) facts.push(`the objective's image is ${f1(c!.vo, 2)} cm behind it: mo = ${f1(Math.abs(c!.mo), 2)}; the eyepiece gives me = ${f1(c!.me, 2)}`, `magnifying power m = ${f1(m, 1)}`);
     } else {
-      story = 'Held close to the eye, a convex lens lets the object come nearer than 25 cm: it fills a larger angle';
-      second = at === 'near_point' ? 'The image is virtual, erect and at the near point: m = 1 + D/f' : 'With the object at the focus the image is at infinity: m = D/f';
-      facts.push(`f = ${fo} cm: the object is ${f1(-u, 2)} cm from the lens`, `magnifying power m = ${at === 'near_point' ? '1 + D/f' : 'D/f'} = ${f1(m, 2)}`);
+      story = told ? 'Held close to the eye, a convex lens lets the object come nearer than 25 cm: it fills a larger angle' : 'Held close to the eye, a convex lens of short focal length lets the object come nearer: it fills a larger angle';
+      second = !told ? 'The object sits within f of the lens: the image is virtual, erect and magnified' : at === 'near_point' ? 'The image is virtual, erect and at the near point: m = 1 + D/f' : 'With the object at the focus the image is at infinity: m = D/f';
+      facts.push(told ? `f = ${fo} cm: the object is ${f1(-u, 2)} cm from the lens` : `f = ${fo} cm: the object is within f of the lens`);
+      if (told) facts.push(`magnifying power m = ${at === 'near_point' ? '1 + D/f' : 'D/f'} = ${f1(m, 2)}`);
     }
     dur = compound ? 8 : 6;
   } else if (s.show === 'refracting_telescope') {
