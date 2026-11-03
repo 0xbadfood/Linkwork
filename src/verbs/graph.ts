@@ -99,7 +99,7 @@ export function graphErrors(s: GraphSpec): string[] {
   }
   if (e.length) return e;
   const v = s.x.name.trim();
-  const oneLetter = /^[A-Za-z]$/.test(v) && v !== 'e';
+  const oneLetter = /^([A-Za-z]|[α-ωΑ-Ω])$/.test(v) && v !== 'e' && v !== 'π';
   // No series is the axes alone: the narration names the quantities before it states how they relate (the resistance
   // film's planner had to draw a made-up curve, which contradicted the physics, when only axes were wanted).
   if ((s as {series?: Series[]}).series === undefined) s = {...s, series: []};
@@ -113,7 +113,7 @@ export function graphErrors(s: GraphSpec): string[] {
     else if (ser.label.length > 32) e.push(nameError(`${where}: label`, ser.label, 32, 'v–t of car A')!);
     if ('expr' in ser === 'points' in ser) { e.push(`${where} has either expr (a formula in ${v}) or points (the book's data)`); return; }
     if ('expr' in ser) {
-      if (!oneLetter) { e.push(`${where}: a formula needs the x axis named by one letter (t, V, T…), not "${v}"`); return; }
+      if (!oneLetter) { e.push(`${where}: a formula needs the x axis named by one letter (t, V, T, ν…), not "${v}"`); return; }
       const errs = exprErrors(ser.expr, [v], `${where} expr`);
       if (errs.length) { e.push(...errs); return; }
       const f = fn(inX(ser.expr, v));

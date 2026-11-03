@@ -61,7 +61,8 @@ export type PhotoelectricSpec = Common & {verb: 'photoelectric'; show: (typeof P
   frequency?: number; wavelength?: number;
   /** apparatus: the collector's potential in volts relative to the emitter (negative retards; default 1). */
   potential?: number;
-  /** apparatus, photons: the light's intensity, 1 to 3 (relative; default 1; photons draws 1 and 2 side by side when left out). */
+  /** apparatus, photons: the light's intensity, 1 to 3 (relative; default 1; photons draws 1 and 2 side by side when left out).
+   * apparatus also takes 0: the light off, no electrons, no current (leph2-03 C2: 'UV stopped' had to be drawn with the light on). */
   intensity?: number;
   /** curves: what changes between the three curves (default intensity). */
   vary?: 'intensity' | 'frequency';
@@ -95,7 +96,8 @@ export function photoelectricErrors(s: PhotoelectricSpec): string[] {
   if (s.frequency !== undefined && !(isNum(s.frequency) && s.frequency >= 1 && s.frequency <= 30)) e.push(`${W}: frequency is in units of 10^14 Hz, 1 to 30 (6.0 × 10^14 Hz is 6)`);
   if (s.wavelength !== undefined && !(isNum(s.wavelength) && s.wavelength >= 100 && s.wavelength <= 2000)) e.push(`${W}: wavelength is 100 to 2000 nm`);
   if (s.potential !== undefined && !(isNum(s.potential) && s.potential >= -5 && s.potential <= 5)) e.push(`${W}: potential is -5 to 5 V`);
-  if (s.intensity !== undefined && !(isNum(s.intensity) && s.intensity >= 1 && s.intensity <= 3)) e.push(`${W}: intensity is 1 to 3 (relative)`);
+  const dark = s.show === 'apparatus' ? 0 : 1;
+  if (s.intensity !== undefined && !(isNum(s.intensity) && s.intensity >= dark && s.intensity <= 3)) e.push(`${W}: intensity is ${dark ? '1 to 3 (relative)' : '0 (light off) to 3 (relative)'}`);
   if (s.vary !== undefined && !['intensity', 'frequency'].includes(s.vary)) e.push(`${W}: vary is intensity or frequency`);
   if (s.top !== undefined && !(isNum(s.top) && s.top >= 1 && s.top <= 8)) e.push(`${W}: top is 1 to 8 eV`);
   if (s.power !== undefined && !(isNum(s.power) && s.power > 0 && s.power <= 100)) e.push(`${W}: power is in watts, above 0 and up to 100`);
@@ -125,7 +127,7 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
   const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {};
   const phi = phiOf(s), nu = frequencyOf(s), nu0 = thresholdNu(phi), hv = photonEv(nu), K = kmax(nu, phi), lam = C / (nu * 1e14) * 1e9;
   const colour = wavelengthColour(lam), emits = K > 0, name = metalName(s);
-  let dur = 7, story = '', second = '';
+  let dur = 7, story = '', second = '', labelAt: Record<string, P2> | undefined;
   const lightFacts = () => facts.push(`hν = ${sig(hv)} eV (ν = ${sig(nu)} × 10¹⁴ Hz, λ = ${sig(lam)} nm)`,
     `${name}: φ₀ = ${sig(phi)} eV, ν₀ = ${sig(nu0)} × 10¹⁴ Hz (λ₀ = ${sig(C / (nu0 * 1e14) * 1e9)} nm)`);
   // a wavy photon from p to q, coloured by its wavelength (a stand-in colour outside the visible band)
@@ -174,6 +176,10 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
     lightFacts();
     if (emits) facts.push(`stopping potential V₀ = ${sig(K)} V; vmax = ${sci(vmax(K), 'm/s')}`);
     Object.assign(anchors, {electron: [xe, y0] as P2, barrier: [mx1, Y(phi)] as P2, photon: [xe, y0] as P2, metal: [(mx0 + mx1) / 2, y0] as P2});
+    // a planner's words at these points go to the empty space right of the metal, not across the photon's end, the
+    // electron and the hν arrow (leph2-03 C4 and C5: 'approximate threshold' and 'one photon / wave: delay' sat on them)
+    const beside: P2 = [mx1 + 14 * k, y0 + 34 * k];
+    labelAt = {electron: beside, photon: beside, metal: beside, barrier: [mx1 + bw * .06, Y(phi) + 64 * k]};
   }
 
   if (s.show === 'apparatus') {
@@ -191,7 +197,7 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
     const src: P2 = [xC + bw * .26, by + 16 * k], wx = src[0] + (xC - src[0]) * (ty0 - src[1]) / (cyT - src[1]);
     line([wx - 34 * k, ty0], [wx + 34 * k, ty0], 'cool', 7); label(wx + 46 * k, ty0 + 30 * k, 'W', 'cool', 24, {align: 'start'});
     label(src[0] + 20 * k, src[1] + 22 * k, 'S', 'ink', 26, {align: 'start'});
-    for (const d of [-14, 14]) photon([src[0] + d * k, src[1] + 28 * k], [xC + 12 * k, cyT + d * 3 * k], .3, 1.2, `light${d}`);
+    if (I > 0) for (const d of [-14, 14]) photon([src[0] + d * k, src[1] + 28 * k], [xC + 12 * k, cyT + d * 3 * k], .3, 1.2, `light${d}`);
     // the circuit below: C and A wired down to a battery (polarity set by V), a voltmeter across, a microammeter in series
     const yc = by + bh * .82, xm = (tx0 + tx1) / 2;
     line([xC, cyT + ph / 2], [xC, yc], 'muted', 3); line([xA, cyT + ph / 2], [xA, yc], 'muted', 3);
@@ -229,10 +235,11 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
       props.push({id: `e${j}`, type: 'circle', x: xC + 12 * k, y: yj, r: 7 * k, style: {fill: 'cool'}, layer: 3,
         keys: {x: keysOf(dur, t => xC + 12 * k + (xA - xC - 24 * k) * u(t)), opacity: keysOf(dur, vis)}} as Prop);
     }
-    story = V >= 0 ? 'Light on C frees electrons; A, positive, collects them: a photocurrent flows'
+    story = I === 0 ? 'No light on C: no electrons leave it, and no current flows' : V >= 0 ? 'Light on C frees electrons; A, positive, collects them: a photocurrent flows'
       : V <= -V0 ? `A at ${sig(V)} V retards every electron: even the fastest turns back, no current` : 'A retards the electrons: only those with more than e|V| reach it';
-    second = `Every electron leaves C with kinetic energy up to Kmax = ${num ? sig(K) + ' eV' : 'hν − φ₀'}; the stopping potential is V₀ = Kmax/e`;
-    facts.push(`stopping potential V₀ = ${sig(V0)} V: at A below −${sig(V0)} V no electron arrives`, `${reach} of ${n} electrons drawn reach A at ${sig(V)} V`);
+    second = I === 0 ? 'The current starts the moment the light falls on C and stops the moment it is cut off' : `Every electron leaves C with kinetic energy up to Kmax = ${num ? sig(K) + ' eV' : 'hν − φ₀'}; the stopping potential is V₀ = Kmax/e`;
+    if (I === 0) facts.push('light off: no electrons, photocurrent 0');
+    else facts.push(`stopping potential V₀ = ${sig(V0)} V: at A below −${sig(V0)} V no electron arrives`, `${reach} of ${n} electrons drawn reach A at ${sig(V)} V`);
     lightFacts();
     Object.assign(anchors, {C: [xC, cyT] as P2, A: [xA, cyT] as P2, window: [wx, ty0] as P2, source: src, ammeter: [xa, yc] as P2, voltmeter: [xm, vy] as P2, battery: [xm, yc] as P2});
   }
@@ -342,7 +349,7 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
     facts.push(`light: ν = ${sig(nu)} × 10¹⁴ Hz, λ = ${sig(lam)} nm`, 'photons drawn far fewer and slower than in truth');
     anchors.plate = [xs1, rows[0]];
   }
-  return finish('photoelectric', s as never, dur, story, second, facts, anchors, s.illustrative);
+  return finish('photoelectric', s as never, dur, story, second, facts, anchors, s.illustrative, labelAt ? {labelAt} : {});
 }
 
 // ---------------------------------------------------------------------------------------------------- matter_wave

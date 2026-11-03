@@ -23,7 +23,9 @@ function tokens(src: string): Token[] {
     if (/\s/.test(c)) { i++; continue; }
     const num = /^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(s.slice(i));
     if (num && !/^e[a-z]/i.test(s.slice(i))) { out.push({t: 'num', v: Number(num[0])}); i += num[0].length; continue; }
-    const id = /^([a-zA-Zπ_][a-zA-Z0-9_]*)/.exec(s.slice(i));
+    // a Greek letter is a name of one letter (ν, λ, θ): 'hν' is h times ν, as the book writes it (leph2-03 C5: a graph
+    // against ν had to call its axis n)
+    const id = /^([α-ωΑ-Ω]|[a-zA-Z_][a-zA-Z0-9_]*)/.exec(s.slice(i));
     if (id) {
       // Split runs like "xy" or "pix" into known pieces only when the whole run is not itself a name we know.
       out.push({t: 'id', v: id[0]}); i += id[0].length; continue;

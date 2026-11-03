@@ -2075,4 +2075,30 @@ test('dual nature verbs get the book right (leph2-03)', async () => {
   // illustrative hides every number but keeps the picture and its words
   const ill = compile({verb: 'photoelectric', show: 'emission', illustrative: true} as any).scene!;
   for (const p of ill.props) if (p.type === 'text' && p.id !== 'title') assert.doesNotMatch(p.text, /\d/, p.text);
+  // leph2-03 C2: 'UV stopped' was drawn with the light still on and every electron reaching A. intensity 0 is the light
+  // off: no photons, no electrons, the needle at zero; only the apparatus takes it
+  const dark = compile({verb: 'photoelectric', show: 'apparatus', intensity: 0} as any).scene!;
+  assert.ok(!dark.props.some(p => /^(light|e\d)/.test(p.id)), 'no light and no electrons');
+  assert.match((dark.meta as any).facts.join(' | '), /light off: no electrons, photocurrent 0/);
+  assert.match(err({verb: 'photoelectric', show: 'photons', intensity: 0}), /intensity is 1 to 3/);
+  // leph2-03 C4 and C5: a planner's words at the metal, the photon or the electron sat on the photon's end and the hν
+  // arrow; they go right of the metal, clear of the drawing
+  const noted = compile({verb: 'photoelectric', show: 'emission', annotate: [{text: 'one photon', at: 'photon'}, {text: 'one step', at: 'electron'}]} as any).scene!;
+  const metal = noted.props.find(p => p.id === 'metal') as any, notes = noted.props.filter(p => /^note\d-label/.test(p.id)) as any[];
+  assert.equal(notes.length, 2);
+  for (const n of notes) assert.ok(n.x > metal.x + metal.w, `${n.text} at ${n.x}, ${n.y}`);
+  assert.ok(Math.abs(notes[0].y - notes[1].y) >= 36, 'stacked, not on top of each other');
+});
+
+test('a graph can be drawn against a Greek letter (leph2-03 C5)', async () => {
+  // the graph of Kmax against ν had to call its axis n, which read on screen as 'n (Hz)'
+  const {compile} = await import('../src/index.ts');
+  const {parse, evaluate} = await import('../src/expr.ts');
+  const r = compile({verb: 'graph', x: {name: 'ν', unit: '10¹⁴ Hz', range: [0, 8]}, y: {name: 'Kmax', unit: 'eV', range: [0, 5]}, series: [{label: 'Kmax', expr: 'ν - 3'}]} as any);
+  assert.deepEqual(r.errors, []);
+  assert.equal((r.scene!.props.find(p => p.type === 'axes') as any).names[0], 'ν (10¹⁴ Hz)');
+  // hν is h times ν, as the book writes it; a Latin run stays one name
+  assert.equal(evaluate(parse('hν', ['h', 'ν']), {h: 2, ν: 3}), 6);
+  assert.equal(evaluate(parse('2πθ', ['θ']), {θ: 1}), 2 * Math.PI);
+  assert.match(compile({verb: 'graph', x: {name: 'π', range: [0, 1]}, y: {name: 'y', range: [0, 1]}, series: [{label: 'y', expr: 'π'}]} as any).errors.join(), /one letter/);
 });
