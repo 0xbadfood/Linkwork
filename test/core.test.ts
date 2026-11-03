@@ -1935,6 +1935,11 @@ test('a picture names no adjustment the narration has not stated, and every card
     assert.doesNotMatch(plain, /(?<![\d.])25 cm|near point|1 \+ D/, show);
     assert.match(told, /25 cm|near point/, show);
   }
+  // a near-point magnifier of tiny f is a speck at true scale; D is measured along the axis to near_point
+  assert.match(compile({verb: 'optical_instrument', show: 'simple_microscope', f: 2} as any).errors.join(), /choose f 4 cm or more/);
+  assert.deepEqual(compile({verb: 'optical_instrument', show: 'simple_microscope', f: 2, image_at: 'infinity'} as any).errors, []);
+  const m = compile({verb: 'optical_instrument', show: 'simple_microscope', f: 5, image_at: 'near_point'} as any).scene!.meta as any;
+  assert.ok(Math.abs(m.anchors.near_point[1] - m.anchors.eye[1]) < 1e-6 && m.anchors.near_point[0] === m.anchors.image[0]);
   // the reviewer reads the cards: a verb that can hide its numbers says so
   for (const [name, c] of Object.entries(cards(['trusted', 'trial']))) if (!c.numeric) assert.ok(c.fields.illustrative, name);
   const lens = texts({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], illustrative: true});

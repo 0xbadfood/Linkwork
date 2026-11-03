@@ -440,6 +440,9 @@ export function opticalInstrumentErrors(s: InstrumentSpec): string[] {
     if (fo >= fe * 2 && s.fo !== undefined && s.fe !== undefined) e.push('optical_instrument: a microscope\'s objective has the shorter focal length (fo < fe)');
     if (c.vo <= fo * 1.05) e.push(`optical_instrument: with L = ${s.L ?? 15} cm the objective's image would have to be ${f1(c.vo)} cm away, inside its focal length: lengthen L`);
   }
+  if (s.show === 'simple_microscope' && (s.image_at ?? 'near_point') === 'near_point' && (s.f ?? 5) < 4)
+    // 2026-11-03 (leph2-01 C8): f 2 cm with the image at 25 cm, true to scale, put the lens and object in a corner
+    e.push(`optical_instrument: with f = ${s.f} cm the image at 25 cm is ${f1(1 + 25 / s.f!, 2)} times the object and the lens a speck in the corner: choose f 4 cm or more, or image_at infinity`);
   if (s.show === 'refracting_telescope' && (s.fo ?? 144) <= (s.fe ?? 6)) e.push('optical_instrument: a telescope\'s objective has the longer focal length (fo > fe)');
   if (s.show === 'reflecting_telescope') {
     const {p} = cassegrain(s.R1 ?? 220, s.R2 ?? 140, s.d ?? 60);
@@ -505,7 +508,7 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
       const hf = rays[0].pts.at(-1)![1] + rays[0].slope * (vFinal - rays[0].pts.at(-1)![0]);
       objectArrow(vFinal, hf, 'muted', true, [compound ? 6 : 4.4, 1e9]);
       label(Math.max(X(vFinal), bx + 150 * k), Y(hf) + (hf > 0 ? -18 : 36) * k, num && told ? 'final image, 25 cm from the eye' : 'final image (virtual)', 'muted', 22, {show: [compound ? 6 : 4.4, 1e9]});
-      anchors.image = P([vFinal, hf]);
+      anchors.image = P([vFinal, hf]); anchors.near_point = P([vFinal, 0]);
     }
     const eye = compound ? L : 0;
     props.push({id: 'eye', type: 'circle', x: X(eye) + 34 * k, y: cy, r: 14 * k, style: {stroke: 'ink', width: 3 * k}, layer: 1} as Prop);
