@@ -60,6 +60,10 @@ export function acErrors(s: AcSpec): string[] {
   if (s.elements !== undefined && !(Array.isArray(s.elements) && s.elements.length > 0 && s.elements.length <= 4 && s.elements.every(x => ELEMENTS.includes(x)))) e.push(`${W}: elements is up to 4 of ${ELEMENTS.join(', ')}`);
   if (s.winding !== undefined && !['separate', 'same'].includes(s.winding)) e.push(`${W}: winding is separate or same`);
   if (s.quantity !== undefined && !['i', 'v'].includes(s.quantity)) e.push(`${W}: quantity is i or v`);
+  // L and C in henry and farad with no frequency were read at 50 Hz: a 1 mH, 1 nF resonance phasor came out all VC
+  // (leph1-07 C6, 2026-11-03). Which reactance wins depends on ν, so the spec says it, or gives XL and XC.
+  if ((s.show === 'phasors' || s.show === 'waves') && s.L !== undefined && s.C !== undefined && s.nu === undefined && s.XL === undefined && s.XC === undefined)
+    e.push(`${W}: with L and C give nu (Hz), or give XL and XC: at 50 Hz, XL = ${sig(reactanceL(s.L, 50), 'Ω')} and XC = ${sig(reactanceC(s.C, 50), 'Ω')}; resonance is at ${sig(resonantOmega(s.L, s.C) / TAU, 'Hz', 3)}`);
   if (s.show === 'reactance' && s.element === 'R') e.push(`${W}: reactance is for element L, C or LCR`);
   if (s.show === 'energy' && s.element !== undefined && !['L', 'C'].includes(s.element)) e.push(`${W}: energy is for element L or C`);
   if (s.iron && !(s.elements ?? []).includes('L')) e.push(`${W}: iron goes in a coil: elements needs L`);
@@ -161,7 +165,7 @@ export function ac(s: AcSpec): Scene {
     story = el === 'R' ? 'For a resistor alone, V and I point the same way: in phase' : el === 'L' ? 'For an inductor alone, V points 90° ahead of I: the current lags by π/2' : 'For a capacitor alone, V points 90° behind I: the current leads by π/2';
     second = 'Both phasors turn together anticlockwise at ω; the angle between them stays fixed';
   } else if (s.show === 'phasors') {
-    const v = values(), R = v.R ?? 3, XL = v.XL ?? 8, XC = v.XC ?? 4, st = seriesOf(R, XL, XC), res = Math.abs(XL - XC) < 1e-9 * Math.max(R, XL, XC, 1), big = Math.max(R, XL, XC, st.Z), o: P2 = [bx + bw * .28, cy], u = S * .36 / big;
+    const v = values(), R = v.R ?? 3, XL = v.XL ?? 8, XC = v.XC ?? 4, st = seriesOf(R, XL, XC), res = Math.abs(XL - XC) < 1e-3 * Math.max(R, XL, XC, 1), big = Math.max(R, XL, XC, st.Z), o: P2 = [bx + bw * .28, cy], u = S * .36 / big;
     const tI = .5, tL = 2.5, tC = 4.5, tN = 6.5, tV = 8.5; dur = 11;
     line([bx + bw * .05, cy], [bx + bw * .56, cy], 'faint', 2); line([o[0], cy - S * .42], [o[0], cy + S * .42], 'faint', 2);
     arrow(o, [o[0] + R * u * 1.25, cy], 'good', 4, {show: [tI, 1e9]}); label(o[0] + R * u * 1.25 + 24 * k, cy - 14 * k, 'I', 'good', 28, {show: [tI, 1e9]});

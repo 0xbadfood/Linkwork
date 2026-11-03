@@ -1818,6 +1818,9 @@ test('ac gets the book right', async () => {
   // an inductor alone meets no XC and no resonance crossing
   const xl = texts(ac({verb: 'ac', show: 'reactance', element: 'L', L: .025, nu: 50})); assert.ok(xl.includes('XL') && !xl.includes('XC') && !xl.includes('ν₀') && xl.includes('7.85 Ω'), xl);
   assert.ok(texts(ac({verb: 'ac', show: 'reactance', L: .025})).includes('XL') && !texts(ac({verb: 'ac', show: 'reactance', L: .025})).includes('XC'));
+  assert.ok(acErrors({verb: 'ac', show: 'phasors', R: 100, L: 1e-3, C: 1e-9}).some(x => x.includes('give nu')));
+  assert.deepEqual(acErrors({verb: 'ac', show: 'phasors', R: 100, L: 1e-3, C: 1e-9, nu: 5.03e6}), []);
+  assert.ok(texts(ac({verb: 'ac', show: 'phasors', R: 100, L: 1e-3, C: 1e-9, nu: 159155})).includes('VL and VC cancel'), 'ν₀ rounded to the hertz is still resonance');
   assert.ok(texts(ac({verb: 'ac', show: 'reactance'})).includes('XC')); assert.ok(acErrors({verb: 'ac', show: 'reactance', element: 'R'}).length); assert.ok(texts(ac({verb: 'ac', show: 'phasors'})).includes('VC'));
 });
 
