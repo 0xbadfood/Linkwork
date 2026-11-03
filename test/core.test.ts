@@ -1808,6 +1808,17 @@ test('ac gets the book right', async () => {
   assert.ok(acErrors({verb: 'ac', show: 'circuit', iron: true, elements: ['R']}).length); assert.ok(acErrors({verb: 'ac', show: 'nope' as never}).length);
   const texts = (sc: {props: unknown[]}) => (sc.props as {text?: string}[]).map(p => p.text ?? '').join(' | ');
   assert.ok(texts(ac({verb: 'ac', show: 'rms', V: 220, P: 100})).includes('311 V')); assert.ok(texts(ac({verb: 'ac', show: 'rms', V: 220, P: 100})).includes('484 Ω'));
+  // rms: the wave's own zero average has its own anchor, apart from the mean of its square; a supply plots v
+  const rmsAnchors = (ac({verb: 'ac', show: 'rms'}).meta as any).anchors; assert.ok(rmsAnchors.zero && rmsAnchors.mean && rmsAnchors.zero[1] < rmsAnchors.mean[1]);
+  const volts = texts(ac({verb: 'ac', show: 'rms', quantity: 'v', V: 220})); assert.ok(volts.includes('V = vm/√2') && !volts.includes('im'), volts);
+  assert.ok(acErrors({verb: 'ac', show: 'rms', quantity: 'x' as never}).length);
+  // a phasor spec giving only R draws the resistor's phasor alone: no VL, no VC, no 'cancel', no triangle
+  const one = texts(ac({verb: 'ac', show: 'phasors', R: 1})); assert.ok(one.includes('VR') && !one.includes('VL') && !one.includes('cancel') && !one.includes('Z'), one);
+  assert.ok(texts(ac({verb: 'ac', show: 'phasors', element: 'L'})).includes('VL'));
+  // an inductor alone meets no XC and no resonance crossing
+  const xl = texts(ac({verb: 'ac', show: 'reactance', element: 'L', L: .025, nu: 50})); assert.ok(xl.includes('XL') && !xl.includes('XC') && !xl.includes('ν₀') && xl.includes('7.85 Ω'), xl);
+  assert.ok(texts(ac({verb: 'ac', show: 'reactance', L: .025})).includes('XL') && !texts(ac({verb: 'ac', show: 'reactance', L: .025})).includes('XC'));
+  assert.ok(texts(ac({verb: 'ac', show: 'reactance'})).includes('XC')); assert.ok(acErrors({verb: 'ac', show: 'reactance', element: 'R'}).length); assert.ok(texts(ac({verb: 'ac', show: 'phasors'})).includes('VC'));
 });
 
 test('an open coil and other loops, by Lenz and by the edge they cut', async () => {

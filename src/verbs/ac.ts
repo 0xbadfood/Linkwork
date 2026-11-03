@@ -18,7 +18,7 @@ export const AC_SHOWS = ['waves', 'rms', 'circuit', 'phasors', 'reactance', 'res
 const ELEMENTS = ['R', 'L', 'C', 'bulb'] as const;
 export type AcSpec = {verb: 'ac'; show: (typeof AC_SHOWS)[number]; element?: 'R' | 'L' | 'C' | 'LCR'; elements?: (typeof ELEMENTS)[number][];
   V?: number; vm?: number; P?: number; nu?: number; R?: number; R2?: number; L?: number; C?: number; XL?: number; XC?: number; phi?: number;
-  plot?: 'power'; sharp?: boolean; correct?: boolean; dc?: boolean; iron?: boolean; reduce?: boolean; a1?: number; a2?: number; delta?: number;
+  plot?: 'power'; quantity?: 'i' | 'v'; sharp?: boolean; correct?: boolean; dc?: boolean; iron?: boolean; reduce?: boolean; a1?: number; a2?: number; delta?: number;
   Np?: number; Ns?: number; Vp?: number; Ip?: number; full?: number; winding?: 'separate' | 'same'; losses?: boolean;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
@@ -36,6 +36,19 @@ export const transformerOf = (Vp: number, Np: number, Ns: number, Ip?: number) =
 /** Two phasors at δ degrees: the size and phase of their sum. */
 export const addPhasors = (a1: number, a2: number, delta: number) => { const x = a1 + a2 * Math.cos(delta * RAD), y = a2 * Math.sin(delta * RAD); return {a: Math.hypot(x, y), phase: Math.atan2(y, x) / RAD}; };
 
+/** The element a phasors spec draws: R alone when it gives only R, L or C alone likewise; otherwise the series LCR. */
+export function phasorElement(s: AcSpec): 'R' | 'L' | 'C' | 'LCR' {
+  const R = s.R !== undefined, L = s.L !== undefined || s.XL !== undefined, C = s.C !== undefined || s.XC !== undefined;
+  return R && !L && !C ? 'R' : L && !R && !C ? 'L' : C && !R && !L ? 'C' : 'LCR';
+}
+
+/** The curves a reactance spec draws: XL alone for element L or only L given, XC alone likewise; otherwise both. */
+export function reactanceElement(s: AcSpec): 'L' | 'C' | 'LCR' {
+  if (s.element === 'L' || s.element === 'C') return s.element;
+  const L = s.L !== undefined, C = s.C !== undefined;
+  return L && !C ? 'L' : C && !L ? 'C' : 'LCR';
+}
+
 export function acErrors(s: AcSpec): string[] {
   const e: string[] = [], W = 'ac';
   if (!AC_SHOWS.includes(s.show)) return [`${W}: show is one of ${AC_SHOWS.join(', ')}`];
@@ -46,6 +59,8 @@ export function acErrors(s: AcSpec): string[] {
   if (s.element !== undefined && !['R', 'L', 'C', 'LCR'].includes(s.element)) e.push(`${W}: element is R, L, C or LCR`);
   if (s.elements !== undefined && !(Array.isArray(s.elements) && s.elements.length > 0 && s.elements.length <= 4 && s.elements.every(x => ELEMENTS.includes(x)))) e.push(`${W}: elements is up to 4 of ${ELEMENTS.join(', ')}`);
   if (s.winding !== undefined && !['separate', 'same'].includes(s.winding)) e.push(`${W}: winding is separate or same`);
+  if (s.quantity !== undefined && !['i', 'v'].includes(s.quantity)) e.push(`${W}: quantity is i or v`);
+  if (s.show === 'reactance' && s.element === 'R') e.push(`${W}: reactance is for element L, C or LCR`);
   if (s.show === 'energy' && s.element !== undefined && !['L', 'C'].includes(s.element)) e.push(`${W}: energy is for element L or C`);
   if (s.iron && !(s.elements ?? []).includes('L')) e.push(`${W}: iron goes in a coil: elements needs L`);
   if (s.reduce && !(s.elements ?? []).includes('C')) e.push(`${W}: reduce makes the capacitor smaller: elements needs C`);
@@ -100,13 +115,13 @@ export function ac(s: AcSpec): Scene {
     }
   } else if (s.show === 'rms') {
     const V = s.V ?? (s.vm ? s.vm / Math.SQRT2 : 220), vm = V * Math.SQRT2, R = s.R ?? (s.P ? V * V / s.P : undefined), turns = 2, gx = bx + bw * .08, gw = bw * .8, y1 = cy - bh * .22, h1 = bh * .2, y2 = cy + bh * .38, h2 = bh * .32; dur = 10;
-    axes(gx, y1, gw, h1, turns); traced(gx, y1, gw, h1, turns, a => Math.sin(a), 'accent', 6); label(gx, y1 - h1 * 1.2, 'i', 'accent', 28);
-    axes(gx, y2, gw, h2 * .56, turns, false); traced(gx, y2, gw, h2, turns, a => Math.sin(a) ** 2, 'bad', 6); label(gx, y2 - h2 * 1.05, 'i²', 'bad', 28);
+    axes(gx, y1, gw, h1, turns); traced(gx, y1, gw, h1, turns, a => Math.sin(a), 'accent', 6); const q = s.quantity === 'v' ? 'v' : 'i', Q = q.toUpperCase(); label(gx, y1 - h1 * 1.2, q, 'accent', 28);
+    axes(gx, y2, gw, h2 * .56, turns, false); traced(gx, y2, gw, h2, turns, a => Math.sin(a) ** 2, 'bad', 6); label(gx, y2 - h2 * 1.05, `${q}²`, 'bad', 28);
     const meanY = y2 - h2 / 2, rmsY = y1 - h1 * Math.SQRT1_2;
-    line([gx, meanY], [gx + gw, meanY], 'bad', 3, {show: [6.5, 1e9]}, true); label(gx + gw * .86, meanY - 12 * k, 'mean = ½ im²', 'bad', 24, {show: [6.5, 1e9]});
-    line([gx, rmsY], [gx + gw, rmsY], 'good', 3, {show: [7.5, 1e9]}, true); label(gx + gw * .9, rmsY - 12 * k, 'I = im/√2', 'good', 24, {show: [7.5, 1e9]}); label(gx + 40 * k, y1 - h1 + 30 * k, 'im', 'accent', 24);
-    anchors.peak = [gx + gw / 8, y1 - h1]; anchors.rms = [gx + gw * .9, rmsY]; anchors.mean = [gx + gw * .86, meanY];
-    story = 'The current averages to zero over a cycle, but i² does not: the heating follows i²'; second = 'A steady current of im/√2 heats the same: that is the rms value, 0.707 im';
+    line([gx, meanY], [gx + gw, meanY], 'bad', 3, {show: [6.5, 1e9]}, true); label(gx + gw * .86, meanY - 12 * k, `mean = ½ ${q}m²`, 'bad', 24, {show: [6.5, 1e9]});
+    line([gx, rmsY], [gx + gw, rmsY], 'good', 3, {show: [7.5, 1e9]}, true); label(gx + gw * .9, rmsY - 12 * k, `${Q} = ${q}m/√2`, 'good', 24, {show: [7.5, 1e9]}); label(gx + 40 * k, y1 - h1 + 30 * k, `${q}m`, 'accent', 24);
+    anchors.peak = [gx + gw / 8, y1 - h1]; anchors.rms = [gx + gw * .9, rmsY]; anchors.mean = [gx + gw * .86, meanY]; anchors.zero = [gx + gw * .62, y1];
+    story = q === 'v' ? 'The voltage averages to zero over a cycle, but v² does not' : 'The current averages to zero over a cycle, but i² does not: the heating follows i²'; second = q === 'v' ? 'Its rms value is vm/√2, 0.707 vm: the value quoted for a supply' : 'A steady current of im/√2 heats the same: that is the rms value, 0.707 im';
     facts.push(`V = ${sig(V, 'V')} rms: vm = √2 V = ${sig(vm, 'V')}`, ...(R !== undefined ? [`R = ${sig(R, 'Ω')}`, `I = V/R = ${sig(V / R, 'A', 2)}`] : []));
   } else if (s.show === 'circuit') {
     const els = s.elements ?? ['R'], dcOn = !!s.dc, x0 = bx + bw * .08, x1 = bx + bw * .92, yT = cy - bh * .26, yB = cy + bh * .28, xs = els.map((_, i) => x0 + (x1 - x0) * (i + 1) / (els.length + 1)), gap = S * .06; dur = 12;
@@ -133,6 +148,18 @@ export function ac(s: AcSpec): Scene {
     const v = values(); if (v.XL !== undefined || v.XC !== undefined || v.R !== undefined) { const st = seriesOf(v.R ?? 0, v.XL ?? 0, v.XC ?? 0); if (v.XL !== undefined) facts.push(`XL = ${sig(v.XL, 'Ω')}`); if (v.XC !== undefined) facts.push(`XC = ${sig(v.XC, 'Ω')}`); if (st.Z > 0) facts.push(`Z = ${sig(st.Z, 'Ω')}, I = ${sig(v.V / st.Z, 'A', 2)}`); }
     story = dcOn && hasC ? 'With dc the capacitor charges, then blocks: the lamp flashes and goes dark' : s.iron ? 'Iron raises L, so XL rises: more of the voltage falls across the coil, the lamp dims' : s.reduce ? 'A smaller C has a larger XC = 1/ωC: less current, a dimmer lamp' : els.includes('bulb') && hasC ? 'With ac the capacitor charges and discharges without end: current keeps flowing, the lamp glows' : els.length > 1 ? 'One current through every element: its voltages add as phasors, not as numbers' : 'The source drives the current one way, then the other';
     second = s.iron ? 'Book Example 7.5: the glow decreases' : dcOn && hasC ? 'Reducing C changes nothing here' : '';
+  } else if (s.show === 'phasors' && (s.element ?? phasorElement(s)) !== 'LCR') {
+    // one element alone: its voltage phasor beside I, in phase (R), 90° ahead (L) or 90° behind (C); no sum, no triangle
+    const el = s.element ?? phasorElement(s), o: P2 = [bx + bw * .3, cy], r = S * .32; dur = 7;
+    line([bx + bw * .05, cy], [bx + bw * .6, cy], 'faint', 2); line([o[0], cy - S * .42], [o[0], cy + S * .42], 'faint', 2);
+    ring(o, r, r, 'faint', 2, true);
+    const iy = el === 'R' ? cy + 16 * k : cy;          // in phase: I drawn just below VR so both are seen
+    arrow([o[0], iy], [o[0] + r * .8, iy], 'good', 5, {show: [.5, 1e9]}); label(o[0] + r * .8 + 24 * k, iy + 30 * k, 'I', 'good', 28, {show: [.5, 1e9]});
+    const name = `V${el}`, tip: P2 = el === 'R' ? [o[0] + r, cy] : [o[0], el === 'L' ? cy - r : cy + r];
+    arrow(o, tip, el === 'R' ? 'ink' : el === 'L' ? 'cool' : 'bad', 7, {show: [1.5, 1e9]}); label(tip[0] + (el === 'R' ? 30 : 40) * k, tip[1] - (el === 'R' ? 22 : 0) * k, name, el === 'R' ? 'ink' : el === 'L' ? 'cool' : 'bad', 28, {show: [1.5, 1e9]});
+    anchors.origin = o; anchors.V = tip; anchors.I = [o[0] + r * .8, iy]; anchors[name] = tip;
+    story = el === 'R' ? 'For a resistor alone, V and I point the same way: in phase' : el === 'L' ? 'For an inductor alone, V points 90° ahead of I: the current lags by π/2' : 'For a capacitor alone, V points 90° behind I: the current leads by π/2';
+    second = 'Both phasors turn together anticlockwise at ω; the angle between them stays fixed';
   } else if (s.show === 'phasors') {
     const v = values(), R = v.R ?? 3, XL = v.XL ?? 8, XC = v.XC ?? 4, st = seriesOf(R, XL, XC), res = Math.abs(XL - XC) < 1e-9 * Math.max(R, XL, XC, 1), big = Math.max(R, XL, XC, st.Z), o: P2 = [bx + bw * .28, cy], u = S * .36 / big;
     const tI = .5, tL = 2.5, tC = 4.5, tN = 6.5, tV = 8.5; dur = 11;
@@ -153,6 +180,20 @@ export function ac(s: AcSpec): Scene {
     story = res ? 'At resonance VL and VC cancel: V is VR alone, in phase with I, and Z = R is smallest' : net > 0 ? 'VL beats VC: V leads I by φ. The voltages add as phasors, not as numbers' : 'VC beats VL: I leads V by φ. The voltages add as phasors, not as numbers';
     second = 'I is the same in all three: VR along it, VL ahead by 90°, VC behind by 90°. V² = VR² + (VL − VC)²';
     facts.push(`Z = √(R² + (XL − XC)²) = ${sig(st.Z, 'Ω')}`, `φ = ${Math.round(st.phi)}°`, ...(v.R !== undefined ? [`I = V/Z = ${sig(v.V / st.Z, 'A', 2)}, P = I²R = ${sig((v.V / st.Z) ** 2 * R, 'W', 2)}`] : []));
+  } else if (s.show === 'reactance' && (s.element ?? reactanceElement(s)) !== 'LCR') {
+    // one element alone: only its own curve, no partner and no resonance crossing (an inductor concept met XC, 2026-11-03)
+    const el = s.element ?? reactanceElement(s), L = s.L ?? 25e-3, C = s.C ?? 15e-6, nuMax = (s.nu ?? 50) * 2.4;
+    const fn = (n: number) => el === 'L' ? reactanceL(L, n) : reactanceC(C, n), top = el === 'L' ? fn(nuMax) * 1.05 : fn(nuMax * .12);
+    const gx = bx + bw * .08, gy = by + bh * .86, gw = bw * .82, gh = bh * .74, X = (n: number) => gx + gw * n / nuMax, Y = (x: number) => gy - gh * Math.min(1, x / top); dur = 7;
+    line([gx, gy], [gx + gw, gy], 'ink', 3); line([gx, gy], [gx, gy - gh * 1.04], 'ink', 3); label(gx + gw + 24 * k, gy + 9 * k, 'ν', 'muted', 26); label(gx, gy - gh * 1.08, el === 'L' ? 'XL' : 'XC', 'muted', 26);
+    const curve = Array.from({length: 241}, (_, i) => nuMax * (i + 1) / 241).filter(n => fn(n) <= top).map(n => [X(n), Y(fn(n))] as P2);
+    poly(curve, el === 'L' ? 'cool' : 'good', 5);
+    if (el === 'L') label(X(nuMax * .7) - 24 * k, Y(fn(nuMax * .7)) - 16 * k, num ? `XL = 2πνL, L = ${sig(L, 'H', 2)}` : 'XL = ωL', 'cool', 28, {align: 'end'});
+    else label(X(nuMax * .3), Y(fn(nuMax * .3)) - 30 * k, num ? `XC = 1/(2πνC), C = ${sig(C, 'F', 2)}` : 'XC = 1/ωC', 'good', 28, {align: 'start'});
+    anchors.curve = curve[Math.floor(curve.length * .6)];
+    if (s.nu !== undefined) { const n0 = s.nu; line([X(n0), gy], [X(n0), Y(fn(n0))], 'accent', 2, {}, true); dot(X(n0), Y(fn(n0)), 8, 'accent'); label(X(n0), gy + 36 * k, num ? `ν = ${sig(n0, 'Hz', 2)}` : 'ν', 'accent', 24); anchors.nu = [X(n0), Y(fn(n0))]; if (num) facts.push(`at ${sig(n0, 'Hz', 2)}: ${el === 'L' ? 'XL' : 'XC'} = ${sig(fn(n0), 'Ω')}`); }
+    story = el === 'L' ? 'XL grows in step with the frequency: double ν, double XL' : 'XC falls as the frequency rises: double ν, half XC';
+    second = el === 'L' ? 'At ν = 0, dc, the coil is a plain wire; at high frequency it all but blocks the current' : 'At ν = 0, dc, the capacitor is a break; at high frequency it passes the current easily';
   } else if (s.show === 'reactance') {
     const L = s.L ?? 25.48e-3, C = s.C ?? 796e-6, nu0 = resonantOmega(L, C) / TAU, top = reactanceL(L, nu0) * 3, nuMax = nu0 * 2.6, gx = bx + bw * .08, gy = by + bh * .86, gw = bw * .82, gh = bh * .74, X = (n: number) => gx + gw * n / nuMax, Y = (x: number) => gy - gh * Math.min(1, x / top); dur = 8;
     line([gx, gy], [gx + gw, gy], 'ink', 3); line([gx, gy], [gx, gy - gh * 1.04], 'ink', 3); label(gx + gw + 24 * k, gy + 9 * k, 'ν', 'muted', 26); label(gx, gy - gh * 1.08, 'X', 'muted', 26);
