@@ -1898,3 +1898,23 @@ test('magnetic_matter gets the book right', async () => {
   assert.ok(matterErrors({verb: 'magnetic_matter', show: 'atoms', kind: 'soft'}).length);
   assert.ok(matterErrors({verb: 'magnetic_matter', show: 'core', mur: .5}).length);
 });
+
+test('em_waves gets the book right', async () => {
+  const {emWaves, emWavesErrors, EM_SHOWS, axesOf, waveOf, fieldAt, capacitance, bandOf, photonEV, C_LIGHT} = await import('../src/verbs/em-waves.ts');
+  const near = (a: number, b: number, tol = .01) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  near(6.3 / C_LIGHT, 2.1e-8);                                                                     // Example 8.1
+  assert.deepEqual(axesOf('xyz'), {travel: 'x', E: 'y', B: 'z', sign: 1}); assert.equal(axesOf('xzy')!.sign, -1);   // Example 8.2 travels along −x
+  assert.equal(axesOf('zxy')!.sign, 1); assert.equal(axesOf('zzy'), undefined);
+  const e82 = waveOf({k: .5e3}); near(e82.lambda, .01257); near(e82.nu, 23.9e9);                  // Example 8.2
+  near(capacitance(.12, .05), 8.01e-12); near(.15 / capacitance(.12, .05), 1.87e10);               // Exercise 8.1
+  const I = 230 * 300 * 100e-12; near(I, 6.9e-6); near(fieldAt(I, .06, .03), 1.15e-11);          // Exercise 8.2, rms
+  near(fieldAt(1, .1, .1), fieldAt(1, .1, .1 - 1e-12), 1e-6);                                      // B is continuous at the plate's edge
+  assert.equal(bandOf(500e-9), 'visible'); assert.equal(bandOf(.5), 'radio'); assert.equal(bandOf(1e-10), 'X-rays'); near(photonEV(.1), 1.24e-5);
+  for (const show of EM_SHOWS) { assert.deepEqual(emWavesErrors({verb: 'em_waves', show}), [], show); assert.ok(emWaves({verb: 'em_waves', show}).props.length > 5, show); }
+  assert.ok(emWavesErrors({verb: 'em_waves', show: 'plane', E0: 6.3, B0: 1e-6}).length, 'E0/B0 must be c');
+  assert.ok(emWavesErrors({verb: 'em_waves', show: 'plane', axes: 'xxz'}).length); assert.ok(emWavesErrors({verb: 'em_waves', show: 'spectrum', band: 'blue'}).length);
+  const texts = (sc: {props: unknown[]}) => (sc.props as {text?: string}[]).map(p => p.text ?? '').join(' | ');
+  assert.ok(texts(emWaves({verb: 'em_waves', show: 'plane', E0: 6.3, nu: 25e6, axes: 'xyz'})).includes('2.1 × 10⁻⁸ T'));
+  assert.ok(texts(emWaves({verb: 'em_waves', show: 'plane', axes: 'xzy'})).includes('−x'), 'Example 8.2 points the travel the other way');
+  const quiet = texts(emWaves({verb: 'em_waves', show: 'source', motion: 'still'})); assert.ok(/no wave|nothing travels/i.test(quiet));
+});

@@ -39,6 +39,7 @@ import {movingCharges, movingErrors, type MovingSpec} from './moving.ts';
 import {magneticMatter, matterErrors, type MatterSpec} from './matter.ts';
 import {induction, inductionErrors, type InductionSpec} from './induction.ts';
 import {ac, acErrors, type AcSpec} from './ac.ts';
+import {emWaves, emWavesErrors, type EmWavesSpec} from './em-waves.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -124,6 +125,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'electrostatic potential, computed: work against a field, V and E against r, a dipole\'s V, V adding over charges, equipotentials traced from V, E = −δV/δl, energy of assembled charges, the electron volt, U = −pE cos θ'},
   ac: {errors: acErrors, compile: ac,
     about: 'Class 12 alternating current, computed: rotating phasors and their waves for R, L, C and series LCR, rms values, lamps in ac and dc circuits, reactance against frequency, impedance triangle, resonance curves, power factor and its correction, energy in a coil over a cycle, the transformer'},
+  em_waves: {errors: emWavesErrors, compile: emWaves,
+    about: 'Class 12 electromagnetic waves, computed: displacement current in a charging capacitor with Ampère\'s two surfaces and B between the plates, the plane wave with E and B in phase and at right angles (B0 = E0/c, λν = c, E × B the travel), the wave slowing in glass, a charge at rest, in uniform motion and oscillating, Hertz\'s spark experiment, and the spectrum from radio to gamma rays with a marked wavelength'} as Verb<EmWavesSpec>,
   induction: {errors: inductionErrors, compile: induction,
     about: 'Class 12 electromagnetic induction, computed: Faraday\'s experiments with a magnet, coil and galvanometer, the tapping key, Φ = BA cos θ, ε = −N dΦ/dt with its graph, Lenz\'s law for a coil and for a loop crossing a field\'s edge, the rod on rails ε = Blv, a turning rod ε = ½Bωl², mutual and self inductance, back emf, ½LI², and the ac generator.'},
   magnetic_matter: {errors: matterErrors, compile: magneticMatter,

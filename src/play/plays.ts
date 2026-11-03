@@ -375,7 +375,31 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.vsbase[1] - a.vs[1], 220 * n(v, 'Ns') / 100]]; },
   },
+  {
+    id: 'tune-the-wave', chapter: 'leph1-08', title: 'Tune the wave',
+    intro: 'Every band of the spectrum is the same kind of wave at a different frequency. Turn the frequency and see the band, the wavelength and the energy each photon carries.',
+    controls: [{id: 'logf', label: 'Frequency, 10^x Hz', kind: 'slider', min: 5, max: 21, step: .1, unit: '', start: 8}],
+    spec: v => ({verb: 'em_waves', show: 'spectrum', title: 'Tuning across the spectrum', mark_nu: 10 ** n(v, 'logf')}),
+    setup: 9,
+    reading: v => { const nu = 10 ** n(v, 'logf'), lam = 3e8 / nu; return [['Band', bandName(lam)], ['Wavelength', sciText(lam, 'm')], ['Photon energy', sciText(1240e-9 / lam, 'eV')]]; },
+    predict: {
+      question: 'You double the frequency. What happens to the wavelength?',
+      options: [{text: 'It halves', right: true}, {text: 'It doubles'}, {text: 'It stays the same: only the speed changes'}],
+      runs: [{logf: 9}, {logf: 9.3}],
+      why: 'All these waves travel at c in vacuum, and c = νλ. Twice the frequency must mean half the wavelength.',
+    },
+    challenges: [
+      {text: 'Find light your eyes can see.', start: {logf: 12}, hit: v => bandName(3e8 / 10 ** n(v, 'logf')) === 'visible', hint: v => 'Visible light is 400 to 700 nm: about 4 to 7.5 × 10¹⁴ Hz.'},
+      {text: 'Make photons of more than 100 eV, enough to ionise atoms.', start: {logf: 15}, hit: v => 1240e-9 * 10 ** n(v, 'logf') / 3e8 > 100, hint: v => 'E = hν: more energy per photon needs a higher frequency.'},
+      {text: 'Find a wave longer than a metre.', start: {logf: 12}, hit: v => 3e8 / 10 ** n(v, 'logf') > 1, hint: v => 'λ = c/ν: a long wave needs a low frequency, below 3 × 10⁸ Hz.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.mark[0] - a.long[0], 4 - Math.log10(3e8 / 10 ** n(v, 'logf'))]]; },
+  },
 ];
+
+/** The book's bands by wavelength, for readings (as the em_waves verb draws them). */
+const bandName = (lam: number) => lam >= .1 ? 'radio' : lam >= 1e-3 ? 'microwave' : lam >= 7e-7 ? 'infrared' : lam >= 4e-7 ? 'visible' : lam >= 1e-9 ? 'ultraviolet' : lam >= 1e-12 ? 'X-rays' : 'gamma rays';
+const sciText = (x: number, unit: string) => { const e = Math.floor(Math.log10(x)), m = x / 10 ** e; return e >= -2 && e <= 3 ? `${+x.toPrecision(3)} ${unit}` : `${+m.toPrecision(3)} × 10^${e} ${unit}`; };
 
 export const playsFor = (chapter: string) => PLAYS.filter(p => p.chapter === chapter);
 export const startValues = (p: Play): Values => Object.fromEntries(p.controls.map(c => [c.id, c.start]));
