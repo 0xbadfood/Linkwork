@@ -17,7 +17,7 @@ export const CURRENT_SHOWS = ['drift', 'wire', 'iv', 'resistivity', 'transmissio
 export type Branch = {e?: number; R: number; name?: string};
 export type Cell = {e: number; r: number};
 export type CurrentSpec = {verb: 'current'; show: (typeof CURRENT_SHOWS)[number]; E?: number; tau?: number; I?: number; A?: number; n?: number; rho?: number; l?: number; V?: number;
-  kind?: string; alpha?: number; T?: number; T0?: number; P?: number; Rc?: number; V2?: number; emf?: number; r?: number; R?: number; cells?: Cell[]; branches?: Branch[];
+  kind?: string; alpha?: number; T?: number; T0?: number; P?: number; Rc?: number; V2?: number; emf?: number; r?: number; R?: number; cells?: Cell[]; branches?: Branch[]; equivalent?: boolean;
   currents?: boolean; R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
@@ -55,7 +55,8 @@ export function currentErrors(s: CurrentSpec): string[] {
   if (s.show === 'resistivity' && s.kind !== undefined && !RHO_KINDS.includes(s.kind)) e.push(`${W}: resistivity kind is ${RHO_KINDS.join(', ')}`);
   if (s.show === 'cells') {
     if (!['series', 'parallel'].includes(s.kind as string)) e.push(`${W}: cells needs kind: series or parallel`);
-    if (!Array.isArray(s.cells) || s.cells.length < 2 || s.cells.length > 4 || s.cells.some(c => !isNum(c?.e) || !isNum(c?.r) || c.r <= 0)) e.push(`${W}: cells is 2 to 4 of {e (V; negative in series for a cell turned round), r (Ω, above 0)}`);
+    if (!Array.isArray(s.cells) || s.cells.length < 2 || s.cells.length > 6 || s.cells.some(c => !isNum(c?.e) || !isNum(c?.r) || c.r <= 0)) e.push(`${W}: cells is 2 to 6 of {e (V; negative for a cell turned round), r (Ω, above 0)}`);
+    if (s.equivalent !== undefined && typeof s.equivalent !== 'boolean') e.push(`${W}: equivalent is true or false`);
   }
   if (s.show === 'kirchhoff' && s.branches !== undefined && (!Array.isArray(s.branches) || s.branches.length !== 3 || s.branches.some(b => !isNum(b?.R) || b.R <= 0 || (b.e !== undefined && !isNum(b.e))))) e.push(`${W}: kirchhoff needs branches: exactly 3 of {e (V, driving up), R (Ω), name}`);
   if (s.show === 'transmission' && s.V !== undefined && s.V2 !== undefined && s.V === s.V2) e.push(`${W}: V and V2 are two different line voltages`);
@@ -161,19 +162,27 @@ export function current(s: CurrentSpec): Scene {
     facts.push(`I = ε/(R + r) = ${fmt(I, 'A')}`, `V = ε − Ir = ${fmt(V, 'V')}`, `lost inside the cell: Ir = ${fmt(I * r, 'V')}`);
     story = 'Current through the cell drops some of the emf inside it: V = ε − Ir'; second = 'V equals ε only when no current flows; the line meets I = ε/r at a short circuit';
   } else if (s.show === 'cells') {
-    const cs = s.cells ?? [{e: 1.5, r: .5}, {e: 1.5, r: .5}], kind = s.kind ?? 'series', eq = combineCells(cs, kind), T1 = 4.8, n = cs.length, x0 = bx + bw * .08, x1 = bx + bw * .92; dur = 9;
+    // equivalent false: only the joined cells, for a passage that has not yet replaced them by one (2026-11-03: the
+    // Class 12 cells film had nothing that showed two cells joined at A, B and C without the answer)
+    const cs = s.cells ?? [{e: 1.5, r: .5}, {e: 1.5, r: .5}], kind = s.kind ?? 'series', eq = combineCells(cs, kind), n = cs.length, x0 = bx + bw * .08, x1 = bx + bw * .92;
+    const whole = s.equivalent ?? true, T1 = whole ? 4.8 : 1e9; dur = whole ? 9 : 5;
     const early = {show: [0, T1] as [number, number]}, late = {show: [T1, 1e9] as [number, number]};
+    const dot = (p: P2, name: string, dy: number) => { props.push({id: `j-${name}`, type: 'circle', x: p[0], y: p[1], r: 8 * k, style: {fill: 'accent'}, layer: 4, ...early} as Prop); label(p[0], p[1] + dy * k, name, 'accent', 26, early); anchors[name] = p; };
     if (kind === 'series') {
       const y = cy, step = (x1 - x0) / n;
       cs.forEach((c, i) => { const a: P2 = [x0 + step * i, y], b: P2 = [x0 + step * (i + 1), y]; c.e >= 0 ? cell(a, b, 'ink', early) : cell(b, a, 'bad', early); label((a[0] + b[0]) / 2, y + 76 * k, num ? `${+c.e.toPrecision(3)} V, ${+c.r.toPrecision(3)} Ω` : `ε${i + 1}, r${i + 1}`, 'ink', 24, early); });
+      for (let i = 0; i <= n; i++) dot([x0 + step * i, y], String.fromCharCode(65 + i), -40);
     } else {
       const pitch = bh * .62 / Math.max(n - 1, 1), ys = cs.map((_, i) => cy - bh * .31 + pitch * i);
-      ys.forEach((y, i) => { cell([x0, y], [x1, y], 'ink', early); label(cx + 130 * k, y - 16 * k, num ? `${+cs[i].e.toPrecision(3)} V, ${+cs[i].r.toPrecision(3)} Ω` : `ε${i + 1}, r${i + 1}`, 'ink', 24, early); });
+      ys.forEach((y, i) => { cs[i].e >= 0 ? cell([x0, y], [x1, y], 'ink', early) : cell([x1, y], [x0, y], 'bad', early); label(cx + 130 * k, y - 16 * k, num ? `${+cs[i].e.toPrecision(3)} V, ${+cs[i].r.toPrecision(3)} Ω` : `ε${i + 1}, r${i + 1}`, 'ink', 24, early); });
       line([x0, ys[0]], [x0, ys[n - 1]], 'muted', 3, early); line([x1, ys[0]], [x1, ys[n - 1]], 'muted', 3, early);
+      dot([x1, ys[0]], 'B₁', -24); dot([x0, ys[0]], 'B₂', -24);   // the long plate, +, faces x1: the book's B₁ joins the positives
     }
-    cell([x0, cy], [x1, cy], 'good', late); label(cx, cy + 76 * k, num ? `ε = ${+eq.e.toPrecision(3)} V, r = ${+eq.r.toPrecision(3)} Ω` : 'one equivalent cell', 'good', 28, late);
-    facts.push(`εeq = ${fmt(eq.e, 'V')}`, `req = ${fmt(eq.r, 'Ω')}`);
-    [story, second] = kind === 'series' ? ['In series the emfs add with their signs, and so do the internal resistances', 'A cell turned round takes its emf away, but its r still adds'] : ['In parallel: εeq/req = Σε/r and 1/req = Σ1/r', 'Equal cells keep ε and share the current, with a smaller r'];
+    if (whole) cell([x0, cy], [x1, cy], 'good', late);
+    if (whole) label(cx, cy + 76 * k, num ? `ε = ${+eq.e.toPrecision(3)} V, r = ${+eq.r.toPrecision(3)} Ω` : 'one equivalent cell', 'good', 28, late);
+    if (whole) facts.push(`εeq = ${fmt(eq.e, 'V')}`, `req = ${fmt(eq.r, 'Ω')}`);
+    else facts.push(`${n} cells joined in ${kind}`);
+    [story, second] = !whole ? (kind === 'series' ? ['Cells joined end to end: the negative of one to the positive of the next', 'The junctions A, B, C… mark where each cell starts and ends'] : (cs.some(c => c.e < 0) ? ['Cells side by side between B₁ and B₂, one turned round: its negative end meets the others\' positive ends at B₁', 'Each cell is its own branch between the same two points'] : ['Cells side by side: their positive ends joined at B₁, their negative ends at B₂', 'Each cell is its own branch between the same two points'])) : kind === 'series' ? ['In series the emfs add with their signs, and so do the internal resistances', 'A cell turned round takes its emf away, but its r still adds'] : ['In parallel: εeq/req = Σε/r and 1/req = Σ1/r', 'Equal cells keep ε and share the current, with a smaller r'];
     anchors.cell = [cx, cy];
   } else if (s.show === 'kirchhoff') {
     const bs = s.branches ?? [{e: 10, R: 2}, {R: 4}, {e: 5, R: 2}], {V, I} = solveBranches(bs), xs = [cx - bw * .36, cx, cx + bw * .36], yt = cy - bh * .36, yb = cy + bh * .36, top = Math.max(...I.map(Math.abs)); dur = 10;

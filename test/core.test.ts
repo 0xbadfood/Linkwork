@@ -1947,6 +1947,18 @@ test('a picture names no adjustment the narration has not stated, and every card
   assert.match(compile({verb: 'ray_diagram', device: 'convex_lens', focal_length: 5, objects: [3], formula: true, illustrative: true} as any).errors.join(), /formula shows the numbers/);
 });
 
+test('cells: joined cells alone, with the book\'s junctions, up to six (Class 12 cells film)', async () => {
+  const {compile} = await import('../src/verbs/index.ts');
+  const texts = (spec: object) => compile(spec as any).scene!.props.filter(p => p.type === 'text').map(p => (p as any).text).join(' | ');
+  const series = compile({verb: 'current', show: 'cells', kind: 'series', cells: [{e: 1.5, r: .5}, {e: 1.5, r: .5}], equivalent: false} as any);
+  assert.deepEqual(series.errors, []); assert.ok(['A', 'B', 'C'].every(n => (series.scene!.meta as any).anchors[n]));
+  assert.doesNotMatch(texts({verb: 'current', show: 'cells', kind: 'series', cells: [{e: 1.5, r: .5}, {e: 1.5, r: .5}], equivalent: false}), /ε = |equivalent/);
+  const six = compile({verb: 'current', show: 'cells', kind: 'series', cells: Array(6).fill({e: 2, r: .1})} as any);
+  assert.deepEqual(six.errors, []); assert.match((six.scene!.meta as any).facts.join(), /εeq = 12/);
+  const par = compile({verb: 'current', show: 'cells', kind: 'parallel', cells: [{e: 1.5, r: .5}, {e: -1.4, r: .5}]} as any);
+  assert.deepEqual(par.errors, []); assert.ok((par.scene!.meta as any).anchors['B₁']);
+});
+
 test('wave optics verbs get the book right (leph2-02)', async () => {
   const wo = await import('../src/verbs/wave-optics.ts');
   const {compile, check} = await import('../src/index.ts');
