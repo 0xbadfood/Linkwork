@@ -103,6 +103,7 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `matter_wave` (trial): de Broglie's λ = h/p for an electron, drawn to one scale against a crystal's atoms, and a ruler of lengths placing a ball's λ beside a nucleus.
 - `rutherford` (trial): Thomson's and Rutherford's atoms crossed by α-particles, α paths past a gold nucleus integrated under Coulomb repulsion (cot(θ/2) = 2b/d), and a head-on α stopping at the distance of closest approach.
 - `bohr` (trial): hydrogen's classical orbit (K, U, E) and its spiral collapse, Bohr's orbits to one scale, de Broglie's standing wave round an orbit, the energy levels with the Lyman to Pfund series, and a series' lines on a wavelength strip.
+- `nucleus` (trial): nuclides as protons and neutrons (isotopes, isobars), nuclei to one scale (R = 1.2A^⅓ fm), mass defect and binding energy, the binding energy per nucleon curve with fission and fusion, the nucleon-pair potential, α, β and γ decay, rays bent in a field and stopped by paper, aluminium and lead, U-235 fission, chain reactions, and the book's fusion reactions and p-p cycle, every Q from the masses.
 
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.

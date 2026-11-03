@@ -2180,6 +2180,61 @@ test('atoms verbs get the book right (leph2-04)', async () => {
   }
 });
 
+test('the nucleus verb gets the book right (leph2-05, and ICSE radioactivity)', async () => {
+  const nu = await import('../src/verbs/nuclei.ts');
+  const {compile, check} = await import('../src/index.ts');
+  const near = (a: number, b: number, tol = .005) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  // Example 13.1: R = 1.2 A^⅓ fm; iron (55.85 u, A = 56) has density 2.29 × 10¹⁷ kg m⁻³
+  near(nu.radiusFm(56), 4.59, .002); near(nu.density(55.85, 56), 2.29e17);
+  // Example 13.3: O-16's mass defect is 127.5 MeV/c²; He-4 7.07 and Fe-56 8.79 MeV per nucleon, each agreeing with the curve
+  near(nu.binding('O-16').Eb, 127.5, .002);
+  for (const [n, e] of nu.EBN) if (n in nu.ATOMIC_MASS) assert.ok(Math.abs(nu.binding(n).Ebn - e) < .02, `${n}: ${nu.binding(n).Ebn} vs the curve's ${e}`);
+  // Fig. 13.1: peak about 8.75 near A = 56, 7.6 at A = 238; fission of 240 into 2 × 120 gains about 216 MeV (B57)
+  near(nu.ebnAt(56), 8.79); assert.equal(nu.ebnAt(238).toFixed(1), '7.6'); assert.equal(nu.ebnAt(240).toFixed(1), '7.6'); assert.equal(nu.ebnAt(120).toFixed(1), '8.5');
+  // B60–B62, B66, B67: Q from the atomic masses
+  assert.equal(nu.FUSION.pp.Q.toFixed(2), '0.42'); assert.equal(nu.FUSION['dd-he3'].Q.toFixed(2), '3.27'); assert.equal(nu.FUSION['dd-t'].Q.toFixed(2), '4.03');
+  assert.deepEqual(nu.PP_CYCLE.map(s => s.Q.toFixed(2)), ['0.42', '1.02', '5.49', '12.86']); assert.equal(nu.PP_NET.toFixed(1), '26.7');
+  // B51, B53, B54: charge and nucleons balance, freeing 3, 4 and 2 neutrons
+  for (const [pair, free] of [['Ba-144 + Kr-89', 3], ['Sb-133 + Nb-99', 4], ['Xe-140 + Sr-94', 2]] as const) {
+    const [a, b] = nu.FISSION[pair].map(x => nu.nuclide(x)!);
+    assert.equal(a.Z + b.Z, 92); assert.equal(236 - a.A - b.A, free);
+  }
+  const facts = (spec: object) => (compile(spec as any).scene!.meta as any).facts.join(' | ');
+  assert.match(facts({verb: 'nucleus', show: 'decay', mode: 'alpha'}), /²³⁸₉₂U → ²³⁴₉₀Th \+ ⁴₂He/);
+  assert.match(facts({verb: 'nucleus', show: 'decay', mode: 'beta-'}), /³²₁₅P → ³²₁₆S \+ e⁻/);
+  assert.match(facts({verb: 'nucleus', show: 'decay', mode: 'beta+'}), /²²₁₁Na → ²²₁₀Ne \+ e⁺/);
+  assert.match(facts({verb: 'nucleus', show: 'make'}), /isotopes/); assert.match(facts({verb: 'nucleus', show: 'make', nuclides: ['H-3', 'He-3']}), /isobars/);
+  assert.match(facts({verb: 'nucleus', show: 'defect'}), /127\.5 MeV/); assert.match(facts({verb: 'nucleus', show: 'size'}), /2\.29 × 10¹⁷/);
+  assert.match(facts({verb: 'nucleus', show: 'curve', process: 'fission'}), /Q ≈ 216 MeV/);
+  // rays: α to the negative plate (right), β further to the positive; in a magnetic field into the page α turns left, β right, β far more
+  const ends = (field: string) => { const a = (compile({verb: 'nucleus', show: 'rays', field} as any).scene!.meta as any).anchors; return [a.alpha[0] - a.gamma[0], a.beta[0] - a.gamma[0]]; };
+  const [ea, eb] = ends('electric'); assert.ok(ea > 0 && eb < 0 && -eb > ea, `electric ${ea} ${eb}`);
+  const [ma, mb] = ends('magnetic'); assert.ok(ma < 0 && mb > 0 && mb > 20 * -ma, `magnetic ${ma} ${mb}`);
+  // size, one scale: with span held, the drawn radius is in proportion to R
+  const drawn = (A: number) => { const a = (compile({verb: 'nucleus', show: 'size', A, span: 20} as any).scene!.meta as any).anchors; return a.edge1[0] - a.nucleus1[0]; };
+  near(drawn(64) / drawn(8), 2, 1e-6); near(drawn(216) / nu.radiusFm(216), drawn(27) / nu.radiusFm(27), 1e-6);
+  const shows: object[] = [{show: 'make'}, {show: 'make', nuclides: ['O-16', 'Au-197']}, {show: 'size'}, {show: 'size', A: 238, span: 20}, {show: 'defect'}, {show: 'defect', nuclides: ['U-238']},
+    {show: 'curve'}, {show: 'curve', mark: ['He-4', 'Fe-56', 'U-238'], process: 'fission'}, {show: 'curve', process: 'fusion'}, {show: 'force'},
+    {show: 'decay', mode: 'alpha'}, {show: 'decay', mode: 'beta-'}, {show: 'decay', mode: 'beta+'}, {show: 'decay', mode: 'gamma'}, {show: 'decay', mode: 'alpha', nuclides: ['Ra-226']},
+    {show: 'rays'}, {show: 'rays', field: 'magnetic'}, {show: 'penetration'}, {show: 'fission'}, {show: 'fission', products: 'Xe-140 + Sr-94'},
+    {show: 'chain'}, {show: 'chain', neutrons: 2, generations: 4}, {show: 'chain', controlled: true}, {show: 'fusion', reaction: 'pp'}, {show: 'fusion', reaction: 'dd-he3'},
+    {show: 'fusion', reaction: 'dd-t'}, {show: 'fusion', reaction: 'cycle'}].map(s => ({verb: 'nucleus', ...s}));
+  for (const spec of shows) { const r = compile(spec as any); assert.deepEqual(r.errors, [], JSON.stringify(spec)); assert.deepEqual(check(r.scene!), [], JSON.stringify(spec)); }
+  for (const spec of shows) {
+    const sc = compile({...spec, illustrative: true} as any).scene!;
+    for (const p of sc.props) if (p.type === 'text' && p.id !== 'title' && (p as any).text) assert.doesNotMatch((p as any).text, /\d/, `${JSON.stringify(spec)}: ${(p as any).text}`);
+  }
+  const err = (spec: object) => compile({verb: 'nucleus', ...spec} as any).errors.join(' | ');
+  assert.match(err({show: 'make', nuclides: ['Oxygen-16']}), /symbol and mass number/);
+  assert.match(err({show: 'defect', nuclides: ['Co-60']}), /measured masses/);
+  assert.match(err({show: 'decay', mode: 'alpha', nuclides: ['C-12']}), /heavy nuclei/);
+  assert.match(err({show: 'decay'}), /needs mode/);
+  assert.match(err({show: 'size', nuclides: ['U-238', 'U-235'], span: 20}), /do not fit a span/);
+  assert.match(err({show: 'force', mode: 'alpha'}), /mode is not used/);
+  assert.match(err({show: 'fusion'}), /needs reaction/);
+  assert.match(err({show: 'fission', products: 'Ba-141 + Kr-92'}), /one of the book's/);
+});
+
 test('a graph can be drawn against a Greek letter (leph2-03 C5)', async () => {
   // the graph of Kmax against ν had to call its axis n, which read on screen as 'n (Hz)'
   const {compile} = await import('../src/index.ts');

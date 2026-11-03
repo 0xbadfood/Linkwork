@@ -475,6 +475,26 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.nucleus[0] - a.alpha[0], closestAt(n(v, 'K'))]]; },
   },
+  {
+    id: 'nuclear-size', chapter: 'leph2-05', title: 'Build a nucleus',
+    intro: 'Pack more protons and neutrons into a nucleus. Its radius follows R = 1.2 A^⅓ fm, drawn here to one scale. Guess how much bigger it gets before you look.',
+    controls: [{id: 'A', label: 'Mass number A (protons + neutrons)', kind: 'slider', min: 1, max: 240, step: 1, unit: '', start: 12}],
+    spec: v => ({verb: 'nucleus', title: 'Nucleus to scale', show: 'size', A: Math.round(n(v, 'A')), span: 20}),
+    setup: .1,
+    reading: v => [['Radius R', `${fixed(radiusAt(n(v, 'A')), 2)} fm`], ['Density', 'about 2.3 × 10^17 kg/m³, whatever A is']],
+    predict: {
+      question: 'You make the nucleus eight times heavier, from A = 8 to A = 64. What happens to its radius?',
+      options: [{text: 'It doubles', right: true}, {text: 'It becomes eight times larger'}, {text: 'It grows about 2.8 times (√8)'}],
+      runs: [{A: 8}, {A: 64}],
+      why: 'R grows as the cube root of A: 64 is 8 × 8, and the cube root of 8 is 2. Volume grows with A, so the density stays the same.',
+    },
+    challenges: [
+      {text: 'Make a nucleus of radius 6.0 fm (within 0.05 fm).', start: {A: 20}, hit: v => Math.abs(radiusAt(n(v, 'A')) - 6) < .05, hint: v => '6 = 1.2 × A^⅓, so A^⅓ = 5.'},
+      {text: 'Carbon-12 has R = 2.75 fm. Make a nucleus twice as wide (within 0.03 fm).', start: {A: 40}, hit: v => Math.abs(radiusAt(n(v, 'A')) - 2 * radiusAt(12)) < .03, hint: v => 'Twice the radius needs 2³ = 8 times the nucleons.'},
+      {text: 'Uranium-238 is about 7.4 fm across its radius. Reach a radius of more than 7.4 fm.', start: {A: 100}, hit: v => radiusAt(n(v, 'A')) > 7.4, hint: v => 'Even the heaviest natural nuclei are only a few times wider than the lightest.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.edge1[0] - a.nucleus1[0], radiusAt(Math.round(n(v, 'A')))]]; },
+  },
 ];
 
 /** A photon's energy in eV at ν (10¹⁴ Hz), and the threshold ν₀ (10¹⁴ Hz) of a work function in eV (as the photoelectric verb computes them). */
@@ -483,6 +503,9 @@ const thresholdAt = (phi: number) => phi * 1.602e-19 / 6.626e-34 / 1e14;
 
 /** The distance of closest approach in fm of an α of K MeV head-on to gold (as the rutherford verb computes it). */
 const closestAt = (K: number) => 2 * 79 * 1.44 / K;
+
+/** A nucleus's radius in fm, R = 1.2 A^⅓ (as the nucleus verb computes it). */
+const radiusAt = (A: number) => 1.2 * Math.cbrt(A);
 
 /** Malus' law: the share of the light leaving P1 that passes P2 at θ degrees (as the polaroid verb computes it). */
 const malusAt = (theta: number) => Math.cos(theta * Math.PI / 180) ** 2;
