@@ -50,11 +50,11 @@ const fmt = (v: number, places = 1) => n2(Number(v.toFixed(places)), places).rep
 const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1];
 const unit = (a: Vec): Vec => { const l = Math.hypot(a[0], a[1]) || 1; return [a[0] / l, a[1] / l]; };
 
-type Shape = {kind: 'polygon'; points: Vec[]; medium: string} | {kind: 'circle'; centre: Vec; r: number; medium: string};
+export type Shape = {kind: 'polygon'; points: Vec[]; medium: string} | {kind: 'circle'; centre: Vec; r: number; medium: string};
 type Hit = {t: number; point: Vec; normal: Vec; shape: number};
 
 /** Where a ray (from p along d, unit) first meets a shape's boundary beyond t = 1e-6; normal: the boundary's unit normal. */
-function nearest(shapes: Shape[], p: Vec, d: Vec): Hit | null {
+export function nearest(shapes: Shape[], p: Vec, d: Vec): Hit | null {
   let best: Hit | null = null;
   shapes.forEach((s, i) => {
     if (s.kind === 'polygon') {
@@ -81,13 +81,13 @@ function nearest(shapes: Shape[], p: Vec, d: Vec): Hit | null {
 }
 
 /** Snell's law in vector form: the refracted direction, or null past the critical angle. */
-function refract(d: Vec, normal: Vec, n1: number, n2v: number): Vec | null {
+export function refract(d: Vec, normal: Vec, n1: number, n2v: number): Vec | null {
   const n: Vec = dot(d, normal) > 0 ? [-normal[0], -normal[1]] : normal;       // against the ray
   const eta = n1 / n2v, cosi = -dot(n, d), k = 1 - eta * eta * (1 - cosi * cosi);
   if (k < 0) return null;
   return unit([eta * d[0] + (eta * cosi - Math.sqrt(k)) * n[0], eta * d[1] + (eta * cosi - Math.sqrt(k)) * n[1]]);
 }
-const reflect = (d: Vec, n: Vec): Vec => { const k = 2 * dot(d, n); return unit([d[0] - k * n[0], d[1] - k * n[1]]); };
+export const reflect = (d: Vec, n: Vec): Vec => { const k = 2 * dot(d, n); return unit([d[0] - k * n[0], d[1] - k * n[1]]); };
 
 /** A ray's path through the shapes: its points, and the direction it leaves in. `reflectInside`: the number of times
  * it reflects inside a circle before it may leave (a raindrop's one internal reflection). Works in y-up coordinates. */

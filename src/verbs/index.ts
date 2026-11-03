@@ -40,6 +40,8 @@ import {magneticMatter, matterErrors, type MatterSpec} from './matter.ts';
 import {induction, inductionErrors, type InductionSpec} from './induction.ts';
 import {ac, acErrors, type AcSpec} from './ac.ts';
 import {emWaves, emWavesErrors, type EmWavesSpec} from './em-waves.ts';
+import {tir, tirErrors, type TirSpec, refractingSurface, refractingSurfaceErrors, type RefractingSurfaceSpec, prismDeviation, prismDeviationErrors, type DeviationSpec,
+  opticalInstrument, opticalInstrumentErrors, type InstrumentSpec} from './ray-optics.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -127,6 +129,14 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'Class 12 alternating current, computed: rotating phasors and their waves for R, L, C and series LCR, rms values, lamps in ac and dc circuits, reactance against frequency, impedance triangle, resonance curves, power factor and its correction, energy in a coil over a cycle, the transformer'},
   em_waves: {errors: emWavesErrors, compile: emWaves,
     about: 'Class 12 electromagnetic waves, computed: displacement current in a charging capacitor with Ampère\'s two surfaces and B between the plates, the plane wave with E and B in phase and at right angles (B0 = E0/c, λν = c, E × B the travel), the wave slowing in glass, a charge at rest, in uniform motion and oscillating, Hertz\'s spark experiment, and the spectrum from radio to gamma rays with a marked wavelength'} as Verb<EmWavesSpec>,
+  tir: {errors: tirErrors, compile: tir,
+    about: 'Class 12 total internal reflection put to work, computed: an optical fibre with core and cladding (a ray trapped beyond the critical angle, or leaking out within it), and right-angled prisms turning light through 90° or 180° or inverting it'} as Verb<TirSpec>,
+  refracting_surface: {errors: refractingSurfaceErrors, compile: refractingSurface,
+    about: 'Class 12 refraction at a spherical surface, computed: n2/v − n1/u = (n2 − n1)/R with rays from a point object to its real or virtual image, and a thin lens as two surfaces in turn, I1 then F: the lens maker\'s formula'} as Verb<RefractingSurfaceSpec>,
+  prism_deviation: {errors: prismDeviationErrors, compile: prismDeviation,
+    about: 'Class 12 refraction through a prism, computed: the ray at several angles of incidence with each deviation plotted (the i–δ curve), the minimum deviation with the symmetric ray, n = sin[(A + Dm)/2]/sin(A/2), and the prism in water'} as Verb<DeviationSpec>,
+  optical_instrument: {errors: opticalInstrumentErrors, compile: opticalInstrument,
+    about: 'Class 12 optical instruments, true to scale: the simple microscope, the compound microscope (objective and eyepiece images), the refracting telescope (angles α and β) and the Cassegrain reflecting telescope, with their magnifying powers'} as Verb<InstrumentSpec>,
   induction: {errors: inductionErrors, compile: induction,
     about: 'Class 12 electromagnetic induction, computed: Faraday\'s experiments with a magnet, coil and galvanometer, the tapping key, Φ = BA cos θ, ε = −N dΦ/dt with its graph, Lenz\'s law for a coil and for a loop crossing a field\'s edge, the rod on rails ε = Blv, a turning rod ε = ½Bωl², mutual and self inductance, back emf, ½LI², and the ac generator.'},
   magnetic_matter: {errors: matterErrors, compile: magneticMatter,

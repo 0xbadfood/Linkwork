@@ -395,7 +395,30 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.mark[0] - a.long[0], 4 - Math.log10(3e8 / 10 ** n(v, 'logf'))]]; },
   },
+  {
+    id: 'least-deviation', chapter: 'leph2-01', title: 'Find the least deviation',
+    intro: 'A 60° glass prism (n = 1.5). Turn the angle at which the light meets it, and watch how far the prism turns the light aside: each try is plotted.',
+    controls: [{id: 'i', label: 'Angle of incidence i', kind: 'slider', min: 30, max: 85, step: .5, unit: '°', start: 35}],
+    spec: v => ({verb: 'prism_deviation', title: 'Deviation through a prism', A: 60, n: 1.5, incidences: [n(v, 'i')], seconds_each: 2}),
+    setup: 3,
+    reading: v => { const d = deviationAt(n(v, 'i')); return [['Incidence i', `${n(v, 'i')}°`], ['Deviation δ', `${d.toFixed(1)}°`]]; },
+    predict: {
+      question: 'You turn i from 35° up to 80°. What does the deviation do?',
+      options: [{text: 'It falls, then rises again', right: true}, {text: 'It keeps growing'}, {text: 'It keeps falling'}],
+      runs: [{i: 35}, {i: 48.5}, {i: 80}],
+      why: 'Near grazing entry, or grazing exit, the light is bent a lot. In between it passes most evenly, and the bending is least when the ray crosses the prism symmetrically, parallel to its base.',
+    },
+    challenges: [
+      {text: 'Find the least deviation, to within 0.3°.', start: {i: 35}, hit: v => deviationAt(n(v, 'i')) < 37.18 + .3, hint: v => 'The least deviation comes when the ray inside runs parallel to the base: try between 45° and 52°.'},
+      {text: 'Make the prism turn the light by more than 50°.', start: {i: 50}, hit: v => deviationAt(n(v, 'i')) > 50, hint: v => 'Go to either end: a ray grazing in, or one grazing out.'},
+      {text: 'Find a second angle, above 55°, that gives δ = 40° (within 0.5°).', start: {i: 70}, hit: v => n(v, 'i') > 55 && Math.abs(deviationAt(n(v, 'i')) - 40) < .5, hint: v => 'Each deviation above the least is reached at two angles of incidence: i and e swap.'},
+    ],
+    probe: (v, s) => { const a = s.meta.anchors; return [[a.point[0] - a.origin[0], n(v, 'i')]]; },
+  },
 ];
+
+/** δ through the play's 60° prism of n = 1.5 (as prism_deviation computes it). */
+const deviationAt = (i: number) => { const r1 = Math.asin(Math.sin(i * Math.PI / 180) / 1.5) * 180 / Math.PI; return i + Math.asin(1.5 * Math.sin((60 - r1) * Math.PI / 180)) * 180 / Math.PI - 60; };
 
 /** The book's bands by wavelength, for readings (as the em_waves verb draws them). */
 const bandName = (lam: number) => lam >= .1 ? 'radio' : lam >= 1e-3 ? 'microwave' : lam >= 7e-7 ? 'infrared' : lam >= 4e-7 ? 'visible' : lam >= 1e-9 ? 'ultraviolet' : lam >= 1e-12 ? 'X-rays' : 'gamma rays';

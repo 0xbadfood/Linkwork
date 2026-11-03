@@ -1926,3 +1926,38 @@ test('em_waves gets the book right', async () => {
   assert.ok(texts(emWaves({verb: 'em_waves', show: 'plane', axes: 'xzy'})).includes('−x'), 'Example 8.2 points the travel the other way');
   const quiet = texts(emWaves({verb: 'em_waves', show: 'source', motion: 'still'})); assert.ok(/no wave|nothing travels/i.test(quiet));
 });
+
+test('ray optics verbs get the book right (leph2-01)', async () => {
+  const ro = await import('../src/verbs/ray-optics.ts');
+  const {compile} = await import('../src/verbs/index.ts');
+  const near = (a: number, b: number, tol = .005) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  // light pipe 1.68 in 1.44: trapped up to 60°; with no cladding, at every angle
+  near(ro.acceptance(1.68, 1.44), 59.9); assert.equal(ro.acceptance(1.68, 1), 90); near(ro.criticalAngle(1.52), 41.1);
+  // one surface: n 1 to 1.5, R 20, source 100 cm away: image 100 cm inside; lens maker: n 1.55, f 20 needs R 22
+  near(ro.surfaceImage(1, 1.5, 20, -100), 100); near(ro.lensMaker(1.55, 22, -22), 20);
+  // prism: A 60, Dm 40 gives n 1.532; in water Dm becomes 10.3°; the symmetric ray deviates least
+  near(ro.indexFromDm(60, 40), 1.532, .001); near(ro.minimumDeviation(60, ro.indexFromDm(60, 40) / 1.33), 10.3, .01);
+  const Dm = ro.minimumDeviation(60, 1.5); near(ro.deviation(60, 1.5, (60 + Dm) / 2), Dm, 1e-6);
+  for (const i of [35, 45, 55, 70]) assert.ok(ro.deviation(60, 1.5, i) > Dm);
+  // compound microscope fo 2, fe 6.25, 15 apart: object 2.5 cm away, m 20; at infinity m 13.5
+  const c = ro.compoundMicroscope(2, 6.25, 15); near(-c.uo, 2.5); near(c.m, 20); near(ro.compoundMicroscope(2, 6.25, 15, 'infinity').m, 13.5);
+  // telescopes: 144 and 6 cm gives m 24 and 150 cm; 140 and 5 gives 28, and 33.6 with the image at 25 cm
+  const t = ro.refractingTelescope(144, 6); near(t.m, 24); near(t.L, 150); near(ro.refractingTelescope(140, 5, 'near_point').m, 33.6);
+  // Cassegrain: secondary inside the primary's focus but beyond its own: rays diverge, as if from 315 mm behind it
+  near(ro.cassegrain(220, 140, 20).v, -315); near(ro.cassegrain(220, 140, 60).v, 175);
+  // the traced prism ray agrees with the formula
+  const sc = compile({verb: 'prism_deviation', A: 60, Dm: 40} as any).scene!;
+  assert.ok((sc.meta as any).facts[0].includes('1.532'));
+  // a fibre ray within the critical angle leaks; the prisms leak below n 1.414
+  assert.match((compile({verb: 'tir', show: 'fibre', n_core: 1.5, n_clad: 1.45, incidence: 40} as any).scene!.meta as any).facts[1], /escapes/);
+  assert.match((compile({verb: 'tir', show: 'prism_90', n: 1.3} as any).scene!.meta as any).facts.join(' '), /within the critical angle|leak/);
+  // errors name the fix
+  const err = (s: any) => compile(s).errors?.join(' ') ?? '';
+  assert.match(err({verb: 'tir', show: 'fibre', n_core: 1.4, n_clad: 1.5}), /core must have the larger/);
+  assert.match(err({verb: 'tir', show: 'prism_90', incidence: 30}), /incidence is not used/);
+  assert.match(err({verb: 'prism_deviation', A: 60, n: 1.5, incidences: [20]}), /does not get through/);
+  assert.match(err({verb: 'prism_deviation', n: 1.5, Dm: 40}), /not both/);
+  assert.match(err({verb: 'refracting_surface', n1: 1, n2: 1.5, R: 20, u: -40}), /infinity/);
+  assert.match(err({verb: 'optical_instrument', show: 'compound_microscope', fo: 2, fe: 6.25, L: 7}), /lengthen L/);
+  assert.match(err({verb: 'optical_instrument', show: 'reflecting_telescope', d: 120}), /d < R1\/2/);
+});

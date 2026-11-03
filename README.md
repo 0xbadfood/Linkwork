@@ -84,6 +84,14 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `refraction` (trial): a ray entering another medium, or crossing a glass slab and coming out, bent by Snell's law with
   the book's refractive indices; i and r from the normal, sin i ÷ sin r for several angles, the speed of light in each
   medium, the slab's lateral shift, and total internal reflection past the critical angle.
+- `tir` (trial): total internal reflection at work: an optical fibre, core and cladding, its ray trapped beyond the
+  critical angle or leaking out within it, and right-angled prisms turning light through 90° or 180° or inverting it.
+- `refracting_surface` (trial): refraction at one spherical surface (n2/v − n1/u = (n2 − n1)/R), and a thin lens as
+  two surfaces in turn, the first's image I1 then F: the lens maker's formula.
+- `prism_deviation` (trial): a prism's ray at one angle of incidence after another with each deviation plotted, the
+  minimum deviation with the symmetric ray, n = sin[(A + Dm)/2]/sin(A/2), and the prism in water.
+- `optical_instrument` (trial): the simple and compound microscope, the refracting and the Cassegrain telescope, true
+  to scale, with their magnifying powers.
 
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.
