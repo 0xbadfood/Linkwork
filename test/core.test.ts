@@ -2332,3 +2332,56 @@ test("a planner's words at a nucleus sit above it, never across its nucleons", a
     for (const t of sc.props.filter((p: any) => p.id.startsWith('note') && p.type === 'text')) assert.ok(t.y + 10 < top, `${t.text} at ${t.y}, nucleus top ${top}`);
   }
 });
+
+test('kirchhoff solves any network the book draws (leph1-03: Example 3.6, Fig. 3.15)', async () => {
+  // 2026-11-04: current's kirchhoff show holds three branches between two junctions; Example 3.6 and Fig. 3.15 found no
+  // verb and four beats of the Kirchhoff film fell to blank backdrops
+  const {solveNetwork, frac} = await import('../src/verbs/network.ts');
+  const ex = cards(['trial']).kirchhoff.example as any;
+  const sol = solveNetwork(ex.nodes.map((n: any) => n.id), ex.branches)!;
+  // the book: AB 5/8 A, CA 5/2 A, AD 15/8 A, BC 5/2 A, CD 0, DEB 15/8 A
+  assert.deepEqual(sol.I.map(frac), ['5/8', '5/2', '15/8', '5/2', '0', '15/8']);
+  const scene = compile(ex).scene!, facts = (scene.meta as any).facts.join(' | ');
+  assert.match(facts, /branch CD: no current/);
+  assert.match(facts, /round the loop BADB: \+4 × 5\/8 −4 × 15\/8 \+5 = 0 V/);          // the book's check: 5 + 5/8 × 4 − 15/8 × 4 = 0
+  assert.deepEqual(check(scene), []);
+  // Fig. 3.15 with the book's labels: the loop ahdcba gives −30 I1 − 41 I3 + 45 = 0, and I3 = I1 + I2 at a
+  const f315 = {verb: 'kirchhoff', currents: 'names', nodes: [{id: 'a', at: [0, 2]}, {id: 'd', at: [6, 2]}], junction: 'a', loop: ['a', 'h', 'd', 'c', 'b', 'a'], branches: [
+    {from: 'a', to: 'd', via: [[0, 0], [6, 0]], parts: [{R: 30}, {point: 'h'}], name: 'I1'},
+    {from: 'd', to: 'a', parts: [{emf: 45, plus: 'to'}, {point: 'c'}, {R: 1}, {point: 'b'}, {R: 40}], name: 'I3'},
+    {from: 'a', to: 'd', via: [[0, 4], [6, 4]], parts: [{point: 'g'}, {emf: 80, plus: 'to'}, {point: 'f'}, {R: 1}, {point: 'e'}, {R: 20}], name: 'I2'}]};
+  const f = compile(f315 as any);
+  assert.deepEqual(f.errors, []);
+  const texts = f.scene!.props.filter(p => p.type === 'text').map(p => (p as any).text);
+  assert.ok(texts.includes('−30 I1 +45 −41 I3'), texts.join(' / '));
+  assert.ok(texts.includes('At a: I3 = I1 + I2'));
+  // the solution satisfies both of the book's loop equations
+  const [I1, I3, I2] = solveNetwork(['a', 'd'], f315.branches as any)!.I;
+  assert.ok(Math.abs(-30 * I1 - 41 * I3 + 45) < 1e-9 && Math.abs(-30 * I1 + 21 * I2 - 80) < 1e-9 && Math.abs(I3 - I1 - I2) < 1e-9);
+  // nothing to show yet: the network alone, no numbers when illustrative
+  const bare = compile({...ex, currents: 'none', loop: undefined, illustrative: true} as any).scene!;
+  assert.ok(!bare.props.some(p => p.type === 'text' && p.id !== 'title' && /\d/.test((p as any).text.replace(/I\d/g, ''))));
+  // errors a planner can act on
+  const err = (spec: object) => compile({...ex, ...spec} as any).errors.join(' | ');
+  assert.match(compile({...f315, loop: ['a', 'c', 'd', 'a']} as any).errors.join(' | '), /from a to c, but no branch joins them next to each other/);
+  assert.match(err({branches: [{from: 'A', to: 'B', parts: [{R: 1}]}, {from: 'A', to: 'Z'}]}), /from and to are node ids/);
+  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [1, 0]}, {id: 'C', at: [2, 0]}], branches: [{from: 'A', to: 'B', parts: [{R: 1}]}, {from: 'B', to: 'A', parts: [{R: 2}]}], loop: undefined}), /no single solution/);
+  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [1, 0]}], branches: [{from: 'A', to: 'B', parts: [{emf: 2, plus: 'to'}]}, {from: 'A', to: 'B', parts: [{emf: 3, plus: 'to'}]}], loop: undefined}), /no single solution/);
+  assert.match(err({nodes: [{id: 'a', at: [0, 0]}, {id: 'd', at: [1, 0]}], branches: [{from: 'a', to: 'd', parts: [{R: 1}]}, {from: 'a', to: 'd', parts: [{R: 2}]}], loop: ['a', 'd', 'a']}), /name a point/);
+  assert.match(err({branches: [{from: 'A', to: 'B', parts: [{emf: 2}]}, ...ex.branches.slice(1)]}), /plus is from or to/);
+});
+
+test('current joins two slabs and draws drift with no field (leph1-03 C2)', () => {
+  // 2026-11-04: "two identical slabs end to end, a series arrangement" and "with no field the average velocity is zero"
+  // found no picture and fell to blank backdrops
+  const facts = (spec: object) => ((compile({verb: 'current', ...spec} as any).scene!.meta as any).facts as string[]).join(' | ');
+  assert.match(facts({show: 'wire', join: 'end', rho: 1e-6, l: 1, A: 1e-6}), /= 2 × 1 Ω = 2 Ω \(in series\)/);
+  assert.match(facts({show: 'wire', join: 'side', rho: 1e-6, l: 1, A: 1e-6}), /1 Ω ÷ 2 = 0\.5 Ω \(in parallel\)/);
+  const still = compile({verb: 'current', show: 'drift', field: false} as any).scene!;
+  assert.ok(!still.props.some(p => p.id === 'field0'));
+  assert.match(facts({show: 'drift', field: false}), /average velocity is zero/);
+  const hidden = compile({verb: 'current', show: 'drift', field: false, illustrative: true} as any).scene!;
+  assert.ok(hidden.props.some(p => p.type === 'text' && /average velocity zero/.test((p as any).text)));       // the point survives illustrative
+  assert.match(compile({verb: 'current', show: 'cell', join: 'end'} as any).errors.join(), /join goes with show wire/);
+  assert.match(compile({verb: 'current', show: 'wire', field: false} as any).errors.join(), /field goes with show drift/);
+});

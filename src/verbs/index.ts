@@ -35,6 +35,7 @@ import {shm, shmErrors, type ShmSpec} from './shm.ts';
 import {wave, waveErrors, type WaveSpec} from './waves.ts';
 import {electric, electricErrors, type ElectricSpec} from './electric.ts';
 import {current, currentErrors, type CurrentSpec} from './current.ts';
+import {kirchhoff, kirchhoffErrors, type KirchhoffSpec} from './network.ts';
 import {movingCharges, movingErrors, type MovingSpec} from './moving.ts';
 import {magneticMatter, matterErrors, type MatterSpec} from './matter.ts';
 import {induction, inductionErrors, type InductionSpec} from './induction.ts';
@@ -63,7 +64,7 @@ export type Spec = WaveSpec | ElectricSpec | PotentialSpec | CapacitorSpec | Shm
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
   | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
-  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec | SemiconductorSpec;
+  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec | SemiconductorSpec | KirchhoffSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -171,6 +172,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'Class 12 moving charges and magnetism, computed: F = qv × B in 3-D, the force on a wire against its weight, circle and helix paths, Biot–Savart, a loop on its axis, Ampère round a wire, the solenoid, parallel currents, torque on a coil, the moving coil galvanometer with shunt and series R'},
   current: {errors: currentErrors, compile: current,
     about: 'Class 12 current electricity, computed: electron drift and mobility, R = ρl/A and J, V–I curves that break Ohm\'s law, ρ against T, power lost in cables, emf and internal resistance, cells combined, Kirchhoff\'s rules on a solved network, the Wheatstone bridge'},
+  kirchhoff: {errors: kirchhoffErrors, compile: kirchhoff,
+    about: "a network of resistors and cells of any shape, solved by Kirchhoff's rules: junctions placed on a grid, branches carrying resistors, cells and named points, every branch current at its true direction (or the book's labels I1, I2 + I3), a junction's currents in = out, and a loop walked with each change in potential added to zero (Figs. 3.15 and 3.17)"} as Verb<KirchhoffSpec>,
   capacitor: {errors: capacitorErrors, compile: capacitor,
     about: 'conductors, dielectrics and capacitors, computed: E = 0 inside a conductor, shielding, polarisation, C = ε₀A/d, a slab of constant K, series and parallel, energy stored'},
   electric: {errors: electricErrors, compile: electric,

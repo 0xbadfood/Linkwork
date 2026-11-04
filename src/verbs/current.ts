@@ -18,7 +18,7 @@ export type Branch = {e?: number; R: number; name?: string};
 export type Cell = {e: number; r: number};
 export type CurrentSpec = {verb: 'current'; show: (typeof CURRENT_SHOWS)[number]; E?: number; tau?: number; I?: number; A?: number; n?: number; rho?: number; l?: number; V?: number;
   kind?: string; alpha?: number; T?: number; T0?: number; P?: number; Rc?: number; V2?: number; emf?: number; r?: number; R?: number; cells?: Cell[]; branches?: Branch[]; equivalent?: boolean;
-  currents?: boolean; R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
+  currents?: boolean; join?: 'end' | 'side'; field?: boolean; R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const QE = 1.602e-19, ME = 9.11e-31, isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -59,6 +59,8 @@ export function currentErrors(s: CurrentSpec): string[] {
     if (s.equivalent !== undefined && typeof s.equivalent !== 'boolean') e.push(`${W}: equivalent is true or false`);
   }
   if (s.show === 'kirchhoff' && s.branches !== undefined && (!Array.isArray(s.branches) || s.branches.length !== 3 || s.branches.some(b => !isNum(b?.R) || b.R <= 0 || (b.e !== undefined && !isNum(b.e))))) e.push(`${W}: kirchhoff needs branches: exactly 3 of {e (V, driving up), R (Ω), name}`);
+  if (s.field !== undefined && (s.show !== 'drift' || typeof s.field !== 'boolean')) e.push(`${W}: field goes with show drift: false keeps the field off (random motion only)`);
+  if (s.join !== undefined && (s.show !== 'wire' || !['end', 'side'].includes(s.join))) e.push(`${W}: join goes with show wire: end (two identical slabs end to end, in series) or side (side by side, in parallel)`);
   if (s.show === 'transmission' && s.V !== undefined && s.V2 !== undefined && s.V === s.V2) e.push(`${W}: V and V2 are two different line voltages`);
   return e;
 }
@@ -89,7 +91,10 @@ export function current(s: CurrentSpec): Scene {
 
   if (s.show === 'drift') {
     const hasI = s.I !== undefined && s.A !== undefined && s.n !== undefined, tau = s.tau ?? 2.5e-14, E0 = s.E ?? 1;
-    const vd = hasI ? s.I! / (s.n! * QE * s.A!) : QE * E0 * tau / ME, x0 = bx + bw * .04, x1 = bx + bw * .96, y0 = cy - bh * .3, y1 = cy + bh * .3, T1 = 3; dur = 10;
+    // field: false (2026-11-04, leph1-03 C2: "with no field the average velocity is zero" was drawn with the field
+    // switching on): the random motion only, for as long as the beat lasts
+    const off = s.field === false;
+    const vd = hasI ? s.I! / (s.n! * QE * s.A!) : QE * E0 * tau / ME, x0 = bx + bw * .04, x1 = bx + bw * .96, y0 = cy - bh * .3, y1 = cy + bh * .3, T1 = off ? 1e9 : 3; dur = off ? 7 : 10;
     line([x0, y0], [x1, y0], 'muted', 4); line([x0, y1], [x1, y1], 'muted', 4);
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let i = 0; i < 12; i++) {
@@ -98,12 +103,40 @@ export function current(s: CurrentSpec): Scene {
       const X = (t: number) => Math.min(x1 - 12 * k, X0 + ax * Math.sin(t * a + p) - after(t)), Y = (t: number) => Math.min(y1 - 12 * k, Math.max(y0 + 12 * k, Y0 + ay * Math.sin(t * b + q)));
       props.push({id: `e${i}`, type: 'circle', x: X(0), y: Y(0), r: 9 * k, style: {fill: 'cool'}, layer: 3, keys: {x: keysOf(dur, X, 12), y: keysOf(dur, Y, 12)}} as Prop);
     }
-    for (let i = 0; i < 3; i++) arrow([x0 + bw * .3, y1 + 40 * k + i * 0], [x0 + bw * .7, y1 + 40 * k], 'accent', 5, {show: [T1, 1e9], id: `field${i}`});
-    label(cx, y1 + 78 * k, 'E', 'accent', 30, {show: [T1, 1e9]});
-    label(cx, y0 - 22 * k, 'E = 0: no net movement', 'muted', 26, {show: [0, T1]}); label(cx, y0 - 22 * k, 'Electrons drift against E', 'cool', 26, {show: [T1, 1e9]});
-    if (hasI) facts.push(`v = I/(neA) = ${fmt(vd, 'm/s')}`, `at n = ${fmt(s.n!, 'm⁻³')}, A = ${fmt(s.A!, 'm²')}, I = ${fmt(s.I!, 'A')}`);
+    if (!off) {
+      arrow([x0 + bw * .3, y1 + 40 * k], [x0 + bw * .7, y1 + 40 * k], 'accent', 5, {show: [T1, 1e9], id: 'field0'});
+      label(cx, y1 + 78 * k, 'E', 'accent', 30, {show: [T1, 1e9]});
+      label(cx, y0 - 22 * k, 'Electrons drift against E', 'cool', 26, {show: [T1, 1e9]});
+    }
+    label(cx, y0 - 22 * k, 'No field: random directions, average velocity zero', 'muted', 26, {show: [0, T1]});
+    if (off) { facts.push('with no electric field the electrons move in random directions after each collision, so their average velocity is zero: no net flow of charge, no current'); story = 'With no field, each electron leaves a collision in a random direction'; second = 'Their velocities cancel on average: no net drift, no current'; anchors.wire = [cx, cy]; }
+    else if (hasI) facts.push(`v = I/(neA) = ${fmt(vd, 'm/s')}`, `at n = ${fmt(s.n!, 'm⁻³')}, A = ${fmt(s.A!, 'm²')}, I = ${fmt(s.I!, 'A')}`);
     else facts.push(`v = eEτ/m = ${fmt(vd, 'm/s')}`, `mobility μ = v/E = eτ/m = ${fmt(QE * tau / ME, 'm²/Vs')}`, `at E = ${fmt(E0, 'V/m')}, τ = ${fmt(tau, 's')}`);
-    story = 'Collisions keep undoing the speed gained, so the field adds only a small steady drift'; second = 'Drift drawn far larger than it is: only about a millimetre a second'; anchors.wire = [cx, cy];
+    if (!off) { story = 'Collisions keep undoing the speed gained, so the field adds only a small steady drift'; second = 'Drift drawn far larger than it is: only about a millimetre a second'; anchors.wire = [cx, cy]; }
+  } else if (s.show === 'wire' && s.join) {
+    // Two identical slabs joined (2026-11-04, leph1-03 C2: "two identical slabs end to end, a series arrangement" had no
+    // picture): end to end the length doubles, so R doubles (series); side by side the area doubles, so R halves (parallel).
+    const rho = s.rho ?? 1.7e-8, l = s.l ?? 1, A = s.A ?? 1e-6, R = rho * l / A, end = s.join === 'end', T1 = 2.4; dur = 8;
+    const w = end ? bw * .4 : bw * .6, h = end ? bh * .26 : bh * .2, gap = end ? 0 : 6 * k;
+    const x0 = cx - (end ? w : w / 2), y0 = cy - (end ? h / 2 : h + gap / 2);
+    const slab = (x: number, y: number, tag: string, from: number) => props.push({id: tag, type: 'rect', x, y, w, h, r: 6 * k, style: {fill: 'faint', stroke: 'muted', width: 3 * k}, show: [from, 1e9], fade: 0.4} as Prop);
+    // the first slab, then its twin slides in beside it
+    slab(x0, y0, 'slab1', 0);
+    const x2 = end ? x0 + w : x0, y2 = end ? y0 : y0 + h + gap;
+    props.push({id: 'slab2', type: 'rect', x: x2, y: y2, w, h, r: 6 * k, style: {fill: 'faint', stroke: 'muted', width: 3 * k}, show: [0.8, 1e9], fade: 0.4,
+      keys: end ? {x: [[0.8, x2 + bw * .12], [1.8, x2, 'inOut']]} : {y: [[0.8, y2 + bh * .12], [1.8, y2, 'inOut']]}} as Prop);
+    // each slab's R off the slab, clear of the current's arrows: above (end to end) or to the left (side by side)
+    const tag = (x: number, y: number, from: number) => label(end ? x + w / 2 : x - 110 * k, end ? y - 22 * k : y + h / 2 + 9 * k, num ? `R = ${fmt(R, 'Ω')}` : 'R', 'ink', 26, {show: [from, 1e9]});
+    tag(x0, y0, 0); tag(x2, y2, 1.8);
+    const bx0 = x0, bx1 = end ? x0 + 2 * w : x0 + w, byB = end ? y0 + h : y2 + h;
+    const count = end ? 4 : 6;
+    for (let i = 0; i < count; i++) { const y = end ? y0 + h * (i + .5) / count : y0 + (2 * h + gap) * (i + .5) / count; arrow([bx0 + 12 * k, y], [bx1 - 12 * k, y], 'accent', 3, on(T1, T1 + 1.2)); }
+    label((bx0 + bx1) / 2, byB + 44 * k, end ? 'twice the length, the same area' : 'the same length, twice the area', 'muted', 26, {show: [T1, 1e9]});
+    label((bx0 + bx1) / 2, byB + 84 * k, end ? 'in series: R + R = 2R' : 'in parallel: 1/R + 1/R, so R/2', 'accent', 28, {show: [T1 + .6, 1e9]});
+    facts.push(end ? `two identical slabs end to end: R = ρ(2l)/A = 2 × ${fmt(R, 'Ω')} = ${fmt(2 * R, 'Ω')} (in series)` : `two identical slabs side by side: R = ρl/(2A) = ${fmt(R, 'Ω')} ÷ 2 = ${fmt(R / 2, 'Ω')} (in parallel)`,
+      `each slab alone: R = ρl/A = ${fmt(R, 'Ω')}`);
+    story = end ? 'Joined end to end, the slabs are one slab twice as long: in series, R doubles' : 'Joined side by side, the slabs are one slab with twice the area: in parallel, R halves';
+    second = 'R = ρl/A: resistance grows with length and falls with area'; anchors.slab = [cx, cy];
   } else if (s.show === 'wire') {
     const rho = s.rho ?? 1.7e-8, l = s.l ?? 1, A = s.A ?? 1e-6, R = rho * l / A, V = s.V ?? 1, I = V / R, J = I / A, ls = s.lspan ?? l, as = s.aspan ?? A;
     const w = bw * .78 * l / ls, h = bh * .5 * Math.sqrt(A / as), x0 = cx - w / 2, y0 = cy - h / 2; dur = 8;
