@@ -53,6 +53,13 @@ export function fieldAt(cs: Charge[], x: number, y: number): P2 {
 }
 
 /** Lines start on positive charges in number ∝ q and run with the field; with only negative charges, they run in to them. */
+/** A traced line cut to the window: a line leaving it and coming back is two pieces, not a chord across the gap. */
+export function windowPieces(line: P2[], xr: number, yr: number): P2[][] {
+  const pieces: P2[][] = [[]];
+  for (const p of line) { if (Math.abs(p[0]) <= xr && Math.abs(p[1]) <= yr) pieces[pieces.length - 1].push(p); else if (pieces[pieces.length - 1].length) pieces.push([]); }
+  return pieces.filter(p => p.length >= 3);
+}
+
 export function traceLines(cs: Charge[], reach: number, per = 12): P2[][] {
   const pos = cs.filter(c => c.q > 0), reversed = !pos.length, starts = reversed ? cs : pos, top = Math.max(...cs.map(c => Math.abs(c.q)));
   const step = reach / 90, near = reach * 0.035, out: P2[][] = [];
@@ -257,11 +264,7 @@ export function electric(s: ElectricSpec): Scene {
     const to = (p: P2): P2 => [cx + p[0] * ppm, cy - p[1] * ppm];
     if (s.show === 'lines') {
       for (const pts_ of traceLines(cs, reach, 12)) {
-        // a line leaving the window and coming back is two pieces, not a chord across the gap
-        const pieces: P2[][] = [[]];
-        for (const p of pts_) { if (Math.abs(p[0]) <= reach * bw / S && Math.abs(p[1]) <= reach * bh / S) pieces[pieces.length - 1].push(p); else if (pieces[pieces.length - 1].length) pieces.push([]); }
-        for (const inside of pieces) {
-          if (inside.length < 3) continue;
+        for (const inside of windowPieces(pts_, reach * bw / S, reach * bh / S)) {
           poly(inside.map(to), 'accent', 3, {layer: 1, ...on(0.6, 3)});
           const mid = Math.floor(inside.length * 0.55), g = to(inside[mid]), h = to(inside[Math.min(mid + 2, inside.length - 1)]);
           arrow(g, h, 'accent', 3, {show: [3, 1e9]});

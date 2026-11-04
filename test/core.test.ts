@@ -1726,6 +1726,9 @@ test('potential and capacitor get the book right', () => {
   const paths = contour((x, y) => potentialAt([{q: 1e-9, x: 0, y: 0}], x, y), 90, 0.3, 0.3);
   assert.equal(paths.length, 1);
   for (const p of paths[0]) assert.ok(Math.abs(Math.hypot(p[0], p[1]) - 8.988e9 * 1e-9 / 90) < 0.003);
+  // field lines that leave the window and come back are cut, never joined by a chord along its edge
+  const lined: any = (compile({verb: 'potential', show: 'equipotentials', charges: [{q: 3.2e-19, x: 0, y: 0}, {q: -1.6e-19, x: .6, y: .4}, {q: -1.6e-19, x: -.6, y: -.5}], reach: 1.5} as never) as any).scene;
+  for (const pr of lined.props.filter((q: any) => q.points)) pr.points.slice(1).forEach((q: number[], i: number) => assert.ok(Math.hypot(q[0] - pr.points[i][0], q[1] - pr.points[i][1]) < 40));
   // compared capacitors share a drawn gap
   const near = {verb: 'capacitor', show: 'plates', d: 1e-3}, far = {verb: 'capacitor', show: 'plates', d: 2e-3};
   shareCapacitorScale([near, far]);

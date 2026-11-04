@@ -21,7 +21,7 @@ import type {Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
 import {panel, scene} from './calculus.ts';
-import {fieldAt, sci, traceLines} from './electric.ts';
+import {fieldAt, sci, traceLines, windowPieces} from './electric.ts';
 import {frame} from './vectors.ts';
 
 type P2 = [number, number];
@@ -202,7 +202,7 @@ export function potential(s: PotentialSpec): Scene {
       const levels = [1.5, 2.3, 3.5, 6].map(f => f * big).flatMap(l => mixed ? [l, -l] : [cs[0].q > 0 ? l : -l]);
       if (mixed && Math.abs(cs.reduce((a, c) => a + c.q, 0)) < 1e-15) levels.push(1e-9 * big);
       levels.forEach(l => contour(V, l, xr, yr).forEach(path => poly(path.map(to), 'cool', 3, on(2.6, 4), false)));
-      if (s.lines !== false) for (const path of traceLines(cs, reach, 12)) { const inside = path.filter(p => Math.abs(p[0]) <= xr && Math.abs(p[1]) <= yr); if (inside.length > 2) { poly(inside.map(to), 'accent', 3, on(.5, 2.4)); const m = Math.floor(inside.length * .55); arrow(to(inside[m]), to(inside[Math.min(m + 2, inside.length - 1)]), 'accent', 3, {show: [2.4, 1e9]}); } }
+      if (s.lines !== false) for (const path of traceLines(cs, reach, 12)) for (const inside of windowPieces(path, xr, yr)) { poly(inside.map(to), 'accent', 3, on(.5, 2.4)); const m = Math.floor(inside.length * .55); arrow(to(inside[m]), to(inside[Math.min(m + 2, inside.length - 1)]), 'accent', 3, {show: [2.4, 1e9]}); }
       cs.forEach(c => { const a = to([c.x, c.y]); charge(a[0], a[1], c.q, 20, c.name); });
       facts.push('no work is done moving a charge along an equipotential', 'field lines cross equipotentials at right angles');
       story = 'Each blue curve joins points of one potential; the field lines cross them at right angles'; second = 'Where the surfaces crowd, the field is strong';
