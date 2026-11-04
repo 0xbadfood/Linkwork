@@ -5,7 +5,9 @@
 //                 `axes` names the travel, E and B axes, and E × B gives the direction (Examples 8.1 and 8.2)
 //   medium        the same wave entering glass: same ν, slower, shorter λ: v = c/√(εr μr)
 //   source        a charge at rest, in steady motion, or oscillating: only the accelerated charge radiates
-//   hertz         Hertz's transmitter, a spark gap, and a ring receiver that sparks a moment later
+//   hertz         Hertz's transmitter, a spark gap, and a ring receiver that sparks a moment later; staged builds it in the
+//                 narration's order (rods and gap, coil, spark and oscillating current, waves, receiver, its spark on arrival)
+//   source `energy`: the oscillating charge's swing dies away as its rings carry energy off, two bars on one scale
 //   spectrum      the bands from radio to gamma on one wavelength scale; `mark` places a wave on it, with its band,
 //                 frequency and photon energy
 import {kit} from './potential.ts';
@@ -18,7 +20,8 @@ export const EM_SHOWS = ['displacement', 'plane', 'medium', 'source', 'hertz', '
 export type EmWavesSpec = {verb: 'em_waves'; show: (typeof EM_SHOWS)[number];
   i?: number; R?: number; d?: number; r?: number; C?: number; V?: number; omega?: number; surfaces?: boolean;
   E0?: number; B0?: number; nu?: number; lambda?: number; k?: number; axes?: string;
-  n?: number; epsilon_r?: number; mu_r?: number; motion?: 'still' | 'steady' | 'oscillating'; antenna?: boolean; mark?: number; mark_nu?: number; band?: string;
+  n?: number; epsilon_r?: number; mu_r?: number; motion?: 'still' | 'steady' | 'oscillating'; antenna?: boolean; energy?: boolean; seconds?: number;
+  staged?: boolean; cues?: {coil?: number; spark?: number; receiver?: number; arrival?: number}; mark?: number; mark_nu?: number; band?: string;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 export const C_LIGHT = 3e8, EPS0 = 8.854e-12, MU0 = 4 * Math.PI * 1e-7;
@@ -62,8 +65,34 @@ export function emWavesErrors(s: EmWavesSpec): string[] {
   if (s.nu !== undefined && s.lambda !== undefined && Math.abs(s.nu * s.lambda / C_LIGHT - 1) > .02) e.push(`${W}: ν λ must be c: give one of nu and lambda`);
   if (s.n !== undefined && (s.epsilon_r !== undefined || s.mu_r !== undefined)) e.push(`${W}: give n, or epsilon_r and mu_r, not both`);
   if (s.n !== undefined && s.n < 1) e.push(`${W}: n is 1 or more`);
+  if (s.energy !== undefined && (typeof s.energy !== 'boolean' || s.show !== 'source' || (s.motion ?? 'oscillating') !== 'oscillating' || s.antenna))
+    e.push(`${W}: energy (true or false) goes with show source, motion oscillating, a lone charge (no antenna): its swing dies away as the waves carry energy off`);
+  if (s.seconds !== undefined && (s.show !== 'source' && s.show !== 'hertz')) e.push(`${W}: seconds is for show source or hertz`);
+  else if (s.seconds !== undefined && !(isNum(s.seconds) && s.seconds >= 4 && s.seconds <= 40)) e.push(`${W}: seconds is 4 to 40`);
+  if (s.staged !== undefined && (typeof s.staged !== 'boolean' || s.show !== 'hertz')) e.push(`${W}: staged (true or false) is for show hertz`);
+  if (s.cues !== undefined) {
+    const T = s.seconds ?? 20, c = s.cues, names = ['coil', 'spark', 'receiver', 'arrival'] as const;
+    if (!s.staged) e.push(`${W}: cues go with staged: true (the seconds each part of Hertz's apparatus appears)`);
+    else if (typeof c !== 'object' || c === null || Object.keys(c).some(n => !(names as readonly string[]).includes(n))) e.push(`${W}: cues is {coil?, spark?, receiver?, arrival?}, each in seconds`);
+    else {
+      const at = hertzCues(T, c), bad = names.filter(n => c[n] !== undefined && !(isNum(c[n]) && c[n]! > 0 && c[n]! < T));
+      if (bad.length) e.push(`${W}: cues ${bad.join(', ')} must be within the scene's seconds (${T})`);
+      else if (!(at.coil < at.spark && at.spark < at.receiver && at.receiver < at.arrival)) e.push(`${W}: cues come in order: coil, then spark, then receiver, then arrival (now ${names.map(n => `${n} ${+at[n].toFixed(1)}`).join(', ')})`);
+      else if (at.receiver - at.spark < HERTZ_LIFE) e.push(`${W}: cues: give the waves ${HERTZ_LIFE} s between spark and receiver (a wave has to pass before the receiver is shown)`);
+      else if (at.arrival - at.receiver < 1) e.push(`${W}: cues: arrival comes at least 1 s after receiver`);
+    }
+  }
   return e;
 }
+
+/** Hertz staged: the second each part appears, by default where the narration usually names it (rods and gap first,
+ * the coil a quarter in, the spark a third in, the receiver half-way, its spark three quarters in). */
+const HERTZ_LIFE = 1.6;   // s at most that a wave stays on screen (it fades before the frame's edge)
+export function hertzCues(T: number, c: EmWavesSpec['cues'] = {}) {
+  return {coil: c.coil ?? .24 * T, spark: c.spark ?? .34 * T, receiver: c.receiver ?? .52 * T, arrival: c.arrival ?? .78 * T};
+}
+/** The oscillating charge's energy, as a share of its first: falling as it radiates, from t0 to a fifth by the end. */
+export const energyLeft = (t: number, T: number, t0 = .6) => Math.exp(-Math.max(0, t - t0) / ((T - t0) / 1.6));
 
 export function emWaves(s: EmWavesSpec): Scene {
   const {k, props, bx, by, bw, bh, cx, cy, S, arrow, line, poly, label, ring, charge, keysOf, finish} = kit(s);
@@ -146,7 +175,7 @@ export function emWaves(s: EmWavesSpec): Scene {
       facts.push(`B0 = E0/c = ${sig(B0, 'T')}`, `λ = c/ν = ${sig(w.lambda, 'm')}`, `ν = ${sig(w.nu, 'Hz')}`);
     }
   } else if (s.show === 'source') {
-    const motion = s.motion ?? 'oscillating', o: P2 = [bx + bw * .2, cy], A = S * .12, period = 2; dur = 10;
+    const motion = s.motion ?? 'oscillating', energy = !!s.energy, cardTop = by + bh - 192 * k, o: P2 = energy ? [bx + bw * .45, (by + cardTop) / 2] : [bx + bw * .2, cy], A = S * .12, period = 2; dur = s.seconds ?? 10;
     if (motion === 'still') {
       for (let j = 0; j < 12; j++) { const a = TAU * j / 12; arrow([o[0] + 34 * k * Math.cos(a), o[1] + 34 * k * Math.sin(a)], [o[0] + S * .34 * Math.cos(a), o[1] + S * .34 * Math.sin(a)], 'accent', 3); }
       charge(o[0], o[1], 1, 26, 'q'); story = 'A charge at rest: a steady electric field, nothing travels outward'; second = 'Static charges make no waves';
@@ -157,33 +186,85 @@ export function emWaves(s: EmWavesSpec): Scene {
       arrow([o[0], o[1] + S * .38], [o[0] + S * .2, o[1] + S * .38], 'good', 4); label(o[0] + S * .1, o[1] + S * .38 + 34 * k, 'steady speed', 'good', 24);
       story = 'A charge in uniform motion carries its field along: a steady current, still no wave'; second = 'Its fields do not change in time anywhere: nothing radiates';
     } else {
-      const y = (t: number) => o[1] - A * Math.sin(TAU * t / period), speed = bw * .14;   // drawn speed of the wavefront, px per s
+      // energy (2026-11-04, leph1-08 C2 S12: "the accelerated charge loses energy as it radiates" had rings but no loss):
+      // the swing's amplitude goes as √(energy left), each ring is as bright as the energy it set out with
+      const left = (t: number) => energy ? energyLeft(t, dur) : 1;
+      const y = (t: number) => o[1] - A * Math.sqrt(left(t)) * Math.sin(TAU * t / period), speed = bw * .14;   // drawn speed of the wavefront, px per s
+      // a ring has faded out before it reaches the frame's edge (check() refused every oscillating source: rings left the frame)
+      const W0 = s.width ?? 1920, H0 = s.height ?? 1080, fadeAt = Math.min(bw * .75, o[0], o[1] - by + 60 * k, W0 - o[0], H0 - o[1]) - 6 * k;   // and clear of a narrow part's title
       if (s.antenna) { line([o[0], o[1] - A * 1.6], [o[0], o[1] + A * 1.6], 'ink', 6); keyed({type: 'circle', x: o[0], y: o[1] - A * 1.6, r: 18 * k, style: {fill: 'bad', stroke: 'ink', width: 2 * k}, layer: 4, keys: {opacity: keysOf(dur, t => .3 + .7 * Math.max(0, Math.sin(TAU * t / period)))}}); keyed({type: 'circle', x: o[0], y: o[1] + A * 1.6, r: 18 * k, style: {fill: 'cool', stroke: 'ink', width: 2 * k}, layer: 4, keys: {opacity: keysOf(dur, t => .3 + .7 * Math.max(0, Math.sin(TAU * t / period)))}}); label(o[0] - 40 * k, o[1] - A * 1.6, 'antenna', 'muted', 22, {align: 'end'}); }
       else keyed({type: 'circle', x: o[0], y: o[1], r: 24 * k, style: {fill: 'bad', stroke: 'ink', width: 2 * k}, layer: 4, keys: {y: keysOf(dur, y)}});
-      for (let j = 0; j < Math.ceil(dur / (period / 2)); j++) { const t0 = j * period / 2; keyed({type: 'circle', x: o[0], y: o[1], r: 1, style: {fill: 'none', stroke: j % 2 ? 'cool' : 'accent', width: 3 * k}, layer: 1, show: [t0, 1e9], keys: {r: keysOf(dur, t => Math.max(1, (t - t0) * speed)), opacity: keysOf(dur, t => Math.max(0, 1 - (t - t0) * speed / (bw * .75)))}}); }
+      for (let j = 0; j < Math.ceil(dur / (period / 2)); j++) { const t0 = j * period / 2; keyed({type: 'circle', x: o[0], y: o[1], r: 1, style: {fill: 'none', stroke: j % 2 ? 'cool' : 'accent', width: 3 * k}, layer: 1, show: [t0, 1e9], keys: {r: keysOf(dur, t => Math.max(1, (t - t0) * speed)), opacity: keysOf(dur, t => left(t0) * Math.max(0, 1 - (t - t0) * speed / fadeAt))}}); }
+      if (energy) {
+        // two bars on one scale, below the rings on a card of their own: what the charge has and what the waves took
+        const x0 = bx + bw * .04, wmax = bw * .62, h = 30 * k, y2 = by + bh - h - 24 * k, y1 = y2 - 86 * k;
+        props.push({id: 'energy-card', type: 'rect', x: bx, y: cardTop, w: bw, h: by + bh - cardTop, r: 12 * k, style: {fill: 'paper', stroke: 'faint', width: 2 * k}, layer: 5} as Prop);
+        const bar = (yb: number, fill: string, w: (t: number) => number, name: string) => {
+          props.push({id: `bar-${fill}`, type: 'rect', x: x0, y: yb, w: Math.max(1, w(0)), h, style: {fill}, layer: 6, keys: {w: keysOf(dur, t => Math.max(1, w(t)), 12)}} as Prop);
+          props.push({id: `frame-${fill}`, type: 'rect', x: x0, y: yb, w: wmax, h, style: {fill: 'none', stroke: 'muted', width: 2 * k}, layer: 6} as Prop);
+          label(x0, yb - 24 * k, name, fill, 24, {align: 'start', layer: 6});
+        };
+        bar(y1, 'bad', t => wmax * left(t), 'energy of the oscillating charge');
+        bar(y2, 'cool', t => wmax * (1 - left(t)), 'energy carried away by the waves');
+        anchors.charge_energy = [x0 + wmax * left(dur), y1 + h / 2]; anchors.wave_energy = [x0 + wmax * (1 - left(dur)), y2 + h / 2];
+        facts.push('the energy the waves carry away is the energy the oscillating charge loses: the two bars always add to the same total');
+      } else {
       // E along a line to the right: the charge's motion, arriving late by x/c
       for (let j = 1; j <= 14; j++) { const x = o[0] + bw * .05 + bw * .5 * j / 14, delay = (x - o[0]) / speed; keyed({type: 'arrow', x1: x, y1: cy + S * .38, x2: x, y2: cy + S * .38, head: 10 * k, style: {stroke: 'accent', width: 3 * k}, layer: 3, keys: {y2: keysOf(dur, t => cy + S * .38 - (t < delay ? 0 : S * .1 * Math.sin(TAU * (t - delay) / period)), 12)}}); }
       label(o[0] + bw * .3, cy + S * .38 + S * .16, 'E further out: the same swing, later', 'accent', 22);
-      anchors.waves = [o[0] + bw * .3, cy - S * .3];
-      story = 'An oscillating charge accelerates: its changing E makes a changing B, which makes E again, and the pair travels out at c';
-      second = 'The wave has the frequency of the charge\'s oscillation; its energy comes from the source';
+      }
+      anchors.waves = [o[0] + bw * .3, o[1] - S * .3];
+      story = energy ? 'The wave\'s energy comes at the expense of its source' : 'An oscillating charge accelerates: its changing E makes a changing B, which makes E again, and the pair travels out at c';
+      second = energy ? 'The accelerated charge supplies it, so it loses energy as it radiates: its swing dies away' : 'The wave has the frequency of the charge\'s oscillation; its energy comes from the source';
     }
     anchors.charge = o;
   } else if (s.show === 'hertz') {
-    const tx = bx + bw * .2, rx = bx + bw * .66, yy = cy, g = 14 * k, rod = bw * .12; dur = 9;
-    rect(tx - 60 * k, yy + S * .22, 120 * k, 70 * k, 'faint'); label(tx, yy + S * .22 + 44 * k, 'induction coil', 'ink', 22);
-    line([tx - g - rod, yy], [tx - g, yy], 'ink', 6); line([tx + g, yy], [tx + g + rod, yy], 'ink', 6);
-    rect(tx - g - rod - 40 * k, yy - 40 * k, 40 * k, 80 * k, 'muted'); rect(tx + g + rod, yy - 40 * k, 40 * k, 80 * k, 'muted');
-    line([tx - g - rod * .5, yy], [tx - 40 * k, yy + S * .22], 'ink', 2); line([tx + g + rod * .5, yy], [tx + 40 * k, yy + S * .22], 'ink', 2);
-    ring([rx, yy], S * .14, S * .14, 'ink', 5); rect(rx + S * .14 - 6 * k, yy - 8 * k, 12 * k, 16 * k, 'paper', {style: {fill: 'paper', stroke: 'paper', width: 0}, layer: 3});
-    const spark = (x: number, y: number, times: number[], name: string) => { for (const t0 of times) poly([[x - 10 * k, y - 12 * k], [x + 6 * k, y - 3 * k], [x - 6 * k, y + 3 * k], [x + 10 * k, y + 12 * k]], 'accent', 4, {layer: 5, show: [t0, t0 + .35]}); label(x, y - 46 * k, name, 'accent', 22); };
-    const times = [1.5, 3, 4.5, 6, 7.5];
-    spark(tx, yy, times, 'spark gap'); spark(rx + S * .14, yy, times.map(t => t + .4), 'small spark');
-    label(tx, yy - S * .26, 'transmitter', 'ink', 26); label(rx, yy - S * .26, 'receiver', 'ink', 26);
-    for (const t0 of times) keyed({type: 'circle', x: tx, y: yy, r: 1, style: {fill: 'none', stroke: 'cool', width: 3 * k}, layer: 1, show: [t0, t0 + 1.4], keys: {r: keysOf(dur, t => Math.max(1, (t - t0) * bw * .32)), opacity: keysOf(dur, t => Math.max(0, 1 - (t - t0) / 1.4))}});
-    anchors.transmitter = [tx, yy]; anchors.receiver = [rx, yy]; anchors.gap = [tx, yy];
-    story = 'Hertz, 1887: sparks across the transmitter\'s gap made sparks jump across a ring\'s gap some metres away';
-    second = 'Nothing connected them: electromagnetic waves carried the energy across, as Maxwell had predicted';
+    // The transmitter sits far enough from the frame's edges that its waves reach the receiver's gap, which faces it,
+    // before they fade (2026-11-04, leph1-08 C2 S16: the rings left the frame, check() refused every hertz scene, and
+    // the receiver sparked a fixed 0.4 s after the transmitter, wherever it stood). Its sparks come when a wave arrives.
+    // staged builds the apparatus in the order a narration names it, at cues (seconds) or at shares of seconds.
+    const W0 = s.width ?? 1920, H0 = s.height ?? 1080, staged = !!s.staged;
+    const tx = bx + bw * .3, rx = bx + bw * .7, yy = cy, g = 14 * k, rod = bw * .09, rr = S * .1, gapX = rx - rr, head = Math.max(S * .26, 150 * k), cy2 = yy + Math.max(S * .22, 130 * k);
+    const v = bw * .32, fadeR = Math.min(tx, yy, H0 - yy, W0 - tx) - 6 * k, life = Math.min(HERTZ_LIFE, fadeR / v), travel = (gapX - tx) / v;
+    dur = s.seconds ?? (staged ? 20 : 9);
+    const c = staged ? hertzCues(dur, s.cues) : {coil: 0, spark: 1.5, receiver: 0, arrival: 0}, from = (t0: number) => ({show: [t0, 1e9], fade: .3});
+    const times: number[] = [];
+    if (!staged) for (let t = 1.5; t < dur - .3; t += 1.5) times.push(t);
+    else {
+      for (let t = c.spark; t <= c.receiver - life + 1e-9; t += 1.5) times.push(t);          // each wave gone before the receiver is shown
+      for (let t = c.arrival - travel; t < dur - .3; t += 1.5) times.push(t);                // then the wave that arrives on cue, and more
+    }
+    const arrivals = times.map(t => t + travel).filter(t => t >= c.receiver && t < dur);
+    // the transmitter: two rods with plates, a small gap between them; the coil below drives it
+    const ends = [tx - g - rod, tx + g + rod];
+    line([ends[0], yy], [tx - g, yy], 'ink', 6); line([tx + g, yy], [ends[1], yy], 'ink', 6);
+    rect(ends[0] - 44 * k, yy - 44 * k, 44 * k, 88 * k, 'paper', {style: {fill: 'paper', stroke: 'ink', width: 3 * k}}); rect(ends[1], yy - 44 * k, 44 * k, 88 * k, 'paper', {style: {fill: 'paper', stroke: 'ink', width: 3 * k}});
+    label(tx, yy - head, 'transmitter', 'ink', 26); label(tx, yy - 46 * k, 'spark gap', 'accent', 22, staged ? from(.6) : {});
+    rect(tx - 115 * k, cy2, 230 * k, 70 * k, 'faint', staged ? from(c.coil) : {}); label(tx, cy2 + 44 * k, 'induction coil', 'ink', 22, staged ? from(c.coil) : {});
+    line([tx - g - rod * .5, yy], [tx - 40 * k, cy2], 'ink', 2, staged ? from(c.coil) : {}); line([tx + g + rod * .5, yy], [tx + 40 * k, cy2], 'ink', 2, staged ? from(c.coil) : {});
+    const zigzag = (x: number, y: number, t0: number) => {
+      keyed({type: 'circle', x, y, r: 20 * k, style: {fill: 'accent', opacity: .35}, layer: 5, show: [t0, t0 + .45], fade: .05});
+      poly([[x - 12 * k, y - 16 * k], [x + 7 * k, y - 4 * k], [x - 7 * k, y + 4 * k], [x + 12 * k, y + 16 * k]], 'accent', 5, {layer: 6, show: [t0, t0 + .45], fade: .05});
+    };
+    for (const t0 of times) {
+      zigzag(tx, yy, t0);
+      // the spark sets charge surging between the plates: their signs swap, dying away
+      for (let j = 0; j < 8; j++) { const w = {show: [t0 + .15 * j, t0 + .15 * (j + 1)], fade: .02, layer: 4}; label(ends[0] - 22 * k, yy + 15 * k, j % 2 ? '−' : '+', j % 2 ? 'cool' : 'bad', 44, w); label(ends[1] + 22 * k, yy + 15 * k, j % 2 ? '+' : '−', j % 2 ? 'bad' : 'cool', 44, w); }
+      keyed({type: 'circle', x: tx, y: yy, r: 1, style: {fill: 'none', stroke: 'cool', width: 3 * k}, layer: 1, show: [t0, t0 + life],
+        keys: {r: keysOf(dur, t => Math.max(1, (t - t0) * v)), opacity: keysOf(dur, t => Math.min(1, Math.max(0, (1 - (t - t0) * v / fadeR) / .2)))}});
+    }
+    if (staged) label(tx, yy - 100 * k, 'oscillating current', 'accent', 22, from(c.spark + .4));
+    // the receiver: a loop with a tiny gap facing the transmitter, sparking as each wave reaches it
+    const rec = staged ? from(c.receiver) : {};
+    poly(Array.from({length: 61}, (_, j) => { const a = .16 + (TAU - .32) * j / 60; return [rx - rr * Math.cos(a), yy + rr * Math.sin(a)] as P2; }), 'ink', 5, rec);
+    label(rx, yy - head, 'receiver', 'ink', 26, rec); label(rx, yy + rr + 44 * k, staged ? 'a loop with a tiny gap' : 'small spark', 'accent', 22, staged ? from(c.receiver + .4) : {});
+    for (const t0 of arrivals) zigzag(gapX, yy, t0);
+    if (staged) label(rx, yy + rr + 80 * k, 'spark: a wave has arrived', 'accent', 22, from(c.arrival));
+    anchors.transmitter = [tx, yy]; anchors.receiver = [rx, yy]; anchors.gap = [tx, yy]; anchors.receiver_gap = [gapX, yy]; anchors.coil = [tx, cy2 + 35 * k];
+    facts.push('a spark jumps the receiver\'s gap when a wave from the transmitter reaches it: nothing else connects them');
+    // staged: the panel names nothing ahead of the narration; each part's label comes in at its cue
+    story = staged ? 'How Hertz produced electromagnetic waves' : 'Hertz, 1887: sparks across the transmitter\'s gap made sparks jump across a ring\'s gap some metres away';
+    second = staged ? '' : 'Nothing connected them: electromagnetic waves carried the energy across, as Maxwell had predicted';
   } else {
     // the spectrum on one log wavelength scale, long wavelengths on the left
     const x0 = bx + bw * .03, x1 = bx + bw * .97, top = Math.log10(1e4), bot = Math.log10(1e-14), X = (lam: number) => x0 + (x1 - x0) * (top - Math.log10(lam)) / (top - bot), yb = cy - S * .02, hb = S * .1; dur = 9;

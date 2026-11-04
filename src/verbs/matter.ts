@@ -9,17 +9,21 @@
 //   atoms      atomic moments: random, tilting toward B as T falls, M ∝ B/T (Curie); a diamagnet's induced moments oppose B
 //   domains    a ferromagnet's domains: random, then those along B grow until it is one domain
 //   hysteresis B against H: the loop with its retained field and the reverse field that removes it; soft or hard
+//   vectors    B, H and M as three separate named vectors, none added to another, each with its unit (1 T = 10⁴ G)
 import type {Prop, Scene} from '../scene.ts';
 import {kit} from './potential.ts';
 import {sci} from './electric.ts';
 
 type P2 = [number, number];
-export const MATTER_SHOWS = ['needle', 'poles', 'cut', 'gauss', 'core', 'response', 'atoms', 'domains', 'hysteresis'] as const;
-export type MatterSpec = {verb: 'magnetic_matter'; show: (typeof MATTER_SHOWS)[number]; m?: number; B?: number; angle?: number; swing?: boolean;
+export const MATTER_SHOWS = ['needle', 'poles', 'cut', 'gauss', 'core', 'response', 'atoms', 'domains', 'hysteresis', 'vectors'] as const;
+export type MatterSpec = {verb: 'magnetic_matter'; show: (typeof MATTER_SHOWS)[number]; m?: number; B?: number; angle?: number; swing?: boolean; units?: 'none' | 'B' | 'all';
   source?: 'magnet' | 'charge'; n?: number; I?: number; mur?: number; kind?: 'diamagnetic' | 'paramagnetic' | 'ferromagnetic' | 'soft' | 'hard' | 'like' | 'unlike'; T?: number; aligned?: boolean; heat?: boolean; Mspan?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const MU = 4 * Math.PI * 1e-7, RAD = Math.PI / 180;
+/** The gauss, the cgs unit of B: 1 T = 10⁴ G (the book, Ch. 5). */
+export const GAUSS_PER_TESLA = 1e4;
+const pow10 = (x: number) => `10${String(Math.round(Math.log10(x))).replace(/-/g, '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+d])}`;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const short = (x: number, unit: string) => `${Math.abs(x) >= 100 || Math.abs(x) < .1 ? sci(x, unit) : `${+x.toFixed(2)} ${unit}`}`;
 
@@ -38,7 +42,10 @@ export function matterErrors(s: MatterSpec): string[] {
   if (s.angle !== undefined && !(isNum(s.angle) && s.angle >= 0 && s.angle <= 180)) e.push(`${W}: angle is 0 to 180 degrees`);
   if (s.mur !== undefined && !(isNum(s.mur) && s.mur > 1)) e.push(`${W}: mur, the core's relative permeability, is above 1`);
   if (s.source !== undefined && !['magnet', 'charge'].includes(s.source)) e.push(`${W}: source is magnet or charge`);
-  const kinds: Record<string, string[]> = {response: ['diamagnetic', 'paramagnetic', 'ferromagnetic'], atoms: ['diamagnetic', 'paramagnetic'], hysteresis: ['soft', 'hard'], poles: ['like', 'unlike']};
+  const kinds: Record<string, string[]> = {response: ['diamagnetic', 'paramagnetic', 'ferromagnetic'], atoms: ['diamagnetic', 'paramagnetic'], hysteresis: ['soft', 'hard'], poles: ['like', 'unlike'], vectors: ['paramagnetic', 'diamagnetic', 'ferromagnetic']};
+  if (s.units !== undefined && (s.show !== 'vectors' || !['none', 'B', 'all'].includes(s.units))) e.push(`${W}: units goes with show vectors: none, B (B's unit, the tesla and the gauss) or all (H and M in A/m too)`);
+  if (s.show === 'vectors') for (const f of ['m', 'B', 'angle', 'n', 'I', 'mur', 'T', 'Mspan', 'swing', 'source', 'aligned', 'heat'] as const)
+    if (s[f] !== undefined) e.push(`${W}: vectors draws B, H and M by name, not by value: leave out ${f} (for H = nI, M and B from a core, use show core)`);
   if (s.kind !== undefined && !(kinds[s.show] ?? []).includes(s.kind)) e.push(kinds[s.show] ? `${W}: ${s.show} takes kind ${kinds[s.show].join(', ')}` : `${W}: ${s.show} has no kind`);
   return e;
 }
@@ -199,6 +206,34 @@ export function magneticMatter(s: MatterSpec): Scene {
     story = 'Each domain is already magnetised, each its own way, so the whole adds up to almost nothing';
     second = 'In a field the domains line up along B: a small field gives a huge magnetisation';
     if (heat) { story = 'Heated, the domains lose their order: gradually, not suddenly'; second = 'Above the Curie temperature the domains are gone: it is a paramagnet'; }
+  } else if (s.show === 'vectors') {
+    // B, H and M kept apart (2026-11-04, leph1-05 C5 S06: "three vectors to keep apart" had only vector_add, which
+    // draws a sum the passage never states). Each in its own box, one at a time; the arrows are all one length, since
+    // tesla and ampere per metre cannot be compared. M points against B and H in a diamagnet.
+    const units = s.units ?? 'all', kind = s.kind ?? 'paramagnetic', narrow = (s.width ?? 1920) < 1.3 * (s.height ?? 1080), gap = bw * .04, cw = (bw - 2 * gap) / 3; dur = 7;
+    const rows = narrow ? [.15, .31, .45, .72, .9] : [.17, .4, .6, .76, .86], top = by + bh * .04, ch = bh * (narrow ? .96 : .8);
+    const items: [string, string, string, string, number][] = [
+      ['B', 'magnetic field', 'tesla, T', 'bad', 1],
+      ['H', 'magnetic intensity', 'ampere per metre, A/m', 'cool', 1],
+      ['M', 'magnetisation', 'ampere per metre, A/m', 'good', kind === 'diamagnetic' ? -1 : 1]];
+    items.forEach(([name, what, unit, colour, dir], j) => {
+      const x = bx + j * (cw + gap), mx = x + cw / 2, t0 = .4 + 1.1 * j, sh = {show: [t0, 1e9], fade: .3};
+      props.push({id: `box-${name}`, type: 'rect', x, y: top, w: cw, h: ch, r: 14 * k, style: {fill: 'faint', opacity: .25, stroke: colour, width: 3 * k}, layer: 1, show: [t0, 1e9], fade: .3} as Prop);
+      label(mx, top + ch * rows[0] + 22 * k, name, colour, narrow ? 52 : 64, sh);
+      const half = cw * .32, ay = top + ch * rows[1];
+      arrow([mx - dir * half, ay], [mx + dir * half, ay], colour, 7, {...sh, head: 26 * k});
+      props.push({id: `what-${name}`, type: 'text', x: mx, y: top + ch * rows[2], text: what, size: (narrow ? 22 : 26) * k, weight: 700, align: 'middle', width: cw * .9, style: {fill: 'ink'}, layer: 3, ...sh} as Prop);
+      if (units === 'all' || (units === 'B' && name === 'B')) props.push({id: `unit-${name}`, type: 'text', x: mx, y: top + ch * rows[3], text: unit, size: (narrow ? 20 : 24) * k, weight: 400, align: 'middle', width: cw * .9, style: {fill: 'muted'}, layer: 3, show: [3.8, 1e9], fade: .3} as Prop);
+      anchors[name] = [mx, ay];
+    });
+    if (units !== 'none') {   // the gauss, from the code's own constant: shown only with numbers (illustrative hides it)
+      const mx = bx + cw / 2;
+      props.push({id: 'gauss', type: 'text', x: mx, y: top + ch * rows[4], text: `1 T = ${pow10(GAUSS_PER_TESLA)} ${narrow ? 'G' : 'gauss'}`, size: (narrow ? 22 : 26) * k, weight: 700, align: 'middle', style: {fill: 'bad'}, layer: 3, show: [4.8, 1e9], fade: .3} as Prop);
+    }
+    // no facts and no second line: the panel would show them at once, ahead of a narration that names B, H and M first
+    // and their units after (the drawing brings each unit in at 3.8 s and the gauss at 4.8 s)
+    story = kind === 'diamagnetic' ? 'Three different vectors: B, H and M. In a diamagnet M points against H' : 'Three different vectors: B, H and M, each with its own meaning';
+    second = '';
   } else {
     const kind = s.kind ?? 'hard', hc = kind === 'hard' ? .55 : .06, w = .3, hm = kind === 'hard' ? 1.8 : .8, c: P2 = [cx - bw * .04, cy], sx = bw * .34 / hm, sy = bh * .38; dur = 12;
     const up = (H: number) => Math.tanh((H - hc) / w), down = (H: number) => Math.tanh((H + hc) / w), first = (H: number) => Math.tanh(H / (w * 1.2));

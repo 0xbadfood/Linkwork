@@ -388,16 +388,40 @@ export function interference(s: InterferenceSpec): Scene {
 }
 
 // --------------------------------------------------------------------------------------------------- diffraction
-export const DIFFRACTION_SHOWS = ['pattern', 'halves'] as const;
+export const DIFFRACTION_SHOWS = ['pattern', 'halves', 'fresnel'] as const;
+export const FRESNEL_STAGES = ['compare', 'setup', 'result'] as const;
 export type DiffractionSpec = Common & {verb: 'diffraction'; show: (typeof DIFFRACTION_SHOWS)[number];
-  /** pattern: the slit's width a in mm (default 0.1), the wavelength in nm (default 600) and the screen's distance D in m (default 1). */
+  /** pattern: the slit's width a in mm (default 0.1), the wavelength in nm (default 600) and the screen's distance D in m (default 1).
+   * fresnel: the aperture a in mm (default 3) and λ in nm (default 500): the book's example, z_F = a²/λ = 18 m. */
   a?: number; lambda?: number; D?: number;
   /** halves: a sin θ in wavelengths: 1 (halves cancel: the first minimum), 1.5 (thirds: a weak maximum) or 2 (quarters: dark). */
-  order?: number};
+  order?: number;
+  /** fresnel: compare (an aperture much wider than λ beside one about λ wide), setup (the aperture, λ and the distance L, no
+   * result yet) or result (the beam: straight within z_F, spreading beyond; with L the Fresnel number a²/λL). Default result. */
+  stage?: (typeof FRESNEL_STAGES)[number];
+  /** fresnel: the distance to the point observed, in m; a_is radius when a is the aperture's radius (N_F = a²/λL with a the radius). */
+  L?: number; a_is?: 'width' | 'radius'};
+
+/** The Fresnel distance in m, z_F = a²/λ, a in mm and λ in nm; within it ray optics holds. */
+export const fresnelDistance = (aMm: number, lambdaNm: number) => (aMm * 1e-3) ** 2 / (lambdaNm * 1e-9);
+/** The Fresnel number a²/λL (a in mm, λ in nm, L in m): ≫ 1, rays hold; ≪ 1, diffraction dominates. */
+export const fresnelNumber = (aMm: number, lambdaNm: number, L: number) => fresnelDistance(aMm, lambdaNm) / L;
 
 export function diffractionErrors(s: DiffractionSpec): string[] {
   const e: string[] = [], W = 'diffraction';
   if (!DIFFRACTION_SHOWS.includes(s.show)) return [`${W}: show is one of ${DIFFRACTION_SHOWS.join(', ')}`];
+  const all = ['a', 'lambda', 'D', 'order', 'stage', 'L', 'a_is'];
+  if (s.show === 'fresnel') {
+    if (s.stage !== undefined && !FRESNEL_STAGES.includes(s.stage)) return [`${W}: stage is one of ${FRESNEL_STAGES.join(', ')}`];
+    const stage = s.stage ?? 'result';
+    e.push(...only(s as never, W, `fresnel, stage ${stage}`, stage === 'compare' ? ['lambda', 'stage'] : ['a', 'lambda', 'L', 'a_is', 'stage'], all));
+    if (s.a !== undefined && !(isNum(s.a) && s.a >= .01 && s.a <= 50)) e.push(`${W}: a is the aperture in mm, 0.01 to 50`);
+    if (s.L !== undefined && !(isNum(s.L) && s.L >= .01 && s.L <= 1000)) e.push(`${W}: L is the distance to the point observed in m, 0.01 to 1000`);
+    if (s.a_is !== undefined && !['width', 'radius'].includes(s.a_is)) e.push(`${W}: a_is is width (the book's a, the aperture's size) or radius`);
+    if (s.lambda !== undefined && !(isNum(s.lambda) && s.lambda >= 380 && s.lambda <= 750)) e.push(`${W}: lambda is a visible wavelength in nm, 380 to 750`);
+    return e;
+  }
+  if (s.stage !== undefined || s.L !== undefined || s.a_is !== undefined) e.push(`${W}: stage, L and a_is belong to show fresnel; leave them out of show ${s.show}`);
   e.push(...only(s as never, W, s.show, s.show === 'pattern' ? ['a', 'lambda', 'D'] : ['order'], ['a', 'lambda', 'D', 'order']));
   if (s.a !== undefined && !(isNum(s.a) && s.a >= .005 && s.a <= 2)) e.push(`${W}: a is the slit's width in mm, 0.005 to 2`);
   if (s.lambda !== undefined && !(isNum(s.lambda) && s.lambda >= 380 && s.lambda <= 750)) e.push(`${W}: lambda is a visible wavelength in nm, 380 to 750`);
@@ -407,7 +431,131 @@ export function diffractionErrors(s: DiffractionSpec): string[] {
   return e;
 }
 
+// The limit of ray optics (Sec. 10.6.3, leph2-01 C1 2026-11-04: three beats had no picture of an aperture against λ).
+// compare: plane wavefronts through a gap many wavelengths wide go on straight; through one about λ wide they spread as
+// half circles. setup: the aperture, λ and the distance L, nothing more. result: the beam drawn from its half-width
+// √((A/2)² + (λz/A)²), A the aperture's width: straight-edged within z_F, spreading beyond; distance across the beam is
+// magnified against distance along it, which the drawing says.
+function fresnel(s: DiffractionSpec): Scene {
+  const {k, props, bx, by, bw, bh, cy, S, on, arrow, line, poly, label, finish} = kit(s);
+  const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {}, stage = s.stage ?? 'result';
+  const lam = s.lambda ?? 500, col = wavelengthColour(lam);
+  let dur = 7, story = '', second = '';
+  const wall = (x: number, y0: number, y1: number, g0: number, g1: number) => { line([x, y0], [x, g0], 'ink', 7); line([x, g1], [x, y1], 'ink', 7); };
+  if (stage === 'compare') {
+    // two rows, the same λ drawn: a gap 8λ wide, then one about λ wide
+    const xa = bx + bw * .3, h = bh * .2, lp = Math.min((bx + bw - xa) / 12, 1.4 * h / 6), nOut = Math.floor((bx + bw - 8 * k - xa) / lp);
+    const row = (yc: number, half: number, gapW: number, t0: number, wide: boolean) => {
+      wall(xa, yc - half, yc + half, yc - gapW / 2, yc + gapW / 2);
+      for (let m = 0; xa - lp * (m + .5) > bx + 6 * k; m++) { const x = xa - lp * (m + .5); line([x, yc - half * .8], [x, yc + half * .8], col, 3, on(t0, t0 + .5)); }
+      for (let m = 1; xa + m * lp < bx + bw - 8 * k; m++) {
+        const r = m * lp, at = t0 + .6 + 1.6 * m / nOut;
+        if (wide) {
+          // straight within the gap's shadow-free width; the edges bend only a little, over arcs from the gap's corners
+          line([xa + r, yc - gapW / 2], [xa + r, yc + gapW / 2], col, 3, on(at, at + .4));
+          for (const sg of [-1, 1]) {
+            const pts = Array.from({length: 9}, (_, j) => { const u = rad(18 * j / 8); return [xa + r * Math.cos(u), yc + sg * (gapW / 2 + r * Math.sin(u))] as P2; }).filter(p => Math.abs(p[1] - yc) < half);
+            if (pts.length > 1) poly(pts, col, 2, {...on(at, at + .4), style: {stroke: col, width: 2 * k, opacity: .45}});
+          }
+        } else {
+          const lim = 80, pts = Array.from({length: 41}, (_, j) => { const u = rad(-lim + 2 * lim * j / 40); return [xa + r * Math.cos(u), yc + r * Math.sin(u)] as P2; }).filter(p => Math.abs(p[1] - yc) < half);
+          poly(pts, col, 3, on(at, at + .4));
+        }
+      }
+    };
+    const yT = by + bh * .27, yB = by + bh * .76;
+    row(yT, h, 6 * lp, .3, true); row(yB, h, lp * .9, 3.2, false);
+    arrow([xa + 20 * k, yT], [bx + bw - 20 * k, yT], 'good', 4, {show: [2.2, 1e9]});
+    label(bx + 6 * k, yT - h - 16 * k, 'aperture much larger than λ', 'ink', 24, {align: 'start', show: [.3, 1e9]});
+    label(bx + bw - 20 * k, yT + 40 * k, 'a ray: straight on', 'good', 24, halo(k, 'good', {align: 'end', show: [2.4, 1e9], layer: 5}));
+    label(bx + 6 * k, yB - h - 16 * k, 'aperture about λ wide', 'ink', 24, {align: 'start', show: [3.2, 1e9]});
+    label(bx + bw - 20 * k, yB + h + 30 * k, 'spreads every way: no ray', 'bad', 24, halo(k, 'bad', {align: 'end', show: [5.2, 1e9], layer: 5}));
+    Object.assign(anchors, {wide: [xa, yT] as P2, narrow: [xa, yB] as P2, ray: [bx + bw - 20 * k, yT] as P2});
+    story = 'Through an aperture many wavelengths wide, light goes on straight: a ray';
+    second = 'When the aperture is about a wavelength, diffraction dominates and the idea of a ray loses its meaning';
+    facts.push('the ray picture needs apertures and objects much larger than the wavelength');
+    dur = 7;
+    return finish('diffraction', s as never, dur, story, second, facts, anchors, s.illustrative);
+  }
+  const a = s.a ?? 3, radius = s.a_is === 'radius', A = radius ? 2 * a : a, zF = fresnelDistance(a, lam), L = s.L;
+  const Z = L ?? 2 * zF, NF = L === undefined ? undefined : fresnelNumber(a, lam, L);
+  const hw = (z: number) => Math.hypot(A / 2, lam * 1e-6 * z * 1e3 / A);                   // mm, at z metres
+  const xa = bx + bw * .16, xP = bx + bw * .9, X = (z: number) => xa + (xP - xa) * z / Z, half = bh * .34, yc = by + bh * .44;
+  const vpm = half * .78 / Math.max(hw(Z), A / 2), gap = Math.max((stage === 'setup' ? 24 : 12) * k, A * vpm);              // pixels per mm across the beam
+  const T = stage === 'setup' ? 0 : 1.6;
+  wall(xa, yc - half * 1.15, yc + half * 1.15, yc - gap / 2, yc + gap / 2);
+  // the light coming in: plane wavefronts
+  const inH = Math.max(half * .5, gap / 2 + 14 * k);
+  for (let m = 0; m < 4; m++) { const x = xa - 56 * k - m * S * .045; line([x, yc - inH], [x, yc + inH], col, 3, on(.2 + m * .1, .7 + m * .1)); }
+  arrow([bx + 4 * k, yc - inH - 24 * k], [xa - 56 * k, yc - inH - 24 * k], 'muted', 3, on(.2, .8));
+  const lw = num ? `λ = ${lam} nm` : 'λ';
+  label(bx + 2 * k, yc + inH + 34 * k, lw, col, 22, halo(k, col, {align: 'start', layer: 5}));
+  // a, bracketed beside the gap
+  const ax = xa - 26 * k;
+  const aEnd = radius ? yc : yc + gap / 2;
+  line([ax, yc - gap / 2], [ax, aEnd], 'accent', 3); for (const y of [yc - gap / 2, aEnd]) line([ax - 8 * k, y], [ax + 8 * k, y], 'accent', 3);
+  const aWord = radius ? (num ? `aperture ${sig(A)} mm across, radius a` : 'aperture of radius a') : (num ? `aperture a = ${sig(a)} mm` : 'aperture a');
+  if (stage === 'setup') { label(xa + 18 * k, yc - gap / 2 - 18 * k, aWord, 'accent', 24, halo(k, 'accent', {align: 'start', layer: 5})); if (L !== undefined) line([xa + 12 * k, yc], [xP, yc], 'faint', 2, on(1, 2), true); }
+  else label(ax - 12 * k, (yc - gap / 2 + aEnd) / 2 + 9 * k, 'a', 'accent', 26, halo(k, 'accent', {align: 'end', layer: 5}));
+  // the point observed and its distance
+  if (L !== undefined) {
+    props.push({id: 'P', type: 'circle', x: xP, y: yc, r: 9 * k, style: {fill: 'ink'}, layer: 4} as Prop);
+    label(xP + 18 * k, yc + 9 * k, 'P', 'ink', 28, halo(k, 'ink', {align: 'start', layer: 5}));
+    const yd = Math.min(yc + half * 1.15 + 30 * k, by + bh - 72 * k);
+    line([xa, yd], [xP, yd], 'muted', 2.5); for (const x of [xa, xP]) line([x, yd - 10 * k], [x, yd + 10 * k], 'muted', 2.5);
+    label((xa + xP) / 2, yd + 32 * k, num ? `L = ${sig(L)} m` : 'L', 'muted', 24);
+    anchors.P = [xP, yc];
+  }
+  if (stage === 'result') {
+    const zs = Array.from({length: 81}, (_, j) => Z * j / 80), top = zs.map(z => [X(z), yc - hw(z) * vpm] as P2), bot = zs.map(z => [X(z), yc + hw(z) * vpm] as P2);
+    props.push({id: 'beam', type: 'polyline', closed: true, points: [...top, ...bot.slice().reverse()], style: {fill: col, opacity: .22}, layer: 0, show: [T, 1e9], fade: .6} as Prop);
+    poly(top, col, 3.5, on(T, T + 1.6)); poly(bot, col, 3.5, on(T, T + 1.6));
+    // the beam's own lines: from across the gap out to across the beam's far end, straight
+    for (const f of [-.66, -.33, 0, .33, .66]) line([xa, yc + f * gap / 2], [X(Z), yc + f * hw(Z) * vpm], col, 2, on(T + .2, T + 1.8));
+    // ray optics' shadow edges, straight on from the aperture's edges
+    for (const sg of [-1, 1]) line([xa, yc + sg * gap / 2], [X(Z), yc + sg * A / 2 * vpm], 'muted', 2, {show: [T + 2, 1e9]}, true);
+    const spread = hw(Z) / (A / 2);
+    if (zF < Z * .97 && zF > Z * .06) {
+      const x = X(zF); line([x, yc - half * 1.1], [x, yc + half * 1.1], 'cool', 2.5, {show: [T + 2.2, 1e9]}, true);
+      label(x + 12 * k, yc - half * 1.1 + 4 * k, num ? `z_F = a²/λ = ${sig(zF)} m` : 'Fresnel distance', 'cool', 24, halo(k, 'cool', {align: 'start', show: [T + 2.2, 1e9], layer: 5}));
+      label((xa + x) / 2, yc + half * .98, 'rays hold', 'good', 24, halo(k, 'good', {show: [T + 2.6, 1e9], layer: 5}));
+      label((x + X(Z)) / 2, yc + half * 1.1 - 4 * k, 'spreading', 'bad', 24, halo(k, 'bad', {show: [T + 2.8, 1e9], layer: 5}));
+      anchors.zF = [x, yc];
+    } else if (zF >= Z * .97) {
+      label(xP, yc - half * 1.15 - 16 * k, num ? `z_F = ${sig(zF)} m, far beyond` : 'Fresnel distance far beyond', 'cool', 24, halo(k, 'cool', {align: 'end', show: [T + 2.2, 1e9], layer: 5}));
+    }
+    const verdict = NF === undefined ? '' : NF >= 10 ? 'a straight beam: rays hold' : NF <= .1 ? 'spread wide: diffraction dominates' : 'rays only roughly: diffraction matters';
+    if (verdict) label(xP, yc - half * 1.15 + 18 * k, verdict, NF! >= 10 ? 'good' : NF! <= .1 ? 'bad' : 'ink', 24, halo(k, NF! >= 10 ? 'good' : 'bad', {align: 'end', show: [T + 2.6, 1e9], layer: 5}));
+    if (NF !== undefined && num) label(xP - 20 * k, yc - 20 * k, `N_F = a²/λL ≈ ${sig(NF, 2)}`, 'ink', 26, halo(k, 'ink', {align: 'end', show: [T + 2.4, 1e9], layer: 5}));
+    if (spread > 1.3 || A * vpm < gap) label(bx + bw * .5, by + bh - 6 * k, 'widths across the beam magnified', 'muted', 22, {show: [T, 1e9]});
+    Object.assign(anchors, {beam: [X(Z * .5), yc] as P2, edge: [X(Z), yc - hw(Z) * vpm] as P2});
+    dur = 7;
+  } else {
+    if (A * vpm < gap) label(bx + bw * .5, by + bh - 6 * k, 'aperture drawn larger than in truth', 'muted', 22);
+    dur = 5;
+  }
+  anchors.aperture = [xa, yc];
+  const named = `a = ${sig(a)} mm${radius ? ' (radius)' : ''}, λ = ${lam} nm`;
+  if (stage === 'setup') {
+    story = L === undefined ? 'An aperture of size a, lit by light of wavelength λ' : 'An aperture of size a, light of wavelength λ, and a point P at a distance L';
+    second = 'Will the light go on as a ray, or spread?';
+    facts.push(L === undefined ? named : `${named}, P at L = ${sig(L)} m`);
+  } else {
+    if (NF === undefined) {
+      story = 'Within the Fresnel distance z_F = a²/λ the beam keeps the aperture\'s width: ray optics holds';
+      second = 'Beyond it diffraction spreads the beam, by about λ/a';
+    } else if (NF >= 10) { story = 'The Fresnel number a²/λL is large: the beam goes on straight, and rays describe it'; second = 'Rays are good for apertures many wavelengths across'; }
+    else if (NF <= .1) { story = 'The Fresnel number a²/λL is small: diffraction spreads the light, and the ray picture fails'; second = 'The beam is far wider than the aperture'; }
+    else { story = 'The Fresnel number a²/λL is near one: the beam is starting to spread'; second = 'Ray optics is only rough here'; }
+    facts.push(`${named}: Fresnel distance z_F = a²/λ = ${sig(zF)} m`);
+    if (NF !== undefined) facts.push(`at L = ${sig(L!)} m the Fresnel number a²/λL = ${sig(NF, 2)}: ${NF >= 10 ? 'ray optics holds' : NF <= .1 ? 'diffraction dominates' : 'between the two'}`);
+    facts.push(`the beam spreads by about λ/${radius ? '2a' : 'a'} = ${sig(lam * 1e-6 / A, 2)} rad`);
+  }
+  return finish('diffraction', s as never, dur, story, second, facts, anchors, s.illustrative);
+}
+
 export function diffraction(s: DiffractionSpec): Scene {
+  if (s.show === 'fresnel') return fresnel(s);
   const {k, props, bx, by, bw, bh, cx, cy, S, on, arrow, line, poly, label, finish} = kit(s);
   const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {};
   let dur = 7, story = '', second = '';
@@ -474,19 +622,129 @@ export function diffraction(s: DiffractionSpec): Scene {
 }
 
 // ------------------------------------------------------------------------------------------------------ polaroid
-export const POLAROID_SHOWS = ['malus', 'crossed'] as const;
+export const POLAROID_SHOWS = ['malus', 'crossed', 'unpolarised', 'one'] as const;
 export type PolaroidSpec = Common & {verb: 'polaroid'; show: (typeof POLAROID_SHOWS)[number];
-  /** malus: P2's pass axis from P1's, in degrees; crossed: the middle polaroid's from P1's. Left out: it turns from 0° to 180°. */
-  angle?: number};
+  /** malus: P2's pass axis from P1's, in degrees; crossed: the middle polaroid's from P1's; one: P1's own. Left out: it turns
+   * from 0° to 180°. */
+  angle?: number;
+  /** unpolarised: hold the plane of vibration at this angle from the vertical, in degrees (plane polarised light); left out,
+   * the plane changes at random from moment to moment (unpolarised). */
+  plane?: number};
+
+/** Unpolarised light through one polaroid at θ: Malus averaged over every plane of vibration, the mean of cos²(θ − φ). */
+export const throughOne = (theta: number) => { let sum = 0; const N = 720; for (let j = 0; j < N; j++) sum += malus(theta - 180 * j / N); return sum / N; };
 
 export function polaroidErrors(s: PolaroidSpec): string[] {
-  const W = 'polaroid';
+  const W = 'polaroid', e: string[] = [];
   if (!POLAROID_SHOWS.includes(s.show)) return [`${W}: show is one of ${POLAROID_SHOWS.join(', ')}`];
-  if (s.angle !== undefined && !(isNum(s.angle) && s.angle >= 0 && s.angle <= 180)) return [`${W}: angle is 0 to 180 degrees`];
-  return [];
+  if (s.show === 'unpolarised' && s.angle !== undefined) e.push(`${W}: show unpolarised has no polaroid, so no angle; give plane to hold the vibration in one plane`);
+  if (s.show !== 'unpolarised' && s.plane !== undefined) e.push(`${W}: plane belongs to show unpolarised; leave it out of show ${s.show}`);
+  if (s.angle !== undefined && !(isNum(s.angle) && s.angle >= 0 && s.angle <= 180)) e.push(`${W}: angle is 0 to 180 degrees`);
+  if (s.plane !== undefined && !(isNum(s.plane) && s.plane >= 0 && s.plane <= 180)) e.push(`${W}: plane is the plane of vibration's angle from the vertical, 0 to 180 degrees`);
+  return e;
+}
+
+// leph2-02 C7 (2026-11-04): the transverse wave whose plane of vibration jumps at random, and one polaroid turned on its own
+// in unpolarised light, had no picture. unpolarised: E arrows along the beam in perspective, each in the plane the source
+// gave it when that stretch of wave left, so a change of plane travels down the beam with the wave; beside it the beam seen
+// end on. one: a lamp, P1 turning, and the light through it: the mean of cos²(θ − φ) over every φ, half at every θ.
+function polaroidAlone(s: PolaroidSpec): Scene {
+  const {k, props, bx, by, bw, bh, cy, line, label, keysOf, finish} = kit(s);
+  const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {};
+  const ox = -.42, oy = .3;
+  let story = '', second = '', dur = 8;
+  if (s.show === 'unpolarised') {
+    const fixed = s.plane !== undefined, R = Math.min(bh * .32, bw * .15), yb = by + bh * .4, x0 = bx + bw * .06, x1 = bx + bw * .7;
+    const at = (x: number, y: number, z: number): P2 => [x + R * ox * z, yb - R * y + R * oy * z];
+    // the source's plane, a new one every 0.6 s, drawn from a fixed shuffle so every render agrees
+    const jumps = [0, 72, 141, 33, 108, 165, 54, 122, 12, 88, 150, 40, 97, 130, 20, 62];
+    const plane = (t: number) => fixed ? s.plane! : jumps[((Math.floor(t / .6) % jumps.length) + jumps.length) % jumps.length];
+    const lamP = (x1 - x0) / 2.4, T = 1.1, v = lamP / T;
+    dur = 8;
+    line([x0, yb], [x1 + 130 * k, yb], 'faint', 2);
+    props.push({id: 'travel', type: 'arrow', x1: x1 + 30 * k, y1: yb, x2: x1 + 130 * k, y2: yb, head: 15 * k, style: {stroke: 'ink', width: 4 * k}, layer: 3} as Prop);
+    label(x1 + 80 * k, yb - 18 * k, 'travel', 'ink', 24, halo(k, 'ink', {layer: 5}));
+    const N = 26;
+    for (let j = 0; j < N; j++) {
+      const x = x0 + (x1 - x0) * j / (N - 1);
+      const tip = (t: number) => { const ph = 2 * Math.PI * ((x - x0) / lamP - t / T), a = .9 * Math.sin(ph), p = rad(plane(t - (x - x0) / v)); return at(x, a * Math.cos(p), a * Math.sin(p)); };
+      props.push({id: `E${j}`, type: 'arrow', x1: x, y1: yb, x2: tip(0)[0], y2: tip(0)[1], head: 10 * k, style: {stroke: 'accent', width: 3 * k}, layer: 3,
+        keys: {x2: keysOf(dur, t => tip(t)[0]), y2: keysOf(dur, t => tip(t)[1])}} as Prop);
+    }
+    // the beam seen end on: the vibration's direction at the front of the wave, always across the beam
+    const er = Math.min(bh * .15, bw * .1), ec: P2 = [bx + bw - er - 20 * k, by + bh * .97 - er - 40 * k];
+    props.push({id: 'endon', type: 'circle', x: ec[0], y: ec[1], r: er, style: {stroke: 'muted', width: 2.5 * k, fill: 'muted', opacity: .08}, layer: 1} as Prop);
+    props.push({id: 'endon-dot', type: 'circle', x: ec[0], y: ec[1], r: 6 * k, style: {fill: 'ink'}, layer: 4} as Prop);
+    const dirEnd = (sg: number, t: number): P2 => { const p = rad(plane(t - (x1 - x0) / v)); return [ec[0] + sg * er * .85 * Math.sin(p), ec[1] - sg * er * .85 * Math.cos(p)]; };
+    for (const sg of [1, -1]) props.push({id: `endon${sg}`, type: 'arrow', x1: ec[0], y1: ec[1], x2: dirEnd(sg, 0)[0], y2: dirEnd(sg, 0)[1], head: 14 * k, style: {stroke: 'accent', width: 4 * k}, layer: 3,
+      keys: {x2: keysOf(dur, t => dirEnd(sg, t)[0]), y2: keysOf(dur, t => dirEnd(sg, t)[1])}} as Prop);
+    label(ec[0], ec[1] + er + 34 * k, 'seen along the beam', 'muted', 22);
+    label(ec[0], ec[1] - er - 16 * k, fixed ? 'one plane' : 'a new plane each moment', fixed ? 'good' : 'accent', 22, halo(k, fixed ? 'good' : 'accent', {layer: 5}));
+    label(x0, by + bh * .92, 'vibration across the direction of travel', 'accent', 24, halo(k, 'accent', {align: 'start', layer: 5}));
+    Object.assign(anchors, {beam: [(x0 + x1) / 2, yb] as P2, front: [x1, yb] as P2, endon: ec});
+    story = fixed ? 'The vibration stays in one plane: the light is plane polarised' : 'The plane of vibration changes at random, many times over: the light is unpolarised';
+    second = 'Either way the displacement is always at right angles to the direction of travel: a transverse wave';
+    facts.push(fixed ? 'plane polarised: the electric vector vibrates in one plane' : 'unpolarised: the plane of vibration changes randomly over very short times');
+    return finish('polaroid', s as never, dur, story, second, facts, anchors, s.illustrative);
+  }
+  // one: a lamp, unpolarised light, P1 alone (turning, or at angle), the light through it against P1's angle
+  const sweep = s.angle === undefined, T0 = 1.4, T1 = 8.4;
+  dur = sweep ? T1 + 1.2 : 6;
+  const theta = (t: number) => sweep ? 180 * smooth((t - T0) / (T1 - T0)) : s.angle!;
+  const yb = by + bh * .3, R = Math.min(bh * .24, bw * .11), at = (x: number, y: number, z: number): P2 => [x + R * ox * z, yb - R * y + R * oy * z];
+  const xl = bx + bw * .06, xu = bx + bw * .26, X1 = bx + bw * .52, xa = bx + bw * .76;
+  line([xl, yb], [bx + bw, yb], 'faint', 2);
+  props.push({id: 'lamp-glow', type: 'circle', x: xl, y: yb, r: 34 * k, style: {fill: 'accent', opacity: .25}, layer: 1} as Prop,
+    {id: 'lamp', type: 'circle', x: xl, y: yb, r: 20 * k, style: {fill: 'accent', stroke: 'ink', width: 2 * k}, layer: 2} as Prop);
+  label(xl, yb + 62 * k, 'lamp', 'accent', 22);
+  for (const a of [0, 45, 90, 135]) for (const sg of [1, -1]) {
+    const p = at(xu, sg * .55 * Math.cos(rad(a)), sg * .55 * Math.sin(rad(a)));
+    props.push({id: `u${a}${sg}`, type: 'arrow', x1: xu, y1: yb, x2: p[0], y2: p[1], head: 12 * k, style: {stroke: 'accent', width: 3 * k}, layer: 3} as Prop);
+  }
+  label(xu, yb - R * .75 - 12 * k, 'unpolarised', 'accent', 22);
+  props.push({id: 'disc-P1', type: 'polyline', closed: true, points: Array.from({length: 49}, (_, j) => { const u = j / 48 * 2 * Math.PI; return at(X1, Math.cos(u), Math.sin(u)); }),
+    style: {stroke: 'cool', width: 3 * k, fill: 'cool', opacity: .12}, layer: 1} as Prop);
+  label(X1, yb - R * 1.25 - 10 * k, 'P1', 'cool', 26);
+  const axEnd = (sg: number, t: number) => at(X1, sg * .9 * Math.cos(rad(theta(t))), sg * .9 * Math.sin(rad(theta(t))));
+  props.push({id: 'axis-P1', type: 'line', x1: axEnd(-1, 0)[0], y1: axEnd(-1, 0)[1], x2: axEnd(1, 0)[0], y2: axEnd(1, 0)[1], style: {stroke: 'ink', width: 4 * k, dash: [12 * k, 7 * k]}, layer: 2,
+    ...(sweep ? {keys: {x1: keysOf(dur, t => axEnd(-1, t)[0]), y1: keysOf(dur, t => axEnd(-1, t)[1]), x2: keysOf(dur, t => axEnd(1, t)[0]), y2: keysOf(dur, t => axEnd(1, t)[1])}} : {})} as Prop);
+  // after P1: polarised along its axis, the amplitude of the half that passes
+  const amp = Math.sqrt(throughOne(0) / .5) * .75;
+  for (const sg of [1, -1]) {
+    const tip = (t: number) => at(xa, sg * amp * Math.cos(rad(theta(t))), sg * amp * Math.sin(rad(theta(t))));
+    props.push({id: `E1${sg}`, type: 'arrow', x1: xa, y1: yb, x2: tip(0)[0], y2: tip(0)[1], head: 14 * k, style: {stroke: 'accent', width: 4 * k}, layer: 3,
+      ...(sweep ? {keys: {x2: keysOf(dur, t => tip(t)[0]), y2: keysOf(dur, t => tip(t)[1])}} : {})} as Prop);
+  }
+  label(xa, yb - R * .9 - 14 * k, 'polarised along P1', 'accent', 22);
+  props.push({id: 'travel', type: 'arrow', x1: bx + bw - 90 * k, y1: yb, x2: bx + bw - 10 * k, y2: yb, head: 15 * k, style: {stroke: 'muted', width: 3 * k}, layer: 2} as Prop);
+  // the light through P1 against its angle: flat at half of I0
+  const g0 = bx + bw * .1, g1 = bx + bw * .82, gy0 = by + bh * .95, gy1 = by + bh * .64, GX = (th: number) => g0 + th / 180 * (g1 - g0), GY = (f: number) => gy0 - f * (gy0 - gy1);
+  line([g0, gy0], [g1, gy0], 'ink', 2.5); line([g0, gy0], [g0, gy1 - 16 * k], 'ink', 2.5);
+  for (const th of [0, 45, 90, 135, 180]) { line([GX(th), gy0], [GX(th), gy0 + 8 * k], 'ink', 2); label(GX(th), gy0 + 32 * k, `${th}°`, 'muted', 20); }
+  line([g0, GY(1)], [g1, GY(1)], 'muted', 2, {}, true);
+  label(g0 + 10 * k, GY(1) - 12 * k, num ? 'I₀, before P1' : 'all the light, before P1', 'muted', 22, {align: 'start'});
+  label(g0 - 10 * k, gy1 + (gy0 - gy1) * .5 + 8 * k, 'I', 'muted', 26, {align: 'end'}); label(g1, gy0 - 12 * k, num ? 'angle of P1' : 'P1 turned', 'muted', 22, {align: 'end'});
+  const curve = Array.from({length: 37}, (_, j) => [GX(5 * j), GY(throughOne(5 * j))] as P2);
+  props.push({id: 'curve', type: 'polyline', points: curve, style: {stroke: 'good', width: 4 * k}, layer: 3, ...(sweep ? {draw: 0, keys: {draw: keysOf(dur, t => theta(t) / 180)}} : {})} as Prop);
+  label(g1, GY(.5) - 14 * k, num ? 'I₀/2 at every angle' : 'half, at every angle', 'good', 22, halo(k, 'good', {align: 'end', layer: 5, show: [sweep ? T1 * .5 : 1, 1e9]}));
+  const dotP = (t: number): P2 => [GX(theta(t)), GY(throughOne(theta(t)))];
+  props.push({id: 'dot', type: 'circle', x: dotP(0)[0], y: dotP(0)[1], r: 9 * k, style: {fill: 'accent'}, layer: 4, ...(sweep ? {keys: {x: keysOf(dur, t => dotP(t)[0])}} : {})} as Prop);
+  // a bar for the light through, as a share of the lamp's
+  const barX = bx + bw - 40 * k, barH = (gy0 - gy1), base = gy0;
+  props.push({id: 'bar-frame', type: 'rect', x: barX - 14 * k, y: base - barH, w: 28 * k, h: barH, style: {stroke: 'muted', width: 2 * k}, layer: 2} as Prop,
+    {id: 'bar', type: 'rect', x: barX - 14 * k, y: base - barH * throughOne(theta(0)), w: 28 * k, h: barH * throughOne(theta(0)), style: {fill: 'good'}, layer: 3} as Prop);
+  label(barX, base + 30 * k, num ? 'I / I₀' : 'through', 'muted', 22);
+  Object.assign(anchors, {lamp: [xl, yb] as P2, P1: [X1, yb] as P2, after: [xa, yb] as P2, bar: [barX, base - barH * .5] as P2, point: dotP(dur)});
+  story = 'Light from an ordinary lamp through one polaroid: the intensity falls to half';
+  second = sweep ? 'Turning P1 makes no difference: the vibration takes every direction at random, and on average half of it passes'
+    : 'The light that passes vibrates along P1\'s pass axis';
+  facts.push('unpolarised light through one polaroid: I = I0/2, whatever its angle',
+    `averaging cos²(θ − φ) over every plane of vibration φ: ${[0, 45, 90].map(th => `${f1(throughOne(th), 3)} at ${th}°`).join(', ')}`);
+  return finish('polaroid', s as never, dur, story, second, facts, anchors, s.illustrative);
 }
 
 export function polaroid(s: PolaroidSpec): Scene {
+  if (s.show === 'unpolarised' || s.show === 'one') return polaroidAlone(s);
   const {k, props, bx, by, bw, bh, cx, cy, S, on, arrow, line, poly, label, keysOf, finish} = kit(s);
   const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {}, crossed = s.show === 'crossed', sweep = s.angle === undefined;
   const yb = by + bh * .3, R = Math.min(bh * .24, bw * .11), ox = -.42, oy = .3;      // the beam's line; z drawn down and to the left

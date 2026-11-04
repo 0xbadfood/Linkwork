@@ -5,8 +5,11 @@
 //   electroscope a charged rod touches the knob; the leaves diverge with the charge
 //   induction    a charged rod near a neutral sphere: the sphere's charges separate, near side opposite
 //   coulomb      two charges and the equal, opposite forces; `r2` moves them to another distance, arrows to one scale
-//   superposition the force or field at a point from each charge, and their vector sum
-//   lines        field lines traced from the charges; count ∝ charge; `rings` shows them thinning with distance
+//   superposition the force or field at a point from each charge, and their vector sum; `arrows: false` only sets the charges out
+//   resultants   the net force on every charge of a system, then those forces placed tip to tail: they close, sum zero
+//   share        Coulomb's method: a charged sphere touched by identical uncharged ones, q → q/2 → q/4
+//   lines        field lines traced from the charges; count ∝ charge; `rings` shows them thinning with distance;
+//                `elements` sets small areas normal to the lines and marks each line that cuts them
 //   plates       uniform field between plates and a charged particle released in it
 //   flux         a flat area in a uniform field: only its part across the field counts, φ = EA cos θ
 //   dipole       field of a dipole at a point on its axis and on its equator
@@ -23,11 +26,12 @@ import {frame} from './vectors.ts';
 
 type P2 = [number, number];
 type Charge = {q: number; x: number; y: number; name?: string};
-export const ELECTRIC_SHOWS = ['rubbing', 'pith', 'electroscope', 'induction', 'coulomb', 'superposition', 'lines', 'plates', 'flux', 'dipole', 'torque', 'gauss', 'profile', 'density'] as const;
+export const ELECTRIC_SHOWS = ['rubbing', 'pith', 'electroscope', 'induction', 'coulomb', 'superposition', 'lines', 'plates', 'flux', 'dipole', 'torque', 'gauss', 'profile', 'density', 'resultants', 'share'] as const;
 export type ElectricSpec = {verb: 'electric'; show: (typeof ELECTRIC_SHOWS)[number]; q?: number; q1?: number; q2?: number; r?: number; r2?: number; charges?: Charge[];
   at?: [number, number]; quantity?: 'force' | 'field'; test?: number; on?: number; reach?: number; full?: number; rings?: boolean;
   E?: number; d?: number; particle?: 'electron' | 'proton'; field?: 'up' | 'down' | 'uniform' | 'nonuniform'; v0?: number; A?: number; theta?: number; a?: number; place?: 'axis' | 'equator' | 'both';
   system?: 'point' | 'wire' | 'plane' | 'shell' | 'cylinder'; R?: number; lambda?: number; sigma?: number; inside?: boolean; outside?: boolean; kind?: 'line' | 'surface' | 'volume'; sign?: 1 | -1; like?: boolean;
+  arrows?: boolean; close?: boolean; touches?: number; elements?: {at: [number, number]; name?: string}[]; size?: number; per?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean;
   span?: number; closest?: number}; // set by shareElectricScale: the largest distance or radius among compared panels, and the closest unlike pair
 
@@ -94,10 +98,20 @@ export function traceLines(cs: Charge[], reach: number, per = 12): P2[][] {
   return out;
 }
 
+/** The net Coulomb force on each charge from all the others (N). */
+export function netForces(cs: Charge[]): P2[] {
+  return cs.map(c => { const [ex, ey] = fieldAt(cs.filter(o => o !== c), c.x, c.y); return [c.q * ex, c.q * ey] as P2; });
+}
+/** Does segment ab cross segment cd? */
+const crosses = (a: P2, b: P2, c: P2, d: P2) => { const o = (p: P2, q: P2, r: P2) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])); return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b); };
+/** Where segment ab meets cd (they cross). */
+const meet = (a: P2, b: P2, c: P2, d: P2): P2 => { const r: P2 = [b[0] - a[0], b[1] - a[1]], q: P2 = [d[0] - c[0], d[1] - c[1]], den = r[0] * q[1] - r[1] * q[0], u = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den; return [a[0] + u * r[0], a[1] + u * r[1]]; };
+const SUB = '₀₁₂₃₄₅₆₇₈₉';
+
 export function electricErrors(s: ElectricSpec): string[] {
   const e: string[] = [], W = 'electric';
   if (!ELECTRIC_SHOWS.includes(s.show)) return [`${W}: show is one of ${ELECTRIC_SHOWS.join(', ')}`];
-  for (const n of ['r', 'r2', 'E', 'd', 'A', 'a', 'R', 'reach', 'full', 'v0'] as const) if (s[n] !== undefined && !(isNum(s[n]) && s[n]! > 0)) e.push(`${W}: ${n} is above 0, in SI units`);
+  for (const n of ['r', 'r2', 'E', 'd', 'A', 'a', 'R', 'reach', 'full', 'v0', 'size'] as const) if (s[n] !== undefined && !(isNum(s[n]) && s[n]! > 0)) e.push(`${W}: ${n} is above 0, in SI units`);
   for (const n of ['q', 'q1', 'q2', 'test', 'lambda', 'sigma'] as const) if (s[n] !== undefined && !(isNum(s[n]) && s[n] !== 0)) e.push(`${W}: ${n} is a number in SI units, not 0; its sign is the charge's`);
   if (s.theta !== undefined && !(isNum(s.theta) && s.theta >= 0 && s.theta <= 180)) e.push(`${W}: theta is 0 to 180 degrees`);
   if (s.charges !== undefined) {
@@ -107,7 +121,7 @@ export function electricErrors(s: ElectricSpec): string[] {
   if (s.show === 'superposition' || s.show === 'lines') { if (!s.charges) e.push(`${W}: ${s.show} needs charges: [{q, x, y}]`); }
   if (s.show === 'superposition' && s.charges && !e.length) {
     if (s.on !== undefined && !(Number.isInteger(s.on) && s.on >= 0 && s.on < s.charges.length)) e.push(`${W}: on is the index of one of the charges`);
-    if (s.on === undefined && !(Array.isArray(s.at) && isNum(s.at[0]) && isNum(s.at[1]))) e.push(`${W}: superposition needs at: [x, y] (m), or on: the index of a charge`);
+    if (s.on === undefined && s.arrows !== false && !(Array.isArray(s.at) && isNum(s.at[0]) && isNum(s.at[1]))) e.push(`${W}: superposition needs at: [x, y] (m), or on: the index of a charge`);
     if (s.on === undefined && s.at && s.charges.some(c => hyp(c.x - s.at![0], c.y - s.at![1]) === 0)) e.push(`${W}: at is on a charge, where the field has no meaning; use on`);
     if (s.on !== undefined && s.charges.length < 2) e.push(`${W}: the force on a charge needs another charge`);
   }
@@ -121,6 +135,22 @@ export function electricErrors(s: ElectricSpec): string[] {
   if (s.system !== undefined && !['point', 'wire', 'plane', 'shell', 'cylinder'].includes(s.system)) e.push(`${W}: system is point, wire, plane, shell or cylinder`);
   if ((s.show === 'gauss' || s.show === 'profile') && !s.system) e.push(`${W}: ${s.show} needs system: point, wire, plane or shell`);
   if (s.show === 'profile' && s.system === 'cylinder') e.push(`${W}: profile has no cylinder; use point, wire, plane or shell`);
+  for (const n of ['arrows', 'close'] as const) if (s[n] !== undefined && typeof s[n] !== 'boolean') e.push(`${W}: ${n} is true or false`);
+  if (s.arrows !== undefined && s.show !== 'superposition') e.push(`${W}: arrows goes with show superposition (false sets out the charges with no arrows yet)`);
+  if (s.close !== undefined && s.show !== 'resultants') e.push(`${W}: close goes with show resultants`);
+  if (s.show === 'resultants') { if (!s.charges) e.push(`${W}: resultants needs charges: 2 to 6 of {q, x, y, name}`); else if (Array.isArray(s.charges) && s.charges.length < 2) e.push(`${W}: resultants needs at least two charges: one alone feels no force`); }
+  if (s.touches !== undefined && (s.show !== 'share' || !(Number.isInteger(s.touches) && s.touches >= 1 && s.touches <= 3))) e.push(`${W}: touches is 1 to 3 (show share): how many identical uncharged spheres touch the charged one in turn`);
+  if (s.per !== undefined && (s.show !== 'lines' || !(Number.isInteger(s.per) && s.per >= 4 && s.per <= 36))) e.push(`${W}: per is 4 to 36 (show lines): the lines leaving the largest charge`);
+  if (s.size !== undefined && s.elements === undefined) e.push(`${W}: size is the length of the elements (m); give elements`);
+  if (s.elements !== undefined) {
+    if (s.show !== 'lines') e.push(`${W}: elements goes with show lines`);
+    else if (!Array.isArray(s.elements) || s.elements.length < 1 || s.elements.length > 4 || s.elements.some(el => !Array.isArray(el?.at) || !isNum(el.at[0]) || !isNum(el.at[1]) || (el.name !== undefined && typeof el.name !== 'string')))
+      e.push(`${W}: elements is 1 to 4 of {at: [x, y] (m), name}: small areas set normal to the lines`);
+    else if (s.charges && !e.length) for (const el of s.elements) {
+      const [ex, ey] = fieldAt(s.charges, el.at[0], el.at[1]);
+      if (s.charges.some(c => hyp(c.x - el.at[0], c.y - el.at[1]) < 1e-9) || hyp(ex, ey) === 0) e.push(`${W}: element ${el.name ?? JSON.stringify(el.at)} sits where the field has no direction (on a charge, or where it cancels); move it`);
+    }
+  }
   if (s.show === 'density' && s.kind !== undefined && !['line', 'surface', 'volume'].includes(s.kind)) e.push(`${W}: kind is line, surface or volume`);
   return e;
 }
@@ -258,12 +288,13 @@ export function electric(s: ElectricSpec): Scene {
     second = r2 ? 'Change the distance and the force goes as 1/r²' : 'F = k q₁q₂/r²: equal and opposite, even when the charges differ';
     facts.push(`k = 1/4πε₀ = ${sci(K, 'N m²/C²')}`);
   } else if (s.show === 'superposition' || s.show === 'lines') {
-    const cs = s.charges!, pts: P2[] = cs.map(c => [c.x, c.y]); if (s.at) pts.push(s.at);
+    const cs = s.charges!, pts: P2[] = cs.map(c => [c.x, c.y]); if (s.at) pts.push(s.at); for (const el of s.elements ?? []) pts.push(el.at);
     // a reach too small for its own charges or point would draw them off the canvas: it widens to hold them
     const far = Math.max(...pts.map(p => Math.max(Math.abs(p[0]), Math.abs(p[1])))), reach = Math.max(s.reach ?? 0, far * (s.reach === undefined ? 1.7 : 1.15)) || 1, ppm = S / 2 / reach;
     const to = (p: P2): P2 => [cx + p[0] * ppm, cy - p[1] * ppm];
     if (s.show === 'lines') {
-      for (const pts_ of traceLines(cs, reach, 12)) {
+      const traced = traceLines(cs, reach, s.per ?? 12);
+      for (const pts_ of traced) {
         for (const inside of windowPieces(pts_, reach * bw / S, reach * bh / S)) {
           poly(inside.map(to), 'accent', 3, {layer: 1, ...on(0.6, 3)});
           const mid = Math.floor(inside.length * 0.55), g = to(inside[mid]), h = to(inside[Math.min(mid + 2, inside.length - 1)]);
@@ -275,6 +306,37 @@ export function electric(s: ElectricSpec): Scene {
       story = cs.length === 1 ? (cs[0].q > 0 ? 'Lines leave a positive charge' : 'Lines enter a negative charge') : 'Lines start on positive charges and end on negative ones, and never cross';
       second = s.rings ? 'The same lines spread over a larger area: they thin out, and the field weakens as 1/r²' : 'Where lines crowd, the field is strong';
       facts.push('field lines never cross; their density shows the strength of the field', 'the number of lines is proportional to the charge');
+      if (s.elements?.length) {
+        // equal small areas set normal to the field (edge on, a short bar); every traced line that cuts one is marked where it cuts
+        const size = s.size ?? reach * 0.25, counts: number[] = [];
+        s.elements.forEach((el, i) => {
+          const [ex, ey] = fieldAt(cs, el.at[0], el.at[1]), m = hyp(ex, ey), nx = -ey / m, ny = ex / m, t0 = 3.6 + i * 1.6;
+          const a: P2 = [el.at[0] - nx * size / 2, el.at[1] - ny * size / 2], b: P2 = [el.at[0] + nx * size / 2, el.at[1] + ny * size / 2], hits: P2[] = [];
+          for (const path of traced) for (let j = 1; j < path.length; j++) if (crosses(path[j - 1], path[j], a, b)) { hits.push(meet(path[j - 1], path[j], a, b)); break; }
+          counts.push(hits.length);
+          const A = to(a), B = to(b), c = to(el.at);
+          line(A, B, 'good', 10, {layer: 2, show: [t0, 1e9]}); anchors[el.name ?? `element${i + 1}`] = c;
+          // the name sits past the bar's end, clear of the lines it is cut by
+          const ux = (B[0] - A[0]) / hyp(B[0] - A[0], B[1] - A[1]), uy = (B[1] - A[1]) / hyp(B[0] - A[0], B[1] - A[1]), side = uy < 0 ? 1 : -1;
+          if (el.name) label(c[0] + side * ux * (hyp(B[0] - A[0], B[1] - A[1]) / 2 + 26 * k), c[1] + side * uy * (hyp(B[0] - A[0], B[1] - A[1]) / 2 + 26 * k) + 9 * k, el.name, 'good', 30, {show: [t0, 1e9]});
+          hits.forEach(h => { const p = to(h); props.push({id: id('x'), type: 'circle', x: p[0], y: p[1], r: 7 * k, style: {fill: 'ink'}, layer: 3, show: [t0 + 0.7, 1e9]} as Prop); });
+          facts.push(`${hits.length} of the drawn lines cut the element at ${el.name ?? `point ${i + 1}`}`);
+        });
+        dur = 3.6 + s.elements.length * 1.6 + 2.4;
+        const names = s.elements.map((el, i) => el.name ?? `point ${i + 1}`), most = counts.indexOf(Math.max(...counts)), least = counts.indexOf(Math.min(...counts));
+        if (s.elements.length > 1 && counts[most] > counts[least]) { story = `Equal areas across the lines: more lines cut the one at ${names[most]} than at ${names[least]}`; second = `So the field is stronger at ${names[most]}`; }
+        else { story = 'Equal small areas set across the lines'; second = 'The number of lines through each shows how strong the field is there'; }
+      }
+    } else if (s.arrows === false) {
+      // the set-up only: the charges, the one the question is about ringed, no arrows yet
+      const target = s.on !== undefined ? cs[s.on] : undefined;
+      cs.forEach(c => { const a = to([c.x, c.y]); charge(a[0], a[1], c.q, 22, c.name); });
+      if (target) { const a = to([target.x, target.y]); anchors.on = a; ring(a, 31 * k, 31 * k, 'good', 3, true, on(1.2, 2)); }
+      if (s.at) { const p = to(s.at); anchors.P = p; props.push({id: 'P', type: 'circle', x: p[0], y: p[1], r: 9 * k, style: {fill: 'ink'}, layer: 3} as Prop); label(p[0] + 22 * k, p[1] - 14 * k, 'P', 'ink', 26); }
+      anchors.O = to([0, 0]); dur = 6;
+      story = target ? `${target.name ?? 'One charge'} among several other charges` : 'Several charges around a point';
+      second = 'Each of them pushes or pulls on it';
+      facts.push(`${cs.length} charges`);
     } else {
       const field = (s.quantity ?? 'field') === 'field' && s.on === undefined, target = s.on !== undefined ? cs[s.on] : undefined;
       const others = target ? cs.filter(c => c !== target) : cs, P: P2 = target ? [target.x, target.y] : s.at!, q0 = target ? target.q : field ? 1 : s.test ?? 1;
@@ -428,6 +490,84 @@ export function electric(s: ElectricSpec): Scene {
     else poly(rs.map(u => [x0 + u * xw, y0 - f(u) * yh] as P2), 'accent', 5, on(.5, 3));
     story = {plane: 'A plane: E is the same at every distance', wire: 'A wire: E falls as 1/r', point: 'A point charge: E falls as 1/r²', shell: 'A shell: zero inside, 1/r² outside, with a jump at R'}[sys as 'plane']; second = 'The shape of the charge sets the fall-off';
     facts.push(story);
+  } else if (s.show === 'resultants') {
+    // the net force on each charge, by Coulomb's law; then the same arrows, one scale, placed tip to tail
+    const cs = s.charges!, F = netForces(cs), close = s.close ?? true, mags = F.map(v => hyp(v[0], v[1])), top = Math.max(...mags) || 1, nC = cs.length;
+    const sys = [bx, by, close ? bx + bw * .56 : bx + bw, by + bh], sw = sys[2] - sys[0], sh = sys[3] - sys[1], scx = sys[0] + sw / 2, scy = sys[1] + sh / 2;
+    const mx = cs.reduce((a, c) => a + c.x, 0) / nC, my = cs.reduce((a, c) => a + c.y, 0) / nC, ext = Math.max(...cs.map(c => hyp(c.x - mx, c.y - my))) || 1, ppm = Math.min(sw, sh) * .3 / ext;
+    const at = cs.map(c => [scx + (c.x - mx) * ppm, scy - (c.y - my) * ppm] as P2), rad = 22 * k;
+    const scr = (v: P2): P2 => [v[0], -v[1]], unit = (v: P2): P2 => { const m = hyp(v[0], v[1]) || 1; return [v[0] / m, v[1] / m]; };
+    const room = (p: P2, v: P2, box: number[]) => Math.min(v[0] > 0 ? (box[2] - p[0]) / v[0] : v[0] < 0 ? (box[0] - p[0]) / v[0] : Infinity, v[1] > 0 ? (box[3] - p[1]) / v[1] : v[1] < 0 ? (box[1] - p[1]) / v[1] : Infinity);
+    const chain: P2[] = [[0, 0]]; F.forEach(v => chain.push([chain[chain.length - 1][0] + v[0], chain[chain.length - 1][1] + v[1]]));
+    const cxs = chain.map(p => p[0]), cys = chain.map(p => p[1]), cw = Math.max(...cxs) - Math.min(...cxs) || 1, ch = Math.max(...cys) - Math.min(...cys) || 1;
+    const reg = [sys[2] + bw * .05, by + bh * .08, bx + bw, by + bh * .84];
+    let len = Math.min(Math.min(sw, sh) * .4 / top, ...F.map((v, i) => mags[i] ? (room(at[i], scr(unit(v)), [sys[0] + 30 * k, sys[1] + 30 * k, sys[2] - 30 * k, sys[3] - 30 * k]) - rad - 4 * k) / mags[i] : Infinity));
+    if (close) len = Math.min(len, (reg[2] - reg[0]) * .8 / cw, (reg[3] - reg[1]) * .8 / ch);
+    const colours = ['accent', 'good', 'cool', 'bad', 'muted', 'ink'], fname = (i: number) => `F${SUB[(i + 1) % 10]}`;
+    const tail = (i: number): P2 => { const u = scr(unit(F[i])); return [at[i][0] + u[0] * (rad + 4 * k), at[i][1] + u[1] * (rad + 4 * k)]; };
+    const head = (i: number): P2 => { const t = tail(i); return [t[0] + F[i][0] * len, t[1] - F[i][1] * len]; };
+    if (nC >= 3) poly([...at, at[0]], 'faint', 2, {style: {stroke: 'faint', width: 2 * k, dash: [8 * k, 7 * k]}});
+    cs.forEach((c, i) => {
+      charge(at[i][0], at[i][1], c.q, 22); anchors[c.name ?? `q${i + 1}`] = at[i];
+      // the charge's name sits opposite its force (or away from the middle), clear of the arrow
+      const away = mags[i] ? scr(unit([-F[i][0], -F[i][1]])) : unit([at[i][0] - scx, at[i][1] - scy]);
+      if (c.name) label(at[i][0] + away[0] * 50 * k, at[i][1] + away[1] * 50 * k + 9 * k, c.name, 'ink', 28);
+    });
+    const t1 = 1, tc = t1 + nC * .9 + .8;
+    F.forEach((v, i) => {
+      if (!mags[i] || mags[i] * len < 6 * k) return;
+      const a = tail(i), b = head(i), u = scr(unit(v)), col = colours[i % colours.length];
+      arrow(a, b, col, 6, on(t1 + i * .9)); label(b[0] + u[0] * 30 * k, b[1] + u[1] * 30 * k + 9 * k, fname(i), col, 28, {show: [t1 + i * .9 + .8, 1e9]});
+      facts.push(`net force on ${cs[i].name ?? `charge ${i + 1}`}: ${fname(i)} = ${sci(mags[i], 'N')}`);
+    });
+    if (close) {
+      const ox = (reg[0] + reg[2]) / 2 - (Math.min(...cxs) + Math.max(...cxs)) / 2 * len, oy = (reg[1] + reg[3]) / 2 + (Math.min(...cys) + Math.max(...cys)) / 2 * len;
+      const V = (p: P2): P2 => [ox + p[0] * len, oy - p[1] * len], mid: P2 = [ox + (Math.min(...cxs) + Math.max(...cxs)) / 2 * len, (reg[1] + reg[3]) / 2];
+      const corners = chain.slice(0, -1).map(V), centroid: P2 = [corners.reduce((a, p) => a + p[0], 0) / corners.length, corners.reduce((a, p) => a + p[1], 0) / corners.length];
+      F.forEach((v, i) => {
+        if (!mags[i] || mags[i] * len < 6 * k) return;
+        const a0 = tail(i), b0 = head(i), a1 = V(chain[i]), b1 = V(chain[i + 1]), m0 = tc + i * 1.1, m1 = m0 + 1, col = colours[i % colours.length];
+        const go = (p: number, q: number): Key[] => [[m0, p], [m1, q, 'inOut']];
+        props.push({id: `chain${i}`, type: 'arrow', x1: a0[0], y1: a0[1], x2: b0[0], y2: b0[1], head: 15 * k, style: {stroke: col, width: 6 * k}, layer: 4, show: [m0, 1e9],
+          keys: {x1: go(a0[0], a1[0]), y1: go(a0[1], a1[1]), x2: go(b0[0], b1[0]), y2: go(b0[1], b1[1])}} as Prop);
+        // its name outside the closed figure, beside the arrow's middle
+        const c: P2 = [(a1[0] + b1[0]) / 2, (a1[1] + b1[1]) / 2], nrm = unit([b1[1] - a1[1], a1[0] - b1[0]]), out = (c[0] - centroid[0]) * nrm[0] + (c[1] - centroid[1]) * nrm[1] < 0 ? -1 : 1, o: P2 = [out * nrm[0], out * nrm[1]];
+        label(c[0] + o[0] * 34 * k, c[1] + o[1] * 34 * k + 9 * k, fname(i), col, 28, {show: [m1, 1e9]});
+      });
+      const tend = tc + nC * 1.1;
+      label(mid[0], Math.min(oy - Math.min(...cys) * len + 70 * k, by + bh - 4 * k), 'tip to tail, they close', 'muted', 26, {show: [tend, 1e9]});
+      anchors.chain = mid; dur = tend + 2.6;
+      const sum = F.reduce((a, v) => [a[0] + v[0], a[1] + v[1]] as P2, [0, 0] as P2);
+      facts.unshift(`${F.map((_, i) => fname(i)).join(' + ')} = 0 (computed: ${sci(hyp(sum[0], sum[1]), 'N')})`);
+      story = 'Each charge feels a net force, yet the forces placed tip to tail close'; second = 'Their sum is zero: the forces of each pair are equal and opposite';
+    } else { dur = tc + 2; story = 'The net force on each charge, from all the others'; second = 'Each is the vector sum of the forces from the other charges'; }
+  } else if (s.show === 'share') {
+    // Coulomb's way to known fractions of a charge: identical spheres share it equally on touching
+    const n = s.touches ?? 2, q = s.q ?? 1e-9, sr = Math.min(bw * .9 / (4 + n * 2.6), bh * .16), pitch = 2.6 * sr;
+    const x0 = bx + (bw - (4 * sr + n * pitch)) / 2 + sr, y = cy + bh * .1, touchX = x0 + 2 * sr, high = y - Math.min(bh * .4, 3.4 * sr), step = 3.2, T = (i: number) => .8 + (i - 1) * step;
+    const frac = (f: number) => f === 1 ? 'q' : `q/${1 / f}`, sign = q > 0 ? '+' : '−';
+    dur = T(n) + step + .6;
+    const sphere = (name: string, xf: (t: number) => number, yf: (t: number) => number, held: [number, number, number][], from = 0) => {
+      props.push({id: name, type: 'circle', x: xf(0), y: yf(0), r: sr, style: {fill: 'faint', stroke: 'ink', width: 3 * k}, layer: 2, show: [from, 1e9], keys: {x: keysOf(dur, xf), y: keysOf(dur, yf)}} as Prop);
+      held.forEach(([t0, t1, f], j) => {
+        const m = Math.round(8 * f), r0 = m > 1 ? sr * .55 : 0;
+        for (let i = 0; i < m; i++) { const th = 2 * Math.PI * i / m + .4, dx = r0 * Math.cos(th), dy = r0 * Math.sin(th) + sr * .16;
+          props.push({id: id('sg'), type: 'text', x: xf(t0) + dx, y: yf(t0) + dy, text: sign, size: sr * .46, weight: 700, align: 'middle', style: {fill: q > 0 ? 'bad' : 'cool'}, layer: 3, show: [t0, t1], keys: {x: keysOf(dur, t => xf(t) + dx), y: keysOf(dur, t => yf(t) + dy)}} as Prop); }
+        // the charge it holds: a symbol (q/2), kept when numbers are hidden
+        props.push({id: `name-${name}-${j}`, type: 'text', x: xf(t0), y: yf(t0) + sr + 40 * k, text: f ? frac(f) : 'uncharged', size: (f ? 30 : 24) * k, weight: 700, align: 'middle', style: {fill: f ? 'ink' : 'muted'}, layer: 3, show: [t0, t1], keys: {x: keysOf(dur, xf), y: keysOf(dur, t => yf(t) + sr + 40 * k)}} as Prop);
+      });
+    };
+    const shared = (i: number) => T(i) + 1.4;
+    sphere('A', () => x0, () => y, Array.from({length: n + 1}, (_, i) => [i ? shared(i) : 0, i < n ? shared(i + 1) : 1e9, 1 / 2 ** i] as [number, number, number]));
+    anchors.A = [x0, y]; anchors.touch = [touchX, y];
+    for (let i = 1; i <= n; i++) {
+      const t0 = T(i), slot = touchX + (n - i + 1) * pitch, ease = (u: number) => { const v = Math.min(1, Math.max(0, u)); return v * v * (3 - 2 * v); };
+      const xf = (t: number) => touchX + (slot - touchX) * ease((t - t0 - 2) / .9), yf = (t: number) => high + (y - high) * ease((t - t0) / 1.1);
+      sphere(`S${i}`, xf, yf, [[t0, shared(i), 0], [shared(i), 1e9, 1 / 2 ** i]], t0);
+    }
+    facts.push(`touching identical spheres share the charge equally: ${[0, ...Array.from({length: n}, (_, i) => i + 1)].map(i => frac(1 / 2 ** i)).join(' → ')}`);
+    if (!s.illustrative && s.q !== undefined) facts.push(`q = ${sci(q, 'C')}: then ${Array.from({length: n}, (_, i) => sci(q / 2 ** (i + 1), 'C')).join(', ')}`);
+    story = 'An identical uncharged sphere touches the charged one: they share its charge equally'; second = 'Each touch halves it, so the charges are known fractions of q, though q itself is not known';
   } else {
     const kind = s.kind ?? 'line', sym = {line: 'λ = Δq/Δl', surface: 'σ = Δq/ΔS', volume: 'ρ = Δq/ΔV'}[kind]; dur = 6;
     if (kind === 'line') { poly(Array.from({length: 61}, (_, i) => [bx + bw * (0.08 + 0.84 * i / 60), cy + bh * 0.12 * Math.sin(i / 60 * 3.6)] as P2), 'bad', 8); poly(Array.from({length: 7}, (_, i) => [bx + bw * (0.44 + 0.08 * i / 6), cy + bh * 0.12 * Math.sin((0.36 + 0.08 * i / 6) / 0.84 * 3.6)] as P2), 'accent', 16, {show: [1.5, 1e9]}); }

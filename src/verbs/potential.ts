@@ -5,7 +5,9 @@
 //   dipole        V = p cos θ / 4πε₀r² at a point; without theta, the point sweeps from the axis to the equator
 //   system        V at a point adds, with signs, over the charges
 //   equipotentials surfaces traced from V itself, crossed at right angles by the field lines; `uniform` for planes
-//   gradient      two close surfaces: E = −δV/δl, pointing to lower potential
+//   gradient      two close surfaces: E = −δV/δl, pointing to lower potential (δV signed: negative is the book's δV along E);
+//                 `names` calls them A (V) and B (V + δV); `move` carries a unit positive charge across, against the field
+//   conductor     a charged conducting sphere: one potential through its volume and on its surface, E = 0 inside, normal outside
 //   assemble      charges brought in one at a time; U sums over pairs
 //   external      a charge through a potential difference: ΔU = qΔV, the electron volt
 //   dipole_energy a dipole turned in a uniform field: U = −pE cos θ, on its graph
@@ -26,10 +28,10 @@ import {frame} from './vectors.ts';
 
 type P2 = [number, number];
 type Charge = {q: number; x: number; y: number; name?: string};
-export const POTENTIAL_SHOWS = ['work', 'curves', 'dipole', 'system', 'equipotentials', 'gradient', 'assemble', 'external', 'dipole_energy'] as const;
+export const POTENTIAL_SHOWS = ['work', 'curves', 'dipole', 'system', 'equipotentials', 'gradient', 'assemble', 'external', 'dipole_energy', 'conductor'] as const;
 export const CAPACITOR_SHOWS = ['conductor', 'dielectric', 'plates', 'insert', 'combine', 'charging'] as const;
 export type PotentialSpec = {verb: 'potential'; show: (typeof POTENTIAL_SHOWS)[number]; q?: number; test?: number; r?: number; start?: number; paths?: boolean; a?: number; theta?: number; charges?: Charge[]; at?: P2; reach?: number; uniform?: boolean; lines?: boolean; E?: number; V?: number; dV?: number; dl?: number; particle?: 'electron' | 'proton'; p?: number; from?: number; to?: number;
-  span?: number; dl0?: number; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+  names?: boolean; move?: boolean; R?: number; span?: number; dl0?: number; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 export type CapacitorSpec = {verb: 'capacitor'; show: (typeof CAPACITOR_SHOWS)[number]; case?: 'equilibrium' | 'external' | 'cavity' | 'pillbox'; molecules?: 'polar' | 'nonpolar'; K?: number; A?: number; d?: number; d2?: number; Q?: number; V?: number; C?: number; battery?: boolean; kind?: 'series' | 'parallel'; caps?: number[]; across?: number; sigma?: number;
   span?: number; thickness?: number; reduce?: boolean; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
@@ -73,7 +75,7 @@ export function contour(f: (x: number, y: number) => number, level: number, xr: 
 export function potentialErrors(s: PotentialSpec): string[] {
   const e: string[] = [], W = 'potential';
   if (!POTENTIAL_SHOWS.includes(s.show)) return [`${W}: show is one of ${POTENTIAL_SHOWS.join(', ')}`];
-  for (const n of ['r', 'start', 'a', 'E', 'dl', 'reach', 'p'] as const) if (s[n] !== undefined && !(isNum(s[n]) && s[n]! > 0)) e.push(`${W}: ${n} is above 0, in SI units`);
+  for (const n of ['r', 'start', 'a', 'E', 'dl', 'reach', 'p', 'R'] as const) if (s[n] !== undefined && !(isNum(s[n]) && s[n]! > 0)) e.push(`${W}: ${n} is above 0, in SI units`);
   for (const n of ['q', 'test', 'V', 'dV', 'theta', 'from', 'to'] as const) if (s[n] !== undefined && !isNum(s[n])) e.push(`${W}: ${n} is a number`);
   if (s.charges !== undefined && (!Array.isArray(s.charges) || !s.charges.length || s.charges.length > 6 || s.charges.some(c => !isNum(c?.q) || !isNum(c?.x) || !isNum(c?.y) || c.q === 0))) e.push(`${W}: charges is 1 to 6 of {q (C, not 0), x (m), y (m), name}`);
   if ((s.show === 'system' || s.show === 'assemble' || (s.show === 'equipotentials' && !s.uniform)) && !s.charges) e.push(`${W}: ${s.show} needs charges: [{q, x, y}]`);
@@ -85,6 +87,10 @@ export function potentialErrors(s: PotentialSpec): string[] {
   if (s.show === 'dipole' && s.a !== undefined && s.r !== undefined && s.r <= s.a) e.push(`${W}: r must be more than a, outside the dipole`);
   if (s.show === 'dipole_energy') for (const n of ['from', 'to'] as const) if (s[n] !== undefined && !(s[n]! >= 0 && s[n]! <= 180)) e.push(`${W}: ${n} is 0 to 180 degrees`);
   if (s.particle !== undefined && !['electron', 'proton'].includes(s.particle)) e.push(`${W}: particle is electron or proton`);
+  for (const n of ['names', 'move'] as const) if (s[n] !== undefined && (typeof s[n] !== 'boolean' || s.show !== 'gradient')) e.push(`${W}: ${n} is true or false, with show gradient`);
+  if (s.show === 'gradient' && s.dV === 0) e.push(`${W}: dV is the change in V from one surface to the other, not 0`);
+  if (s.R !== undefined && s.show !== 'conductor') e.push(`${W}: R is the conductor's radius (show conductor)`);
+  if (s.show === 'conductor' && s.q === 0) e.push(`${W}: the conductor needs a charge q (C), not 0`);
   return e;
 }
 
@@ -208,15 +214,49 @@ export function potential(s: PotentialSpec): Scene {
       story = 'Each blue curve joins points of one potential; the field lines cross them at right angles'; second = 'Where the surfaces crowd, the field is strong';
     }
   } else if (s.show === 'gradient') {
-    const dl = s.dl ?? 0.01, dV = Math.abs(s.dV ?? 10), V = s.V ?? 100, E0 = dV / dl, half = s.span ? Math.max(.05, .25 * dl / s.span) : .14, x1 = cx + bw * half, x2 = cx - bw * half; dur = 7;
-    const surface = (x: number, c: string) => poly(Array.from({length: 41}, (_, i) => [x + bw * .05 * Math.sin(i / 40 * Math.PI), by + bh * (.05 + .9 * i / 40)] as P2), c, 5);
-    surface(x1, 'cool'); surface(x2, 'bad');
-    if (!s.illustrative) { label(Math.min(x2, cx - 110 * k), by + 4 * k, `V + δV = ${sci(V + dV, 'V')}`, 'bad', 26); label(Math.max(x1, cx + 110 * k), by + 4 * k, `V = ${sci(V, 'V')}`, 'cool', 26); }
-    else { label(Math.min(x2, cx - 50 * k), by + 4 * k, 'V + δV', 'bad', 26); label(Math.max(x1, cx + 40 * k), by + 4 * k, 'V', 'cool', 26); }
-    const mid = cy + bh * .02; line([x2 + bw * .05, mid + 64 * k], [x1 + bw * .05, mid + 64 * k], 'muted', 2); label(cx + bw * .05, mid + 100 * k, 'δl', 'muted', 28);
-    arrow([x2 + bw * .05, mid], [x1 + bw * .05, mid], 'accent', s.span ? 3 + 6 * (s.dl0 ?? dl) / dl : 7, on(1.5, 2.6)); label(cx + bw * .05, mid - 22 * k, 'E', 'accent', 34, {show: [2.6, 1e9]});
-    facts.push(`|E| = δV/δl = ${sci(E0, 'V/m')}`);
+    // dV is the change from surface A (potential V, right) to B (V + δV, left); E points to the lower one. The book's δV is
+    // taken along E, so it is negative (2026-11-04: a film's dV −20 had been read as +20, the arrow drawn towards A)
+    const dl = s.dl ?? 0.01, dV0 = s.dV ?? 10, dV = Math.abs(dV0), V = s.V ?? 100, E0 = dV / dl, half = s.span ? Math.max(.05, .25 * dl / s.span) : .14, x1 = cx + bw * half, x2 = cx - bw * half; dur = s.move ? 8 : 7;
+    const bHigh = dV0 > 0, hi = bHigh ? x2 : x1, lo = bHigh ? x1 : x2, bulge = bw * .05;
+    const surface = (x: number, c: string) => poly(Array.from({length: 41}, (_, i) => [x + bulge * Math.sin(i / 40 * Math.PI), by + bh * (.05 + .9 * i / 40)] as P2), c, 5);
+    surface(x1, bHigh ? 'cool' : 'bad'); surface(x2, bHigh ? 'bad' : 'cool');
+    const nameA = s.names ? 'A: ' : '', nameB = s.names ? 'B: ' : '', cB = bHigh ? 'bad' : 'cool', cA = bHigh ? 'cool' : 'bad';
+    if (!s.illustrative) { label(Math.min(x2, cx - 110 * k), by + 4 * k, `${nameB}V + δV = ${sci(V + dV0, 'V')}`, cB, 26); label(Math.max(x1, cx + 110 * k), by + 4 * k, `${nameA}V = ${sci(V, 'V')}`, cA, 26); }
+    else { label(Math.min(x2, cx - 50 * k - (s.names ? 20 * k : 0)), by + 4 * k, `${nameB}V + δV`, cB, 26); label(Math.max(x1, cx + 40 * k + (s.names ? 20 * k : 0)), by + 4 * k, `${nameA}V`, cA, 26); }
+    const mid = cy + bh * .02, eY = s.move ? mid - 78 * k : mid; line([x2 + bulge, mid + 64 * k], [x1 + bulge, mid + 64 * k], 'muted', 2); label(cx + bulge, mid + 100 * k, 'δl', 'muted', 28);
+    arrow([hi + bulge, eY], [lo + bulge, eY], 'accent', s.span ? 3 + 6 * (s.dl0 ?? dl) / dl : 7, on(1.5, 2.6)); label(cx + bulge, eY - 22 * k, 'E', 'accent', 34, {show: [2.6, 1e9]});
+    anchors.A = [x1 + bulge, mid]; anchors.B = [x2 + bulge, mid];
+    facts.push(`|E| = |δV|/δl = ${sci(E0, 'V/m')}`, `E points from ${s.names ? (bHigh ? 'B to A' : 'A to B') : 'the higher surface to the lower'}, the way V falls`);
     story = 'E points from higher to lower potential, along the steepest drop'; second = 'E = −δV/δl: the closer the surfaces, the stronger the field';
+    if (s.move) {
+      // a unit positive charge carried along the perpendicular from the lower surface to the higher one: against E
+      const x0 = lo + bulge, xe = hi + bulge, T0 = 3.2, T1 = 6.2, X = (t: number) => { const u = Math.min(1, Math.max(0, (t - T0) / (T1 - T0))); return x0 + (xe - x0) * u * u * (3 - 2 * u); };
+      props.push({id: 'P', type: 'circle', x: x0, y: mid, r: 7 * k, style: {fill: 'ink'}, layer: 2} as Prop); label(x0 + (x0 > xe ? 30 : -30) * k, mid + 40 * k, 'P', 'ink', 26);
+      props.push({id: 'unit', type: 'circle', x: x0, y: mid, r: 16 * k, style: {fill: 'bad', stroke: 'ink', width: 2 * k}, layer: 3, show: [2.6, 1e9], keys: {x: keysOf(dur, X)}} as Prop);
+      props.push({id: 'unit-s', type: 'text', x: x0, y: mid + 7 * k, text: '+', size: 22 * k, weight: 700, align: 'middle', style: {fill: 'paper'}, layer: 4, show: [2.6, 1e9], keys: {x: keysOf(dur, t => X(t))}} as Prop);
+      line([x0, mid], [xe, mid], 'faint', 2, {show: [T0, 1e9]}, true); anchors.P = [x0, mid];
+      const from = s.names ? (bHigh ? 'A' : 'B') : 'the lower surface', to = s.names ? (bHigh ? 'B' : 'A') : 'the higher one';
+      facts.push(`work to carry a unit positive charge from ${from} to ${to}: |E|δl = ${sci(dV, 'J/C')}`);
+      story = `A unit positive charge moved from ${from} to ${to}, against the field`; second = 'Along the perpendicular between the surfaces, the shortest way across';
+    }
+  } else if (s.show === 'conductor') {
+    // a sphere: exact. V = kQ/R through the metal and on its surface; outside V = kQ/r, E = kQ/r² normal to the surface
+    const Q = s.q ?? 1e-9, R = s.R ?? 0.1, V0 = K0 * Q / R, Rp = S * .26, c: P2 = [cx, cy]; dur = 7;
+    props.push({id: 'metal', type: 'circle', x: cx, y: cy, r: Rp, style: {fill: 'faint', stroke: 'cool', width: 6 * k}, layer: 1} as Prop);
+    for (let i = 0; i < 12; i++) { const th = i * Math.PI / 6; label(cx + (Rp + 18 * k) * Math.cos(th), cy + (Rp + 18 * k) * Math.sin(th) + 9 * k, Q > 0 ? '+' : '−', Q > 0 ? 'bad' : 'cool', 26); }
+    // equipotentials outside, at V0 × f: radius R/f
+    const fs = [.72, .55].filter(f => Rp / f < Math.min(bw, bh) / 2 - 10 * k);
+    fs.forEach((f, i) => ring(c, Rp / f, Rp / f, 'cool', 2, true, on(4.6 + i * .5)));
+    // the same V at points inside and on the surface
+    const spots: P2[] = [[0, 0], [.5, .3], [-.45, -.4], [Math.cos(rad(-45)), Math.sin(rad(-45))]];
+    spots.forEach(([u, v], i) => { const p: P2 = [cx + u * Rp, cy - v * Rp], t0 = 1 + i * .7, edge = i === spots.length - 1;
+      props.push({id: `spot${i}`, type: 'circle', x: p[0], y: p[1], r: 8 * k, style: {fill: 'ink'}, layer: 3, show: [t0, 1e9]} as Prop);
+      label(p[0] - (edge ? 30 : 0) * k, p[1] - (edge ? 26 : 16) * k, 'V₀', 'ink', 26, {show: [t0, 1e9]}); anchors[edge ? 'surface' : `inside${i}`] = p; });
+    // E normal to the surface, outward for a positive charge
+    for (let i = 0; i < 8; i++) { const th = i * Math.PI / 4 + Math.PI / 8, u: P2 = [Math.cos(th), Math.sin(th)], a: P2 = [cx + u[0] * (Rp + 34 * k), cy + u[1] * (Rp + 34 * k)], b: P2 = [cx + u[0] * (Rp + 34 * k + S * .1), cy + u[1] * (Rp + 34 * k + S * .1)]; Q > 0 ? arrow(a, b, 'accent', 3, on(4)) : arrow(b, a, 'accent', 3, on(4)); }
+    anchors.centre = c;
+    facts.push(`V = kQ/R = ${sci(V0, 'V')} everywhere inside and on the surface`, 'E = 0 inside, so no work moves a charge within it: ΔV = 0', `outside V falls as 1/r: ${sci(V0 * .72, 'V')} at ${sci(R / .72, 'm')}`);
+    story = 'The potential is the same throughout the conductor, and the same on its surface'; second = 'No field inside, so no work moves a charge there; outside, E leaves the surface at right angles';
   } else if (s.show === 'assemble') {
     const cs = s.charges!, far = Math.max(...cs.flatMap(c => [Math.abs(c.x), Math.abs(c.y)])), reach = Math.max(s.reach ?? 0, (far || .1) * 1.5), ppm = S / 2 / reach, to = (c: Charge): P2 => [cx + c.x * ppm, cy - c.y * ppm]; dur = 2 + cs.length * 2 + 2; let sum = 0;
     cs.forEach((c, i) => {

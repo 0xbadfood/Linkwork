@@ -42,14 +42,31 @@ export type TirSpec = Common & {verb: 'tir'; show: (typeof TIR_SHOWS)[number];
   n?: number;
   /** fibre: the core's and cladding's refractive indices (default 1.68 and 1.44, the book's light pipe); n_clad 1: no cladding. */
   n_core?: number; n_clad?: number;
-  /** fibre: the angle of incidence at the fibre's end face, from the axis, in degrees (default 40). */
-  incidence?: number};
+  /** fibre: the angle of incidence at the fibre's end face, from the axis, in degrees (default 40; 20 with bend or losses). */
+  incidence?: number;
+  /** fibre: bend it through a right angle, the bend's radius (to the core's middle) in core widths, 1.5 (tight) to 10 (gentle). */
+  bend?: number;
+  /** fibre: true dims the light along the way, a little absorbed and scattered all along. */
+  losses?: boolean};
+
+/** The least bend radius, in core widths, at which every guided ray stays trapped: (R − ½)/(R + ½) = n2/n1 (a ray grazing the
+ * inner wall meets the outer one at the smallest angle). */
+export const safeBend = (n1: number, n2: number) => .5 * (1 + n2 / n1) / (1 - n2 / n1);
+/** Fresnel's reflectance for unpolarised light, from n1 into n2 at incidence i (degrees); 1 past the critical angle. */
+export const reflectance = (n1: number, n2: number, i: number) => {
+  const si = n1 * Math.sin(rad(i)) / n2; if (si >= 1) return 1;
+  const ci = Math.cos(rad(i)), ct = Math.sqrt(1 - si * si), rs = (n1 * ci - n2 * ct) / (n1 * ci + n2 * ct), rp = (n1 * ct - n2 * ci) / (n1 * ct + n2 * ci);
+  return (rs * rs + rp * rp) / 2;
+};
 
 export function tirErrors(s: TirSpec): string[] {
   const e: string[] = [];
   if (!TIR_SHOWS.includes(s.show)) return [`tir: show is one of ${TIR_SHOWS.join(', ')}`];
   const fibre = s.show === 'fibre';
-  e.push(...only(s as never, 'tir', s.show, fibre ? ['n_core', 'n_clad', 'incidence'] : ['n'], ['n', 'n_core', 'n_clad', 'incidence']));
+  e.push(...only(s as never, 'tir', s.show, fibre ? ['n_core', 'n_clad', 'incidence', 'bend', 'losses'] : ['n'], ['n', 'n_core', 'n_clad', 'incidence', 'bend', 'losses']));
+  if (s.bend !== undefined && !(isNum(s.bend) && s.bend >= 1.5 && s.bend <= 10)) e.push('tir: bend is the bend\'s radius in core widths, 1.5 (bent too tightly) to 10 (a gentle bend)');
+  if (s.losses !== undefined && typeof s.losses !== 'boolean') e.push('tir: losses is true or false');
+  if (s.bend !== undefined && s.incidence !== undefined && s.incidence > 60) e.push('tir: with a bend, keep incidence to 60 degrees or less: steeper rays leave the straight part before the bend');
   if (s.n !== undefined && !(isNum(s.n) && s.n >= 1.2 && s.n <= 2.5)) e.push('tir: n is 1.2 to 2.5');
   if (s.n_core !== undefined && !(isNum(s.n_core) && s.n_core > 1 && s.n_core <= 2.5)) e.push('tir: n_core is above 1, up to 2.5');
   if (s.n_clad !== undefined && !(isNum(s.n_clad) && s.n_clad >= 1 && s.n_clad <= 2.5)) e.push('tir: n_clad is 1 (no cladding) to 2.5');
@@ -81,6 +98,7 @@ export function tir(s: TirSpec): Scene {
   const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {};
   let dur = 8, story = '', second = '';
   const drawn = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});
+  if (s.show === 'fibre' && (s.bend !== undefined || s.losses)) return bentFibre(s);
   if (s.show === 'fibre') {
     const n1 = s.n_core ?? 1.68, n2 = s.n_clad ?? 1.44, i = s.incidence ?? 40, ic = criticalAngle(n1, n2), acc = acceptance(n1, n2);
     const r = deg(Math.asin(Math.sin(rad(i)) / n1)), wall = 90 - r, trapped = r === 0 || wall > ic;
@@ -174,6 +192,129 @@ export function tir(s: TirSpec): Scene {
       ...reflections.map(ev => `it meets the face at ${f1(ev.angle)}°, ${ev.angle > ic ? 'beyond' : 'within'} ic`));
   }
   return finish('tir', s as never, dur, story, second, facts, anchors, s.illustrative);
+}
+
+// A fibre bent through a right angle, or dimmed by losses (leph2-01 C4, 2026-11-04: "light can leak from a fibre if it is
+// bent too tightly" had no picture: the fibre was always straight). Every ray is traced: straight walls and the bend's two
+// circular walls, the angle of incidence at each hit from the true normal; within the critical angle the light that leaves
+// is drawn by Snell's law and Fresnel's reflectance keeps the rest, ever fainter.
+type Wall = {kind: 'seg'; a: P2; b: P2} | {kind: 'arc'; c: P2; r: number; ok: (p: P2) => boolean} | {kind: 'end'; a: P2; b: P2};
+function hitWall(w: Wall, p: P2, d: P2): {t: number; n: P2} | undefined {
+  if (w.kind === 'arc') {
+    const o: P2 = [p[0] - w.c[0], p[1] - w.c[1]], b = dot(o, d), cc = dot(o, o) - w.r * w.r, disc = b * b - cc;
+    if (disc < 0) return undefined;
+    for (const t of [-b - Math.sqrt(disc), -b + Math.sqrt(disc)]) {
+      if (t <= 1e-6) continue;
+      const q: P2 = [p[0] + d[0] * t, p[1] + d[1] * t];
+      if (w.ok(q)) return {t, n: unit([q[0] - w.c[0], q[1] - w.c[1]])};
+    }
+    return undefined;
+  }
+  const e: P2 = [w.b[0] - w.a[0], w.b[1] - w.a[1]], den = d[0] * e[1] - d[1] * e[0];
+  if (Math.abs(den) < 1e-12) return undefined;
+  const ap: P2 = [w.a[0] - p[0], w.a[1] - p[1]], t = (ap[0] * e[1] - ap[1] * e[0]) / den, u = (ap[0] * d[1] - ap[1] * d[0]) / den;
+  return t > 1e-6 && u >= -1e-9 && u <= 1 + 1e-9 ? {t, n: unit([-e[1], e[0]])} : undefined;
+}
+
+function bentFibre(s: TirSpec): Scene {
+  const {k, props, bx, by, bw, bh, S, label, finish} = kit(s);
+  const num = !s.illustrative, facts: string[] = [], anchors: Record<string, P2> = {};
+  const n1 = s.n_core ?? 1.68, n2 = s.n_clad ?? 1.44, i = s.incidence ?? 20, ic = criticalAngle(n1, n2), B = s.bend, lossy = !!s.losses;
+  const x0 = bx + bw * .06, yA = by + bh * (B === undefined ? .45 : .3);
+  const Ls = B === undefined ? bw * .9 : bw * .34, leakRoom = S * .16;
+  const RbMax = B === undefined ? 0 : Math.min(bh * .97 - (yA - by) - bh * .12, bw * .94 - (x0 - bx) - Ls - leakRoom);
+  const hc = B === undefined ? S * .07 : Math.min(S * .07, RbMax / (2 * B + 1.6)), cl = hc * .6, Rb = B === undefined ? 0 : 2 * B * hc;
+  const xb = x0 + Ls, C: P2 = [xb, yA + Rb], yEnd = by + bh, xEnd = bx + bw * .97;
+  const inArc = (q: P2) => q[0] >= xb - 1e-6 && q[1] <= C[1] + 1e-6;
+  const walls: Wall[] = B === undefined
+    ? [{kind: 'seg', a: [x0, yA - hc], b: [xEnd, yA - hc]}, {kind: 'seg', a: [x0, yA + hc], b: [xEnd, yA + hc]}, {kind: 'end', a: [xEnd, yA - hc], b: [xEnd, yA + hc]}]
+    : [{kind: 'seg', a: [x0, yA - hc], b: [xb, yA - hc]}, {kind: 'seg', a: [x0, yA + hc], b: [xb, yA + hc]},
+      {kind: 'arc', c: C, r: Rb + hc, ok: inArc}, {kind: 'arc', c: C, r: Rb - hc, ok: inArc},
+      {kind: 'seg', a: [xb + Rb + hc, C[1]], b: [xb + Rb + hc, yEnd]}, {kind: 'seg', a: [xb + Rb - hc, C[1]], b: [xb + Rb - hc, yEnd]},
+      {kind: 'end', a: [xb + Rb - hc, yEnd], b: [xb + Rb + hc, yEnd]}];
+  // the fibre: cladding, then core, as bands along the centre line
+  // a band w either side of the centre line: along the straight parts, and round the bend on radii Rb ± w
+  const side = (w: number): P2[] => B === undefined ? [[x0, yA + w], [xEnd, yA + w]] : [[x0, yA + w], [xb, yA + w],
+    ...Array.from({length: 31}, (_, j) => { const ph = rad(90 * j / 30); return [C[0] + (Rb - w) * Math.sin(ph), C[1] - (Rb - w) * Math.cos(ph)] as P2; }), [xb + Rb - w, yEnd]];
+  const band = (w: number): P2[] => [...side(-w), ...side(w).reverse()];
+  props.push({id: 'cladding', type: 'polyline', closed: true, points: band(hc + cl), style: {fill: 'cool', opacity: n2 > 1 ? .14 : 0}, layer: 0} as Prop);
+  props.push({id: 'core', type: 'polyline', closed: true, points: band(hc), style: {fill: 'cool', opacity: .3}, layer: 0} as Prop);
+  for (const w of walls) if (w.kind === 'seg') props.push({id: `wall${props.length}`, type: 'line', x1: w.a[0], y1: w.a[1], x2: w.b[0], y2: w.b[1], style: {stroke: 'cool', width: 2.5 * k}, layer: 1} as Prop);
+    else if (w.kind === 'arc') props.push({id: `wall${props.length}`, type: 'polyline', points: Array.from({length: 31}, (_, j) => { const ph = rad(90 * j / 30); return [C[0] + w.r * Math.sin(ph), C[1] - w.r * Math.cos(ph)] as P2; }), style: {stroke: 'cool', width: 2.5 * k}, layer: 1} as Prop);
+  label(x0 + 10 * k, yA + hc + cl + 36 * k, num ? `core, n1 = ${n1}` : 'core (higher n)', 'cool', 24, {align: 'start'});
+  label(x0 + 10 * k, yA - hc - cl - 14 * k, n2 > 1 ? (num ? `cladding, n2 = ${n2}` : 'cladding (lower n)') : 'no cladding: air outside', 'muted', 24, {align: 'start'});
+  // rays: in through the end face from three heights, alternately up and down, refracted to r
+  const r = deg(Math.asin(Math.sin(rad(i)) / n1)), alpha = .055;               // loss per core width travelled, when lossy
+  type Leak = {at: P2; angle: number; dir: P2; I: number; t: number};
+  const leaks: Leak[] = [], trapped: {at: P2; angle: number}[] = [];
+  let T = 1.2;
+  const speed = 4.8 / (Ls + (B === undefined ? 0 : Rb * 2.2));                       // seconds per pixel of path
+  const scatter: [P2, number][] = [];
+  [-.45, .45].forEach((f, j) => {
+    let p: P2 = [x0, yA + f * hc], d: P2 = unit([Math.cos(rad(r)), (j % 2 ? 1 : -1) * Math.sin(rad(r))]), I = 1, t = T, walked = 0;
+    const start: P2 = [x0 - S * .12 * Math.cos(rad(i)), p[1] - (j % 2 ? 1 : -1) * S * .12 * Math.sin(rad(i))];
+    props.push({id: `in${j}`, type: 'line', x1: start[0], y1: start[1], x2: p[0], y2: p[1], style: {stroke: 'accent', width: 4 * k}, layer: 3, draw: 0, keys: {draw: [[.3, 0], [1.1, 1, 'linear']] as Key[]}} as Prop);
+    for (let hit = 0; hit < 80 && I > .06; hit++) {
+      let best: {t: number; n: P2; w: Wall} | undefined;
+      for (const w of walls) { const h = hitWall(w, p, d); if (h && (!best || h.t < best.t)) best = {...h, w}; }
+      if (!best) break;
+      const q: P2 = [p[0] + d[0] * best.t, p[1] + d[1] * best.t], len = best.t, I1 = lossy ? I * Math.exp(-alpha * len / (2 * hc)) : I;
+      props.push({id: `ray${j}-${hit}`, type: 'line', x1: p[0], y1: p[1], x2: q[0], y2: q[1], style: {stroke: 'accent', width: 4 * k, opacity: +Math.max(.15, (I + I1) / 2).toFixed(3)}, layer: 3,
+        draw: 0, keys: {draw: [[t, 0], [t + len * speed, 1, 'linear']] as Key[]}} as Prop);
+      if (lossy && walked + len > 3 * hc * (scatter.length + 1)) scatter.push([[p[0] + d[0] * len * .5, p[1] + d[1] * len * .5], t + len * speed * .5]);
+      t += len * speed; walked += len; I = I1; p = q;
+      if (best.w.kind === 'end') break;
+      const n = dot(d, best.n) > 0 ? best.n : [-best.n[0], -best.n[1]] as P2, angle = deg(Math.acos(Math.min(1, dot(d, n))));
+      const refl: P2 = [d[0] - 2 * dot(d, n) * n[0], d[1] - 2 * dot(d, n) * n[1]];
+      if (angle > ic) trapped.push({at: q, angle});
+      else {
+        const Rf = reflectance(n1, n2, angle), out = refract(d, [-n[0], -n[1]], n1, n2) as P2;
+        leaks.push({at: q, angle, dir: out, I: I * (1 - Rf), t});
+        const Lk = S * .17;
+        props.push({id: `leak${j}-${hit}`, type: 'line', x1: q[0], y1: q[1], x2: q[0] + out[0] * Lk, y2: q[1] + out[1] * Lk, style: {stroke: 'bad', width: 5 * k, opacity: +Math.max(.6, I * (1 - Rf)).toFixed(3)}, layer: 2,
+          draw: 0, keys: {draw: [[t, 0], [t + .5, 1, 'linear']] as Key[]}} as Prop);
+        I *= Rf;
+      }
+      d = unit(refl);
+    }
+  });
+  // scattered light: short strokes off the path in fixed, varied directions
+  scatter.forEach(([q, t], j) => { const a = rad(37 + 83 * j); props.push({id: `scat${j}`, type: 'line', x1: q[0], y1: q[1], x2: q[0] + Math.cos(a) * hc * 1.1, y2: q[1] + Math.sin(a) * hc * 1.1, style: {stroke: 'muted', width: 2.5 * k}, layer: 2, show: [t, 1e9], fade: .3} as Prop); });
+  const firstLeak = leaks.slice().sort((a, b) => b.I - a.I)[0];
+  const firstBend = B === undefined ? undefined : trapped.find(h => inArc(h.at));
+  if (firstLeak) {
+    const q = firstLeak.at;
+    label(q[0] + 14 * k, q[1] - 40 * k, num ? `${f1(firstLeak.angle)}° < ic = ${f1(ic)}°` : 'less than the critical angle', 'bad', 24, {align: 'start', show: [firstLeak.t + .2, 1e9]});
+    anchors.leak = q;
+  }
+  if (B !== undefined) {
+    const sideAt = [C[0] + (Rb + hc + cl) * Math.SQRT1_2, C[1] - (Rb + hc + cl) * Math.SQRT1_2] as P2;
+    anchors.bend = [C[0] + Rb * Math.SQRT1_2, C[1] - Rb * Math.SQRT1_2];
+    const cx0 = xb + Rb - hc - cl - 18 * k, cy0 = yA + hc + cl + Math.max(90 * k, (Rb - hc - cl) * .45);
+    label(cx0, cy0, leaks.length ? 'bent too tightly' : 'a gentle bend', leaks.length ? 'bad' : 'good', 26, {align: 'end', show: [2.6, 1e9]});
+    if (!leaks.length) label(cx0, cy0 + 34 * k, 'still beyond the critical angle', 'good', 22, {align: 'end', show: [3.4, 1e9]});
+    anchors.side = sideAt;
+  }
+  if (lossy) {
+    const ly = by + bh * .97;
+    if (B === undefined) label(x0 + 10 * k, ly, 'absorbed and scattered: a little lost all along', 'muted', 24, {align: 'start', show: [3, 1e9]});
+    else { label(x0, ly - 32 * k, 'absorbed and scattered:', 'muted', 22, {align: 'start', show: [3, 1e9]}); label(x0, ly, 'a little lost all along', 'muted', 22, {align: 'start', show: [3, 1e9]}); }
+  }
+  Object.assign(anchors, {entry: [x0, yA] as P2, core: [x0 + Ls * .5, yA] as P2, cladding: [x0 + Ls * .5, yA - hc - cl / 2] as P2,
+    exit: B === undefined ? [xEnd, yA] as P2 : [xb + Rb, yEnd] as P2});
+  const story = B === undefined ? 'Even inside a fibre some light is lost: the glass absorbs a little and scatters a little, all along'
+    : leaks.length ? 'Bent too tightly, the light meets the outer wall within the critical angle: there it leaks out'
+      : 'Bent gently, the light still meets every wall beyond the critical angle: it stays inside';
+  const second = B === undefined ? 'Real fibres are made of very pure glass to keep these losses small'
+    : lossy ? 'And all along, the glass absorbs and scatters a little of the light' : 'In the straight part every reflection is total';
+  facts.push(`critical angle at the core's wall: sin ic = n2/n1 = ${f1(n2 / n1, 3)}, ic = ${f1(ic)}°`);
+  if (B !== undefined) {
+    facts.push(leaks.length ? `bend radius ${f1(B)} core widths: at the outer wall the light meets it at ${f1(Math.min(...leaks.map(l => l.angle)))}°, within ic: it leaks`
+      : `bend radius ${f1(B)} core widths: the least angle at the walls is ${f1(Math.min(...trapped.filter(h => inArc(h.at)).map(h => h.angle), 90))}°, beyond ic`);
+    facts.push(`every ray stays trapped only if the bend's radius is over ${f1(safeBend(n1, n2))} core widths: (R − ½)/(R + ½) > n2/n1`);
+  }
+  if (firstBend && !leaks.length) anchors.wall = firstBend.at;
+  return finish('tir', s as never, 9, story, second, facts, anchors, s.illustrative);
 }
 
 // ------------------------------------------------------------------------------------------- refracting_surface
@@ -391,7 +532,7 @@ export function prismDeviation(s: DeviationSpec): Scene {
 }
 
 // ------------------------------------------------------------------------------------------- optical_instrument
-export const INSTRUMENTS = ['simple_microscope', 'compound_microscope', 'refracting_telescope', 'reflecting_telescope'] as const;
+export const INSTRUMENTS = ['simple_microscope', 'compound_microscope', 'refracting_telescope', 'reflecting_telescope', 'lens_chain'] as const;
 export type InstrumentSpec = Common & {verb: 'optical_instrument'; show: (typeof INSTRUMENTS)[number];
   /** simple_microscope: the lens's focal length in cm (default 5). */
   f?: number;
@@ -404,7 +545,25 @@ export type InstrumentSpec = Common & {verb: 'optical_instrument'; show: (typeof
   /** refracting_telescope: the distant object's angle α at the eye, in degrees (default: so the final image is 30° wide). */
   angle?: number;
   /** reflecting_telescope (Cassegrain): the mirrors' radii in mm and their separation in mm (default 220, 140, 60). */
-  R1?: number; R2?: number; d?: number};
+  R1?: number; R2?: number; d?: number;
+  /** lens_chain: thin lenses in a line, their focal lengths in cm (+ convex, − concave), 2 or 3; gaps between neighbours in
+   * cm; u the object's distance from the first, negative (default the book's example: 10, −10, 30; 5 and 10 apart; u −30). */
+  focal?: number[]; gaps?: number[]; u?: number;
+  /** lens_chain: how many lenses' images to draw, in order (default all): 1 shows only the first lens's image so far. */
+  images?: number};
+
+/** Thin lenses in a line: each lens's image from 1/v − 1/u = 1/f, that image the next lens's object. Distances in cm, signed;
+ * x the image's position from the first lens; v, u Infinity for parallel light; m each lens's magnification v/u. */
+export function lensChain(focal: number[], gaps: number[], u: number) {
+  const out: {x0: number; u: number; v: number; m: number; x: number}[] = [];
+  let x0 = 0, uu = u;
+  focal.forEach((f, j) => {
+    if (j) { x0 += gaps[j - 1]; uu = out[j - 1].x - x0; }
+    const vg = (Number.isFinite(uu) ? 1 / uu : 0) + 1 / f, v = Math.abs(vg) < 1e-12 ? Infinity : 1 / vg;
+    out.push({x0, u: uu, v, m: Number.isFinite(v) && Number.isFinite(uu) ? v / uu : NaN, x: x0 + v});
+  });
+  return {lenses: out, m: out.reduce((a, l) => a * l.m, 1)};
+}
 
 const D0 = 25;
 export function simpleMicroscope(f: number, at: 'near_point' | 'infinity' = 'near_point') {
@@ -425,11 +584,29 @@ export function cassegrain(R1: number, R2: number, d: number) {
   return {f1: f1v, p, v: Math.abs(p - f2) < 1e-9 ? Infinity : p * f2 / (f2 - p)};
 }
 
+function lensChainErrors(s: InstrumentSpec): string[] {
+  const e: string[] = [], W = 'optical_instrument', focal = s.focal ?? [10, -10, 30], gaps = s.gaps ?? (s.focal ? [] : [5, 10]), u = s.u ?? -30;
+  if (!Array.isArray(focal) || focal.length < 2 || focal.length > 3 || !focal.every(f => isNum(f) && Math.abs(f) >= 2 && Math.abs(f) <= 200))
+    return [`${W}: focal is a list of 2 or 3 focal lengths in cm, 2 to 200 each, + for a convex lens and − for a concave one`];
+  if (!Array.isArray(gaps) || gaps.length !== focal.length - 1 || !gaps.every(g => isNum(g) && g > 0 && g <= 500))
+    return [`${W}: gaps lists the ${focal.length - 1} distance${focal.length > 2 ? 's' : ''} between neighbouring lenses in cm (above 0, up to 500), first to second${focal.length > 2 ? ', then second to third' : ''}`];
+  if (!(isNum(u) && u <= -1 && u >= -1000)) return [`${W}: u is the object's distance from the first lens in cm, negative (−1 to −1000): the object is on the side the light comes from`];
+  if (s.images !== undefined && !(Number.isInteger(s.images) && s.images >= 1 && s.images <= focal.length)) e.push(`${W}: images is how many lenses' images to draw, 1 to ${focal.length}`);
+  const c = lensChain(focal, gaps, u), span = Math.max(-u, gaps.reduce((a, g) => a + g, 0), ...focal.map(Math.abs));
+  c.lenses.forEach((l, j) => {
+    const name = `lens ${j + 1}`;
+    if (j === focal.length - 1 && !Number.isFinite(l.v)) e.push(`${W}: the light leaves ${name} parallel, so the final image is at infinity; move the object (u) or change a gap`);
+    else if (Number.isFinite(l.v) && Math.abs(l.v) > 6 * span) e.push(`${W}: ${name}'s image is ${f1(l.v)} cm from it, too far to draw beside the lenses: move the object (u) or change a gap`);
+  });
+  return e;
+}
+
 export function opticalInstrumentErrors(s: InstrumentSpec): string[] {
   const e: string[] = [];
   if (!INSTRUMENTS.includes(s.show)) return [`optical_instrument: show is one of ${INSTRUMENTS.join(', ')}`];
-  const use: Record<string, string[]> = {simple_microscope: ['f', 'image_at'], compound_microscope: ['fo', 'fe', 'L', 'image_at'], refracting_telescope: ['fo', 'fe', 'image_at', 'angle'], reflecting_telescope: ['R1', 'R2', 'd']};
-  e.push(...only(s as never, 'optical_instrument', s.show, use[s.show], ['f', 'fo', 'fe', 'L', 'image_at', 'angle', 'R1', 'R2', 'd']));
+  const use: Record<string, string[]> = {simple_microscope: ['f', 'image_at'], compound_microscope: ['fo', 'fe', 'L', 'image_at'], refracting_telescope: ['fo', 'fe', 'image_at', 'angle'], reflecting_telescope: ['R1', 'R2', 'd'], lens_chain: ['focal', 'gaps', 'u', 'images']};
+  e.push(...only(s as never, 'optical_instrument', s.show, use[s.show], ['f', 'fo', 'fe', 'L', 'image_at', 'angle', 'R1', 'R2', 'd', 'focal', 'gaps', 'u', 'images']));
+  if (s.show === 'lens_chain') return e.length ? e : lensChainErrors(s);
   if (s.image_at !== undefined && !['near_point', 'infinity'].includes(s.image_at)) e.push('optical_instrument: image_at is near_point (25 cm) or infinity');
   for (const f of ['f', 'fo', 'fe', 'L'] as const) if (s[f] !== undefined && !(isNum(s[f]) && s[f]! > 0 && s[f]! <= 2000)) e.push(`optical_instrument: ${f} is a length in cm, above 0`);
   for (const f of ['R1', 'R2', 'd'] as const) if (s[f] !== undefined && !(isNum(s[f]) && s[f]! > 0 && s[f]! <= 5000)) e.push(`optical_instrument: ${f} is a length in mm, above 0`);
@@ -550,6 +727,77 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
     second = at === 'infinity' ? 'In normal adjustment m = β/α = fo/fe, and the tube is fo + fe long' : 'With the final image at 25 cm, m = (fo/fe)(1 + fe/D)';
     facts.push(`fo = ${fo} cm, fe = ${fe} cm: magnifying power m = ${f1(t.m, 2)}`, `separation of the lenses ${f1(t.L, 2)} cm`);
     dur = 7;
+  } else if (s.show === 'lens_chain') {
+    // thin lenses in a line, true to scale; rays from the object's top traced lens by lens (paraxial ray transfer)
+    const focal = s.focal ?? [10, -10, 30], gaps = s.gaps ?? (s.focal ? [] : [5, 10]), u = s.u ?? -30, N = focal.length, upto = s.images ?? N;
+    const fm = (v: number) => f1(v, 2).replace('-', '−'), c = lensChain(focal, gaps, u), L = c.lenses, sub = (j: number) => String(j).replace(/\d/g, q => '₀₁₂₃₄₅₆₇₈₉'[+q]);
+    const shown = L.slice(0, upto), xs = [u, ...L.map(l => l.x0), ...shown.filter(l => Number.isFinite(l.x)).map(l => l.x)];
+    const lo0 = Math.min(...xs), hi0 = Math.max(...xs), pad = (hi0 - lo0) * .08 + 1;
+    xl = lo0 - pad; ppc = bw * .94 / (hi0 + pad - xl);
+    const hi = hi0 + pad;
+    const lenses: [number, number][] = L.map((l, j) => [l.x0, focal[j]]);
+    // a ray's point at lens j and its slope after it; an image's height where the ray (extended) reaches it
+    const after = (r: {pts: P2[]; slope: number}, j: number): [P2, number] => [r.pts[j + 1], j + 2 < r.pts.length ? (r.pts[j + 2][1] - r.pts[j + 1][1]) / (r.pts[j + 2][0] - r.pts[j + 1][0]) : r.slope];
+    const heightAt = (hh: number, j: number) => { const [p, sl] = after(transfer(u, hh, 0, lenses.slice(0, upto)), j); return p[1] + sl * (L[j].x - p[0]); };
+    // heights: the tallest image (or the object) fills about 0.4 of the height; image heights from the traced rays
+    const mags = shown.map((l, j) => Number.isFinite(l.x) ? heightAt(1, j) : 0);
+    const room = bh * .36 / ppc, h = Math.min(room / Math.max(1, ...mags.map(Math.abs)), room * .7);
+    line([bx, cy], [bx + bw, cy], 'faint', 2);
+    objectArrow(u, h, 'accent');
+    label(X(u), cy + 40 * k, 'object', 'accent', 24);
+    const rays = [transfer(u, h, 0, lenses.slice(0, upto)), transfer(u, h, -h / (0 - u), lenses.slice(0, upto))];
+    const half = Math.max(h, ...rays.flatMap(r => r.pts.slice(1).map(q => Math.abs(q[1])))) * 1.15 + 20 / ppc;
+    L.forEach((l, j) => {
+      const x = X(l.x0), top = Y(half), bot = Y(-half), conv = focal[j] > 0, name = `L${sub(j + 1)}`;
+      props.push({id: `lens-${j}`, type: 'line', x1: x, y1: top, x2: x, y2: bot, style: {stroke: 'cool', width: 5 * k}, layer: 2} as Prop);
+      for (const [yy, sg] of [[top, 1], [bot, -1]] as const) {
+        const tip = conv ? -sg : sg;                                       // convex: heads point out; concave: in
+        props.push({id: `lens-${j}-${sg}`, type: 'polyline', points: [[x - 12 * k, yy + tip * -14 * k], [x, yy], [x + 12 * k, yy + tip * -14 * k]], style: {stroke: 'cool', width: 4 * k}, layer: 2} as Prop);
+      }
+      const close = j > 0 && (l.x0 - L[j - 1].x0) * ppc < 70 * k && j % 2 === 1;
+      label(x, top - (close ? 50 : 18) * k, name, 'cool', 26);
+      anchors[`lens${j + 1}`] = [x, cy];
+    });
+    const T = (j: number) => 1 + 1.6 * j;                                   // when the light reaches lens j
+    rays.forEach((r, q) => {
+      const end = r.pts.at(-1)!, last = shown[upto - 1];
+      // past the last lens drawn: on to its image if real and ahead, then a little beyond; else to the frame's edge
+      const reach = upto < N ? (Number.isFinite(last.x) && last.x > end[0] ? Math.min(last.x + (last.x - end[0]) * .25, hi) : Math.min(L[upto].x0, hi)) : hi;
+      const pts = [...r.pts, [reach, end[1] + r.slope * (reach - end[0])] as P2];
+      props.push({id: `ray${q}`, type: 'polyline', points: pts.map(P), style: {stroke: q ? 'good' : 'accent', width: 4 * k}, layer: 3, ...drawn(.4, T(upto))} as Prop);
+      // each image the rays do not pass through: dashed lines to it
+      shown.forEach((l, j) => {
+        if (!Number.isFinite(l.x)) return;
+        const [at, sl] = after(r, j);
+        const next = j + 1 < upto ? L[j + 1].x0 : Infinity;
+        if (l.x < l.x0) props.push({id: `back${q}-${j}`, type: 'line', x1: X(at[0]), y1: Y(at[1]), x2: X(l.x), y2: Y(at[1] + sl * (l.x - at[0])), style: {stroke: 'muted', width: 2.5 * k, dash: [10 * k, 8 * k]}, layer: 2, ...drawn(T(j + 1), T(j + 1) + .6)} as Prop);
+        else if (l.x > next) { const b = r.pts[j + 2]; props.push({id: `fwd${q}-${j}`, type: 'line', x1: X(b[0]), y1: Y(b[1]), x2: X(l.x), y2: Y(at[1] + sl * (l.x - at[0])), style: {stroke: 'muted', width: 2.5 * k, dash: [10 * k, 8 * k]}, layer: 2, ...drawn(T(j + 1), T(j + 1) + .6)} as Prop); }
+      });
+    });
+    shown.forEach((l, j) => {
+      const at = T(j + 1) - .2, name = `I${sub(j + 1)}`, finalOne = j === N - 1;
+      if (!Number.isFinite(l.x)) { label(X(l.x0) + 16 * k, Y(-half) + 40 * k, `${name}: parallel, at infinity`, 'muted', 22, {align: 'start', show: [at, 1e9]}); return; }
+      const hj = h * mags[j], real = l.x > l.x0, colour = finalOne ? 'good' : 'cool';
+      objectArrow(l.x, hj, real ? colour : 'muted', !real, [at, 1e9]);
+      const crowded = L.some(o => Math.abs(o.x0 - l.x) * ppc < 50 * k);
+      label(X(l.x) + (crowded ? 16 * k : 0), hj >= 0 ? Y(hj) - 18 * k : Y(hj) + 36 * k, name + (num && Number.isFinite(l.m) ? `, m${sub(j + 1)} = ${fm(l.m)}` : ''), real ? colour : 'muted', 24, {show: [at, 1e9], layer: 5, ...(crowded ? {align: 'start'} : {}), style: {fill: real ? colour : 'muted', stroke: 'paper', width: 6 * k}});
+      anchors[`image${j + 1}`] = P([l.x, hj]);
+    });
+    anchors.object = P([u, h]); anchors.image = anchors[`image${upto}`] ?? P([L[upto - 1].x0, 0]);
+    const mNames = Array.from({length: N}, (_, j) => `m${sub(j + 1)}`).join(' × ');
+    if (upto < N) {
+      story = upto === 1 ? 'The first lens forms an image of the object, I₁' : `The first ${upto} lenses each form an image in turn`;
+      second = `The combination's magnification is the product of each lens's own: m = ${mNames}`;
+    } else {
+      story = 'Each lens\'s image is the object for the next: the light is bent lens by lens';
+      second = Number.isFinite(c.m) ? `The magnifications multiply: m = ${mNames}` : 'Light leaving a lens parallel is the next lens\'s object at infinity';
+    }
+    L.slice(0, upto).forEach((l, j) => facts.push(`L${j + 1}: f = ${fm(focal[j])} cm, object at u = ${Number.isFinite(l.u) ? `${fm(l.u)} cm` : 'infinity'}, image at v = ${Number.isFinite(l.v) ? `${fm(l.v)} cm` : 'infinity'}${Number.isFinite(l.m) ? `, m${j + 1} = ${fm(l.m)}` : ''}`));
+    if (upto === N) {
+      const fin = L[N - 1];
+      facts.push(`the final image is ${f1(Math.abs(fin.v), 2)} cm ${fin.v > 0 ? 'beyond' : 'before'} the last lens${Number.isFinite(c.m) ? `; m = ${L.map((_, j) => `m${j + 1}`).join(' × ')} = ${fm(c.m)}` : ''}`);
+    }
+    dur = +(T(upto) + 2).toFixed(2);
   } else {
     // Cassegrain, in mm: the primary's vertex at 0 (concave, facing left), the secondary's at −d (convex, facing right)
     const R1 = s.R1 ?? 220, R2 = s.R2 ?? 140, d = s.d ?? 60, c = cassegrain(R1, R2, d), real = Number.isFinite(c.v) && c.v > 0;

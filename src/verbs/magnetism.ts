@@ -16,7 +16,9 @@ export type FieldSpec = Common & {
   source: 'bar_magnet' | 'wire' | 'loop' | 'solenoid' | 'uniform';
   /** wire: end (seen end-on, through a card: circles) or along (in the page, the field out of and into the page on its
    * two sides); loop: section (cut through its middle: lines through the centre) or face (seen face-on). */
-  view?: 'end' | 'along' | 'section' | 'face';
+  view?: 'end' | 'along' | 'section' | 'face' | 'turns';
+  /** solenoid view turns: the summed field lines inside after the turns' fields cancel between them (default false). */
+  net?: boolean;
   /** The way the current runs: wire end: out | in (of the page); wire along: up | down; loop face: anticlockwise |
    * clockwise; uniform: right | left | up | down | out | in (the field). */
   direction?: 'out' | 'in' | 'up' | 'down' | 'anticlockwise' | 'clockwise' | 'right' | 'left';
@@ -26,7 +28,7 @@ export type FieldSpec = Common & {
   currents?: number[];
   /** closes: no current, then the key is plugged; reverses: the current turns round half-way. */
   key?: 'closes' | 'reverses';
-  /** Turns of a solenoid (2 to 16) or of a loop's coil (1 to 50: the field is that many times as large). */
+  /** Turns of a solenoid (2 to 16; view turns: 3 to 6 shown close up) or of a loop's coil (1 to 50: the field is that many times as large). */
   turns?: number;
   /** solenoid: a soft iron core inside it, an electromagnet. */
   core?: boolean;
@@ -112,9 +114,15 @@ export function fieldLines(wires: Wire[], seg: [Vec, Vec], step: number, box: [n
 export function fieldErrors(s: FieldSpec): string[] {
   const e: string[] = [], src = s.source;
   if (!['bar_magnet', 'wire', 'loop', 'solenoid', 'uniform'].includes(src)) return ['magnetic_field: source is bar_magnet, wire, loop, solenoid or uniform'];
-  const views: Record<string, string[]> = {wire: ['end', 'along'], loop: ['section', 'face']};
+  const views: Record<string, string[]> = {wire: ['end', 'along'], loop: ['section', 'face'], solenoid: ['turns']};
   if (s.view !== undefined && !(views[src] ?? []).includes(s.view)) e.push(`magnetic_field: view is ${views[src] ? views[src].join(' or ') + ` for a ${src}` : `not used for a ${src}`}`);
-  const view = s.view ?? views[src]?.[0];
+  const view = s.view ?? ({wire: 'end', loop: 'section'} as Record<string, string>)[src];
+  if (view === 'turns') {
+    if (s.turns !== undefined && !(Number.isInteger(s.turns) && s.turns >= 3 && s.turns <= 6)) e.push('magnetic_field: turns is 3 to 6 for a solenoid\'s turns view (the turns shown close up)');
+    if (s.key || (s.currents?.length ?? 1) > 1 || s.core || s.compare || s.filings || s.compasses) e.push('magnetic_field: view turns is a close-up of a few turns with one current: no key, currents list, core, compare, filings or compasses');
+    if (s.lines === false) e.push('magnetic_field: view turns draws each turn\'s own field; lines false would leave only the wires');
+    if (s.net !== undefined && typeof s.net !== 'boolean') e.push('magnetic_field: net is true or false');
+  } else if (s.net !== undefined) e.push('magnetic_field: net goes with source solenoid, view turns (the summed field after the turns\' fields cancel between them)');
   const dirs = src === 'uniform' ? ['right', 'left', 'up', 'down', 'out', 'in'] : view === 'end' ? ['out', 'in'] : view === 'along' ? ['up', 'down'] : view === 'face' ? ['anticlockwise', 'clockwise'] : [];
   if (s.direction !== undefined && !dirs.includes(s.direction)) e.push(dirs.length ? `magnetic_field: direction is ${dirs.join(' or ')} here` : `magnetic_field: a ${src} takes north (right or left), not direction`);
   if (s.north !== undefined && (!['right', 'left'].includes(s.north) || !(src === 'bar_magnet' || src === 'solenoid' || (src === 'loop' && view === 'section'))))
@@ -124,7 +132,7 @@ export function fieldErrors(s: FieldSpec): string[] {
   if ((s.currents || s.key) && (src === 'bar_magnet' || src === 'uniform')) e.push(`magnetic_field: a ${src} has no current or key`);
   if (s.key !== undefined && !['closes', 'reverses'].includes(s.key)) e.push('magnetic_field: key is closes or reverses');
   if (s.key && (s.currents?.length ?? 1) > 1) e.push('magnetic_field: a key with one current, or currents without a key');
-  if (s.turns !== undefined && !(src === 'solenoid' ? Number.isInteger(s.turns) && s.turns >= 2 && s.turns <= 16 : src === 'loop' && Number.isInteger(s.turns) && s.turns >= 1 && s.turns <= 50))
+  if (s.turns !== undefined && view !== 'turns' && !(src === 'solenoid' ? Number.isInteger(s.turns) && s.turns >= 2 && s.turns <= 16 : src === 'loop' && Number.isInteger(s.turns) && s.turns >= 1 && s.turns <= 50))
     e.push('magnetic_field: turns is 2 to 16 for a solenoid, 1 to 50 for a loop\'s coil');
   if (s.core !== undefined && (typeof s.core !== 'boolean' || src !== 'solenoid')) e.push('magnetic_field: core (true or false) is for a solenoid');
   if (s.compare !== undefined) {
@@ -145,8 +153,8 @@ export function magneticField(s: FieldSpec): Scene {
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, panel = s.panel !== false;
   const left = 0.03 * W, right = panel ? 0.63 * W : 0.97 * W, top = (panel ? 0.12 : s.title ? 0.22 : 0.13) * H, bottom = 0.96 * H;
   const T = s.seconds ?? 10, props: Prop[] = [], facts: string[] = [], anchors: Record<string, Vec> = {}, lines: string[] = [];
-  const src = s.source, view = s.view ?? ({wire: 'end', loop: 'section'} as Record<string, string>)[src];
-  const X = src === 'wire' && view === 'end' ? 4 : src === 'loop' ? 4.5 : src === 'uniform' ? 4 : s.compare === 'spread' ? 6.2 : 5.6;
+  const src = s.source, view = s.view ?? ({wire: 'end', loop: 'section'} as Record<string, string>)[src], closeup = src === 'solenoid' && view === 'turns';
+  const X = closeup ? (s.turns ?? 4) / 2 + 0.4 : src === 'wire' && view === 'end' ? 4 : src === 'loop' ? 4.5 : src === 'uniform' ? 4 : s.compare === 'spread' ? 6.2 : 5.6;
   const cx = (left + right) / 2, cy = (top + bottom) / 2, sc = (right - left) / (2 * X), Y = (bottom - top) / 2 / sc;
   const P = ([x, y]: Vec): Vec => [round(cx + x * sc, 2), round(cy - y * sc, 2)];
   const text = (id: string, value: string, [x, y]: Vec, fill = 'ink', size = 28, t = 0, align: 'start' | 'middle' | 'end' = 'middle') =>
@@ -187,7 +195,66 @@ export function magneticField(s: FieldSpec): Scene {
     text('wire-label', s.direction === 'in' ? 'current into the page' : 'current out of the page', [P([0, 0])[0], P([0, 0])[1] + 52 * k], 'accent', 24);
     anchors.wire = P([0, 0]);
   }
-  if (src === 'loop' && view === 'section' || src === 'solenoid') {
+  // A close-up of a few turns of a long solenoid, cut along its axis (2026-11-04, leph1-04 C7 S07, the book's Fig. 4.18
+  // close-up: "the circular loops between neighbouring turns tend to cancel" had no picture). The section is the middle
+  // of a long coil (26 more turns, off the frame), so what is computed here is what a long solenoid does.
+  if (closeup) {
+    const n = s.turns ?? 4, R = 0.68 * Y, sign = s.north === 'left' ? -1 : 1, N = n + 26, I = s.currents?.[0] ?? 1;
+    const xs = Array.from({length: N}, (_, j) => j - (N - 1) / 2), shown = xs.filter(x => Math.abs(x) < n / 2);
+    const long: Wire[] = xs.flatMap(x => [{x, y: R, I: sign * I}, {x, y: -R, I: -sign * I}]);
+    const tCircles = 0.12 * T, tPair = 0.4 * T, tCancel = 0.58 * T, tNet = 0.78 * T;
+    // Each turn's own field near its wire: circles round it, the way the current there makes them go. The turn's front
+    // half joins its two cut ends, faint, behind.
+    shown.forEach((x, j) => { const [a, b] = [P([x, R - 0.44]), P([x, -R + 0.44])]; props.push({id: `strand${j}`, type: 'line', x1: a[0], y1: a[1], x2: b[0], y2: b[1], style: {stroke: '#c8793a', width: 6 * k, opacity: 0.3}, layer: 1}); });
+    shown.forEach((x, j) => [R, -R].forEach(y => {
+      const I1 = y > 0 ? sign : -sign, tag = `${y > 0 ? 'top' : 'bottom'}${j}`, c = P([x, y]);
+      props.push({id: `cut-${tag}`, type: 'circle', x: c[0], y: c[1], r: 13 * k, style: {fill: 'paper', stroke: '#c8793a', width: 3 * k}, layer: 6});
+      mark(`flow-${tag}`, c, I1 > 0, 9 * k, [0, 1e9], 'ink');
+      [0.2, 0.38].forEach((r, q) => {
+        const pts = Array.from({length: 49}, (_, i) => { const a = (I1 > 0 ? 1 : -1) * 2 * Math.PI * i / 48; return P([x + r * Math.cos(a), y + r * Math.sin(a)]); });
+        const t0 = tCircles + 0.25 * j + 0.15 * q;
+        props.push({id: `own-${tag}-${q}`, type: 'polyline', points: pts, ...draw(t0), show: [t0, 1e9], style: {stroke: 'accent', width: 3 * k, opacity: 0.85}, layer: 4});
+        [0.25, 0.75].forEach((f, m) => arrowAlong(`own-${tag}-${q}-arrow${m}`, pts, f, [t0 + 1.2, 1e9]));
+      });
+      if (y > 0) anchors[`turn${j}`] = c;
+    }));
+    // Midway between two neighbouring turns: the two turns' fields, equal and opposite, then their sum, nothing.
+    const gaps = shown.slice(0, -1).map(x => x + 0.5), L = 0.3;
+    gaps.forEach((gx, j) => [R, -R].forEach(y => {
+      const g: Vec = [gx, y], tag = `${y > 0 ? 'top' : 'bottom'}${j}`;
+      [gx - 0.5, gx + 0.5].forEach((wx, m) => {
+        const b = fieldAt([{x: wx, y, I: (y > 0 ? sign : -sign) * I}], g), u: Vec = [b[0] / Math.hypot(...b), b[1] / Math.hypot(...b)];
+        const off = (m ? 1 : -1) * 0.07, a = P([gx + off - u[0] * L / 2, y - u[1] * L / 2]), z = P([gx + off + u[0] * L / 2, y + u[1] * L / 2]), mid = P([gx + off, y]);
+        const shut = (from: number, to: number): Key[] => [[0, from], [tCancel, from], [tCancel + 0.8, to, 'inOut']];
+        props.push({id: `pair-${tag}-${m}`, type: 'arrow', x1: a[0], y1: a[1], x2: z[0], y2: z[1], head: 16 * k, show: [tPair, tCancel + 0.8], fade: 0.25,
+          keys: {x1: shut(a[0], mid[0]), y1: shut(a[1], mid[1]), x2: shut(z[0], mid[0]), y2: shut(z[1], mid[1])}, style: {stroke: 'cool', width: 4 * k}, layer: 7});
+      });
+      props.push({id: `zero-${tag}`, type: 'circle', x: P(g)[0], y: P(g)[1], r: 7 * k, show: [tCancel + 0.8, 1e9], fade: 0.3, style: {fill: 'good'}, layer: 7});
+    }));
+    const mid = gaps[Math.floor((gaps.length - 1) / 2)], above = P([mid, R + 0.48]);
+    props.push({id: 'pair-label', type: 'text', x: above[0], y: above[1], text: 'Between neighbouring turns: opposite ways', size: 26 * k, width: right - left, align: 'middle', weight: 700, show: [tPair, tCancel + 0.8], fade: 0.3, style: {fill: 'cool', stroke: 'paper', width: 6 * k}, layer: 8},
+      {id: 'cancel-label', type: 'text', x: above[0], y: above[1], text: 'They cancel: no field between the turns', size: 26 * k, width: right - left, align: 'middle', weight: 700, show: [tCancel + 0.8, 1e9], fade: 0.3, style: {fill: 'good', stroke: 'paper', width: 6 * k}, layer: 8});
+    // net: the summed field of the whole coil inside the section, straight along the axis.
+    if (s.net) {
+      const seg: [Vec, Vec] = [[0, -0.6 * R], [0, 0.6 * R]], step = Math.abs(psi(long, seg[0]) - psi(long, seg[1])) / 4;
+      fieldLines(long, seg, step, [X, Y]).forEach((line, j) => {
+        const pts = line.filter(inFrame).filter((_, i) => i % 3 === 0).map(P);
+        if (pts.length < 4) return;
+        props.push({id: `net${j}`, type: 'polyline', points: pts, ...draw(tNet), show: [tNet, 1e9], style: {stroke: 'good', width: 4 * k}, layer: 5});
+        arrowAlong(`net${j}-arrow`, pts, 0.5, [tNet + 1.2, 1e9], 'good');
+      });
+      const q = P([0, -R + 0.62]);
+      props.push({id: 'net-label', type: 'text', x: q[0], y: q[1], text: 'Inside, the turns\' fields add along the axis', size: 26 * k, width: right - left, align: 'middle', weight: 700, show: [tNet + 0.6, 1e9], fade: 0.3, style: {fill: 'good', stroke: 'paper', width: 6 * k}, layer: 8});
+    }
+    // What the drawing shows, computed: the pair's sum midway, and the whole coil's field across its wall there.
+    const g: Vec = [mid, R], each = Math.hypot(...fieldAt([{x: mid - 0.5, y: R, I}], g)), pair = Math.hypot(...fieldAt([{x: mid - 0.5, y: R, I}, {x: mid + 0.5, y: R, I}], g));
+    const across = Math.abs(fieldAt(long, g)[1]), inside = Math.abs(fieldAt(long, [0, 0])[0]);
+    facts.push(`midway between two neighbouring turns their fields are equal and opposite: their sum is ${round(100 * pair / each, 1)}% of either`,
+      `across the coil's wall between the turns the net field is ${round(100 * across / inside, 1)}% of the field inside: no field passes out between the turns`);
+    if (s.net) facts.push('inside, the fields of all the turns add up along the axis');
+    anchors.gap = P(g); anchors.centre = P([0, 0]); anchors.top = P([0, R]); anchors.bottom = P([0, -R]);
+  }
+  if ((src === 'loop' && view === 'section' || src === 'solenoid') && !closeup) {
     const arrangements = s.compare ? [0, 1] : [0], shown = (i: number): [number, number] => s.compare ? at(i) : [0, 1e9];
     const coil: Vec[] = [];
     if (src === 'solenoid') {
@@ -225,7 +292,7 @@ export function magneticField(s: FieldSpec): Scene {
     anchors.centre = P([0, 0]); anchors.top = P([0, geo.R]); anchors.bottom = P([0, -geo.R]);
   }
   // Field lines, phase by phase: traced for the computed currents, more of them for a larger current.
-  if (s.lines !== false && src !== 'uniform' && view !== 'face' && view !== 'along') {
+  if (s.lines !== false && src !== 'uniform' && view !== 'face' && view !== 'along' && !closeup) {
     const ref = model(s, Imax).wires, seg: [Vec, Vec] = src === 'wire' ? [[0.35, 0], [Math.min(X, Y) * 0.98, 0]] : [[0, -0.85 * geo.R], [0, 0.85 * geo.R]];
     const span0 = (() => { const a = psi(ref, seg[0]), b = psi(ref, seg[1]); return Math.abs(a - b); })();
     const count = src === 'wire' ? 7 : magnet ? 11 : src === 'solenoid' ? 9 : 8, step = span0 / count;
@@ -390,7 +457,7 @@ export function magneticField(s: FieldSpec): Scene {
     text('rule-curl-label', 'fingers: field', [bx + 125 * k, by + 258 * k], 'cool', 20);
   }
   // Poles of a solenoid, read from the computed field at its ends.
-  if (src === 'solenoid' || (src === 'loop' && view === 'section')) {
+  if ((src === 'solenoid' && !closeup) || (src === 'loop' && view === 'section')) {
     const I = phases.find(v => v) ?? 1, end = src === 'solenoid' ? geo.L / 2 + 0.55 : 0.9, bx = fieldAt(model(s, I).wires, [0, 0])[0];
     if (src === 'solenoid' && !s.compare) { text('pole-right', bx > 0 ? 'N' : 'S', P([end, 0]), bx > 0 ? RED : '#3b7bff', 40, at(phases.findIndex(v => v))[0] + 1.5); text('pole-left', bx > 0 ? 'S' : 'N', P([-end, 0]), bx > 0 ? '#3b7bff' : RED, 40, at(phases.findIndex(v => v))[0] + 1.5); }
   }
@@ -418,6 +485,9 @@ export function magneticField(s: FieldSpec): Scene {
     const acw = s.direction !== 'clockwise';
     lines.push(`Current ${acw ? 'anticlockwise' : 'clockwise'} as seen`, `Inside the loop the field points ${acw ? 'out of' : 'into'} the page`, `Outside it, ${acw ? 'into' : 'out of'} the page`);
     facts.push(`a current going ${acw ? 'anticlockwise' : 'clockwise'} round a loop lying in the page makes a field ${acw ? 'out of' : 'into'} the page inside the loop and ${acw ? 'into' : 'out of'} it outside (right-hand rule)`);
+  } else if (closeup) {
+    lines.push('A few turns of a long solenoid, close up', 'Round each wire, its own field: circles', 'Between neighbouring turns they run opposite ways and cancel');
+    if (s.net) lines.push('Inside, the turns\' fields add along the axis');
   } else if (src === 'solenoid' && s.compare) {
     lines.push('Turns packed close, current the same way in each: their fields add up', s.compare === 'spread' ? 'Spread the same turns out: their fields add less at the centre; fewer lines' : 'Reverse the current in some turns: their fields take away from the rest; fewer lines', 'The field is strongest when the turns are close and the current flows the same way in all of them');
     facts.push('the fields of the turns of a coil add up when the current flows the same way in every turn',

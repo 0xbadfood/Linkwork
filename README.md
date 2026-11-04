@@ -85,20 +85,25 @@ A verb turns a short spec into a full scene and checks the spec first.
   the book's refractive indices; i and r from the normal, sin i ÷ sin r for several angles, the speed of light in each
   medium, the slab's lateral shift, and total internal reflection past the critical angle.
 - `tir` (trial): total internal reflection at work: an optical fibre, core and cladding, its ray trapped beyond the
-  critical angle or leaking out within it, and right-angled prisms turning light through 90° or 180° or inverting it.
+  critical angle or leaking out within it, a fibre bent too tightly leaking at the bend (or gently bent and still
+  trapped), light lost along it to absorption and scattering, and right-angled prisms turning light through 90° or
+  180° or inverting it.
 - `refracting_surface` (trial): refraction at one spherical surface (n2/v − n1/u = (n2 − n1)/R), and a thin lens as
   two surfaces in turn, the first's image I1 then F: the lens maker's formula.
 - `prism_deviation` (trial): a prism's ray at one angle of incidence after another with each deviation plotted, the
   minimum deviation with the symmetric ray, n = sin[(A + Dm)/2]/sin(A/2), and the prism in water.
 - `optical_instrument` (trial): the simple and compound microscope, the refracting and the Cassegrain telescope, true
-  to scale, with their magnifying powers.
+  to scale, with their magnifying powers; and two or three thin lenses in a line, each image the next lens's object,
+  m = m1 × m2.
 - `huygens` (trial): secondary wavelets and their envelope from a spherical or plane wavefront, a point source at a
   lens's focus leaving on plane wavefronts, and the book's constructions of refraction and reflection of a plane wave.
 - `interference` (trial): two sources' bright and dark lines traced, Young's fringes from 4I0 cos²(πxd/λD) with
   β = λD/d (one or two wavelengths, or white light), and intensity against path difference beside 2I0.
 - `diffraction` (trial): the single slit's pattern from (sin β/β)², minima at nλ/a, and the slit cut into halves,
-  thirds or quarters that cancel in pairs.
-- `polaroid` (trial): Malus' law with the pass axes in perspective and I against θ, and a polaroid between crossed ones.
+  thirds or quarters that cancel in pairs; and the limit of ray optics: an aperture against λ, the beam straight within
+  the Fresnel distance a²/λ and spreading beyond, the Fresnel number a²/λL.
+- `polaroid` (trial): Malus' law with the pass axes in perspective and I against θ, a polaroid between crossed ones, an
+  unpolarised wave whose plane of vibration changes at random, and one polaroid turned alone, I0/2 at every angle.
 - `photoelectric` (trial): the photoelectric effect from h, e and a metal's work function: the energy picture (Kmax = hν − φ₀, or no emission below ν₀), the apparatus with a retarding potential, photocurrent against collector potential, V₀ against ν (slope h/e), and photons.
 - `matter_wave` (trial): de Broglie's λ = h/p for an electron, drawn to one scale against a crystal's atoms, and a ruler of lengths placing a ball's λ beside a nucleus.
 - `rutherford` (trial): Thomson's and Rutherford's atoms crossed by α-particles, α paths past a gold nucleus integrated under Coulomb repulsion (cot(θ/2) = 2b/d), and a head-on α stopping at the distance of closest approach.
@@ -106,6 +111,13 @@ A verb turns a short spec into a full scene and checks the spec first.
 - `nucleus` (trial): nuclides as protons and neutrons (isotopes, isobars), nuclei to one scale (R = 1.2A^⅓ fm), mass defect and binding energy, the binding energy per nucleon curve with fission and fusion, the nucleon-pair potential, α, β and γ decay, rays bent in a field and stopped by paper, aluminium and lead, U-235 fission, chain reactions, and the book's fusion reactions and p-p cycle, every Q from the masses.
 - `semiconductor` (trial): energy bands of metals, insulators and semiconductors (C, Si, Ge, Sn to one scale), the Si lattice with a broken bond and a moving hole, As and B dopants, n- and p-type carriers (nₑnₕ = nᵢ²), donor and acceptor levels, a p-n junction's depletion layer and barrier, forward and reverse bias, the diode's V-I curve with its cut-in and dynamic resistance, and half- and full-wave rectifiers with a capacitor filter.
 - `kirchhoff` (trial): a network of resistors and cells of any shape, solved exactly (modified nodal analysis): junctions on a grid, branches with resistors, cells and named points, every branch current at its true direction or the book's labels, a junction's in = out, and a loop walked with each change in potential summed to zero (NCERT Example 3.6, Fig. 3.15).
+- `magnetic_field` (trial): field lines traced from computed fields of magnets, wires, loops and solenoids, with
+  filings, compasses and the thumb rule; a close-up of a few solenoid turns whose fields cancel between neighbours.
+- `magnetic_matter` (trial): a dipole's torque and energy, Gauss's law for magnetism, H, M and B in a core, dia-, para-
+  and ferromagnets, domains, hysteresis, and B, H and M kept apart as three named vectors (1 T = 10⁴ G).
+- `em_waves` (trial): displacement current, the plane wave, a wave in glass, a charge at rest, moving or oscillating
+  (its swing dying as the waves carry its energy off), Hertz's spark gap and receiver built in the narration's order,
+  and the spectrum.
 
 - `stage` velocity arrows: v and its components vₓ and vᵧ follow a mover's computed velocity as it flies (vₓ unchanged,
   vᵧ zero at the top), with faint snapshots left along the path: the textbook's projectile figure.
