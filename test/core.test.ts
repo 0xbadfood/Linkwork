@@ -319,6 +319,19 @@ test('compound: parts in boxes on one clock; a linked graph traces the mover; se
   assert.equal(check(grid.scene!, {every: 10}).filter(e => /text is drawn at \d+ px/.test(e)).length, 4);
 });
 
+test('every verb\'s example draws its text at a legible size, full frame and in half a frame', async () => {
+  // 2026-11-04, leph2-06 C3: semiconductor drew 17 px ion signs, so its side-by-side beats were refused until they
+  // went blank; a full-height part's sizes are the verb's own, so the verb answers for them here.
+  const {CARDS} = await import('../src/verbs/cards.ts'), {MIN_TEXT} = await import('../src/check.ts');
+  for (const [name, card] of Object.entries(CARDS)) for (const width of [1920, 960]) {
+    const {scene, errors} = compile({compound: true, parts: [{id: 'a', box: [0, 0, width, 1080], spec: card.example}]} as never);
+    if (errors.length) continue;
+    const part = scene!.parts![0];
+    const small = part.scene.props.filter(p => (p.type === 'text' || p.type === 'readout') && ((p as {size?: number}).size ?? 32) * part.scale < MIN_TEXT - 1e-6);
+    assert.deepEqual(small.map(p => (p as {text?: string}).text), [], `${name} at ${width} px`);
+  }
+});
+
 test('stage velocity arrows follow the computed velocity: vₓ unchanged, vᵧ zero at the top (the book\'s cricket ball)', () => {
   // 2026-10-26, before the projectile film: keph1 Fig. 3.16 draws v and its components along the path.
   const {scene, errors} = compile({verb: 'stage', width_m: 80, ground: 'grass', items: [{id: 'ball', object: 'ball', x: 3, size: 0.8}],
@@ -2267,6 +2280,7 @@ test('the semiconductor verb gets the book right (leph2-06)', async () => {
   const shows: object[] = [{show: 'bands'}, {show: 'bands', temperature: 'zero'}, {show: 'bands', materials: ['C', 'Si', 'Ge', 'Sn']}, {show: 'bands', materials: ['Si']},
     {show: 'lattice'}, {show: 'lattice', stage: 'intact'}, {show: 'lattice', stage: 'broken'}, {show: 'lattice', field: true}, {show: 'lattice', dopant: 'As'},
     {show: 'lattice', dopant: 'B'}, {show: 'lattice', dopant: 'In', field: true}, {show: 'doped'}, {show: 'doped', type: 'p'}, {show: 'doped', type: 'n', atoms: 5e28, ppm: 1, ni: 1.5e16},
+    {show: 'doped', temperature: 'high'}, {show: 'doped', type: 'p', temperature: 'high'},
     {show: 'levels'}, {show: 'levels', type: 'p'}, {show: 'levels', material: 'Ge'}, {show: 'junction'}, {show: 'bias'}, {show: 'bias', bias: 'reverse', V: 20}, {show: 'bias', V: .6},
     {show: 'iv'}, {show: 'iv', material: 'Ge'}, {show: 'iv', resistance: true, V: .75}, {show: 'iv', V: -2}, {show: 'rectifier'}, {show: 'rectifier', kind: 'full'},
     {show: 'rectifier', filter: true, tau: 5}, {show: 'rectifier', kind: 'full', filter: true, drop: true, peak: 12}].map(s => ({verb: 'semiconductor', ...s}));
@@ -2285,6 +2299,14 @@ test('the semiconductor verb gets the book right (leph2-06)', async () => {
   assert.match(err({show: 'lattice', dopant: 'As', stage: 'moving'}), /leave stage out/);
   assert.match(err({show: 'lattice', stage: 'intact', field: true}), /no carrier/);
   assert.match(err({show: 'bands', materials: ['Cu']}), /materials is a list/);
+  // 2026-11-04, leph2-06 C3: "intrinsic carriers rise at high temperature" had no picture, and its beat went blank
+  const hot = compile({verb: 'semiconductor', show: 'doped', temperature: 'high'} as any).scene!, cool = compile({verb: 'semiconductor', show: 'doped'} as any).scene!;
+  const count = (sc: typeof hot) => sc.props.filter(p => p.type === 'circle' && (p as any).style?.fill === 'paper').length;
+  assert.ok(count(hot) - count(cool) >= 12, 'thermal pairs rival the 24 dopant carriers');
+  assert.ok((hot.meta as any).facts.some((f: string) => /behaves as an intrinsic/.test(f)));
+  assert.ok(!(hot.meta as any).facts.some((f: string) => /≫/.test(f)), 'no majority claim once the crystal is hot');
+  assert.match(err({show: 'bands', temperature: 'high'}), /bands: temperature is 'zero' or 'room'/);
+  assert.match(err({show: 'doped', temperature: 'high', ppm: 1}), /leave atoms, ppm and ni out/);
 });
 
 test('a graph can be drawn against a Greek letter (leph2-03 C5)', async () => {

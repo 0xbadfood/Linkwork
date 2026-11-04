@@ -168,7 +168,11 @@ export function partErrors(scene: Scene, options: CheckOptions = {}): string[] {
     out.push(...(own.length ? own : motionErrors(p.scene, options)).map(e => `part ${p.id}: ${e}`));
     const sizes = p.scene.props.filter(q => q.type === 'text' || q.type === 'readout').map(q => ((q as {size?: number}).size ?? 32) * p.scale * 1080 / scene.height);
     const smallest = Math.min(...sizes);
-    if (sizes.length && smallest < MIN_TEXT - 1e-6) out.push(`part ${p.id}: its text is drawn at ${smallest.toFixed(0)} px (at least ${MIN_TEXT}); give it a taller box`);
+    // A full-height part is drawn at its verb's own sizes, which no box can raise: the verb's test guards those
+    // (2026-11-04, leph2-06 C3: semiconductor's 17 px ion signs in two full-height halves were refused three rounds
+    // running with "give it a taller box", and the beats fell to blank backdrops).
+    const full = p.box[3] >= scene.height - 1e-6 && p.scale >= 1 - 1e-6;
+    if (sizes.length && smallest < MIN_TEXT - 1e-6 && !full) out.push(`part ${p.id}: its text is drawn at ${smallest.toFixed(0)} px (at least ${MIN_TEXT}); give it a taller box`);
   }
   return out;
 }

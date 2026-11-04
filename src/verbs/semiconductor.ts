@@ -73,8 +73,9 @@ const DOPANTS = {As: 5, P: 5, Sb: 5, B: 3, Al: 3, In: 3} as const;
 export type SemiconductorSpec = Common & {verb: 'semiconductor'; show: (typeof SEMICONDUCTOR_SHOWS)[number];
   /** bands: one to four of 'metal', 'insulator', 'semiconductor', 'C', 'Si', 'Ge', 'Sn'. */
   materials?: (typeof MATERIALS)[number][];
-  /** bands: 'zero' (0 K, no electron lifted) or 'room' (default). */
-  temperature?: 'zero' | 'room';
+  /** bands: 'zero' (0 K, no electron lifted) or 'room' (default). doped: 'room' (default) or 'high', where thermal
+   * pairs grow until they rival the dopant's carriers and the crystal behaves as intrinsic. */
+  temperature?: 'zero' | 'room' | 'high';
   /** lattice: how far the story goes: 'intact' (0 K), 'broken' (a bond breaks), 'moving' (the hole moves; default). */
   stage?: 'intact' | 'broken' | 'moving';
   /** lattice: an impurity at the centre: pentavalent As, P, Sb (n-type) or trivalent B, Al, In (p-type). */
@@ -101,7 +102,7 @@ export type SemiconductorSpec = Common & {verb: 'semiconductor'; show: (typeof S
    * silicon diode's 0.7 V. */
   peak?: number; drop?: boolean};
 const FIELDS = ['materials', 'temperature', 'stage', 'dopant', 'field', 'type', 'material', 'atoms', 'ppm', 'ni', 'bias', 'V', 'resistance', 'kind', 'filter', 'tau', 'peak', 'drop'];
-const USES: Record<string, string[]> = {bands: ['materials', 'temperature'], lattice: ['stage', 'dopant', 'field', 'material'], doped: ['type', 'atoms', 'ppm', 'ni'],
+const USES: Record<string, string[]> = {bands: ['materials', 'temperature'], lattice: ['stage', 'dopant', 'field', 'material'], doped: ['type', 'atoms', 'ppm', 'ni', 'temperature'],
   levels: ['type', 'material'], junction: [], bias: ['bias', 'V', 'material'], iv: ['material', 'V', 'resistance'], rectifier: ['kind', 'filter', 'tau', 'peak', 'drop']};
 
 export function semiconductorErrors(s: SemiconductorSpec): string[] {
@@ -110,7 +111,9 @@ export function semiconductorErrors(s: SemiconductorSpec): string[] {
   e.push(...FIELDS.filter(f => (s as never)[f] !== undefined && !USES[s.show].includes(f)).map(f => `${W}: ${f} is not used by show ${s.show}; leave it out`));
   if (s.materials !== undefined && !(Array.isArray(s.materials) && s.materials.length >= 1 && s.materials.length <= 4 && s.materials.every(m => MATERIALS.includes(m))))
     e.push(`${W}: materials is a list of 1 to 4 of ${MATERIALS.join(', ')}`);
-  if (s.temperature !== undefined && !['zero', 'room'].includes(s.temperature)) e.push(`${W}: temperature is 'zero' or 'room'`);
+  if (s.temperature !== undefined && s.show === 'bands' && !['zero', 'room'].includes(s.temperature)) e.push(`${W}: bands: temperature is 'zero' or 'room'`);
+  if (s.temperature !== undefined && s.show === 'doped' && !['room', 'high'].includes(s.temperature)) e.push(`${W}: doped: temperature is 'room' or 'high'`);
+  if (s.temperature === 'high' && (s.atoms !== undefined || s.ppm !== undefined || s.ni !== undefined)) e.push(`${W}: Example 14.2's numbers hold at room temperature; with temperature 'high' leave atoms, ppm and ni out`);
   if (s.stage !== undefined && !['intact', 'broken', 'moving'].includes(s.stage)) e.push(`${W}: stage is 'intact', 'broken' or 'moving'`);
   if (s.dopant !== undefined && !(s.dopant in DOPANTS)) e.push(`${W}: dopant is pentavalent As, P or Sb (n-type) or trivalent B, Al or In (p-type)`);
   if (s.dopant !== undefined && s.stage !== undefined) e.push(`${W}: stage tells the pure crystal's story; with a dopant leave stage out`);
@@ -157,7 +160,7 @@ export function semiconductor(s: SemiconductorSpec): Scene {
   // a fixed ion: a ringed + (donor) or − (acceptor), as the book draws them
   const ion = (x: number, y: number, q: 1 | -1, extra: Record<string, unknown> = {}, r = 13) => {
     props.push({id: id('i'), type: 'circle', x, y, r: r * k, style: {fill: q > 0 ? 'bad' : 'cool', opacity: .85, stroke: 'paper', width: 2 * k}, layer: 3, ...extra} as Prop);
-    label(x, y + r * .55 * k, q > 0 ? '+' : '−', 'paper', r * 1.7, {layer: 3, ...extra});
+    label(x, y + r * .55 * k, q > 0 ? '+' : '−', 'paper', r * 1.8, {layer: 3, ...extra});
   };
   const move = (from: P2, to: P2, t0: number, t1: number) => ({keys: {x: [[t0, from[0]], [t1, to[0], 'inOut']], y: [[t0, from[1]], [t1, to[1], 'inOut']]}});
   const path = (pts: [number, P2][]) => ({keys: {x: pts.map(([t, p], i) => (i ? [t, p[0], 'inOut'] : [t, p[0]])), y: pts.map(([t, p], i) => (i ? [t, p[1], 'inOut'] : [t, p[1]]))}});
@@ -322,20 +325,31 @@ export function semiconductor(s: SemiconductorSpec): Scene {
       else hole(pts[0][1][0], pts[0][1][1], {show: [t0 + .3, 1e9], fade: .3, ...path(pts)});
     }
     // one minority carrier, thermally made
-    const mx = x0 + dxs * 3, my = y0 + dys * 2;
+    const mx = x0 + dxs * 3, my = y0 + dys * 2, hot = s.temperature === 'high';
     if (tp === 'n') hole(mx, my, {show: [2.4, 1e9], fade: .3}); else electron(mx, my, {show: [2.4, 1e9], fade: .3});
-    label(mx, my - 24 * k, 'minority', 'accent', 22, {show: [2.6, 1e9]});
+    label(mx, my - 24 * k, 'minority', 'accent', 22, {show: [2.6, hot ? 3.6 : 1e9], fade: .3});
+    // hot: thermal pairs, one per lattice cell, born between the ions until they rival the dopant's carriers
+    if (hot) for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const x = x0 + dxs * (c + 1), y = y0 + dys * (r + 1), t0 = 3.8 + ((c * 5 + r * 3) % 12) * .18;
+      if (c === cols - 1 || r === rows - 1 || (x === mx && y === my)) continue;   // not on the minority carrier
+      electron(x - dxs * .12, y, {show: [t0, 1e9], fade: .3}); hole(x + dxs * .12, y, {show: [t0, 1e9], fade: .3});
+    }
     anchors.slab = [x0 + w / 2, y0 + h / 2]; anchors.minority = [mx, my];
-    legend(by + bh * .86, tp === 'n' ? [['donor ion', '+'], ['electron (majority)', 'e'], ['hole (minority)', 'h']] : [['acceptor ion', '-'], ['hole (majority)', 'h'], ['electron (minority)', 'e']]);
+    legend(by + bh * .86, hot ? [[tp === 'n' ? 'donor ion' : 'acceptor ion', tp === 'n' ? '+' : '-'], ['electron', 'e'], ['hole', 'h']]
+      : tp === 'n' ? [['donor ion', '+'], ['electron (majority)', 'e'], ['hole (minority)', 'h']] : [['acceptor ion', '-'], ['hole (majority)', 'h'], ['electron (minority)', 'e']]);
     if (tp === 'n' && (s.atoms !== undefined || s.ppm !== undefined || s.ni !== undefined)) {
       const atoms = s.atoms ?? 5e28, ppm = s.ppm ?? 1, ni = s.ni ?? 1.5e16, c = carriers(atoms, ppm, ni);
       facts.push(`N_D = ${ppm} ppm × ${sci(atoms, 'm⁻³')} = ${sci(c.N, 'm⁻³')}`, `nₑ ≈ N_D = ${sci(c.ne, 'm⁻³')}`, `nₕ = nᵢ²/nₑ = ${sci(c.nh, 'm⁻³')}`);
       if (num) label(x0 + w / 2, by + bh * .97, `drawn one minority carrier; truly nₑ/nₕ ≈ ${sci(c.ne / c.nh)}`, 'muted', 22, {show: [3, 1e9]});
-    } else facts.push(tp === 'n' ? 'nₑ ≫ nₕ: electrons are the majority carriers' : 'nₕ ≫ nₑ: holes are the majority carriers', 'nₑnₕ = nᵢ²');
+    } else if (!hot) facts.push(tp === 'n' ? 'nₑ ≫ nₕ: electrons are the majority carriers' : 'nₕ ≫ nₑ: holes are the majority carriers', 'nₑnₕ = nᵢ²');
     facts.push('the crystal stays neutral: each carrier balances its fixed ion');
-    dur = 6;
+    dur = s.temperature === 'high' ? 8 : 6;
     story = tp === 'n' ? 'n-type: each donor is a fixed positive ion with its free electron' : 'p-type: each acceptor is a fixed negative ion with its hole';
     second = 'Thermal pairs add a few minority carriers, and recombination with the majority keeps them few';
+    if (s.temperature === 'high') {
+      second = 'Heated, thermal pairs grow until they rival the dopant\'s carriers: the crystal behaves as intrinsic';
+      facts.push('at high temperature nᵢ grows until it is comparable to the dopant concentration, and the crystal behaves as an intrinsic one');
+    }
   } else if (s.show === 'levels') {
     const tp = s.type ?? 'n', mat = s.material ?? 'Si', Eg = mat === 'Si' ? 1.1 : .72, x0 = bx + bw * .12, w = bw * .66;
     const gapH = bh * .44, per = gapH / Eg, band = bh * .18, cBot = by + bh * .2, cTop = cBot - band, vTop = cBot + gapH;

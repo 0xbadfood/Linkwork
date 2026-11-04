@@ -143,8 +143,8 @@ export function domesticCircuit(s: DomesticSpec): Scene {
       props.push({id: `c${i}a${j}-housing`, type: 'rect', x: round(x - 38 * k, 2), y: round(mid[1] - 34 * k, 2), w: 76 * k, h: 64 * k, r: 8 * k, style: {fill: 'paper', stroke: a.earth ? 'muted' : 'faint', width: a.earth ? 4 * k : 2 * k}, layer: 4},
         ...icon(a.name, mid, 0.7 * k, `c${i}a${j}-icon`, on, off));
       if (a.earth) wire(`c${i}a${j}-earth`, [[x + 38 * k, mid[1] + 20 * k], [x + 50 * k, mid[1] + 20 * k], [x + 50 * k, rE]], EARTH, [0, 1e9], 2);
-      text(`c${i}a${j}-name`, `${a.name} ${num(a.watts)} W`, [x, rN + 26 * k], 'ink', 17, [0, 1e9], 'middle', 400);
-      text(`c${i}a${j}-amps`, `${num(a.watts / V)} A`, [x - 44 * k, mid[1] + 6 * k], 'accent', 17, [on, off], 'end');
+      text(`c${i}a${j}-name`, `${a.name} ${num(a.watts)} W`, [x, rN + 26 * k], 'ink', 18, [0, 1e9], 'middle', 400);
+      text(`c${i}a${j}-amps`, `${num(a.watts / V)} A`, [x - 44 * k, mid[1] + 6 * k], 'accent', 18, [on, off], 'end');
       I += a.watts / V; Ikeys.push([on - 0.01, Ikeys.at(-1)![1]], [on, round(I, 2)]);
       anchors[`c${i}a${j}`] = [round(x, 2), round(mid[1], 2)];
     });
