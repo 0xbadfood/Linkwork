@@ -2238,6 +2238,55 @@ test('the nucleus verb gets the book right (leph2-05, and ICSE radioactivity)', 
   assert.match(err({show: 'fission', products: 'Ba-141 + Kr-92'}), /one of the book's/);
 });
 
+test('the semiconductor verb gets the book right (leph2-06)', async () => {
+  const sc = await import('../src/verbs/semiconductor.ts');
+  const {compile, check} = await import('../src/index.ts');
+  const near = (a: number, b: number, tol = .02) => assert.ok(Math.abs(a / b - 1) < tol, `${a} vs ${b}`);
+  // Example 14.2: 1 ppm of As in 5 × 10²⁸ Si atoms m⁻³, nᵢ = 1.5 × 10¹⁶: nₑ ≈ 5 × 10²², nₕ ≈ 4.5 × 10⁹ m⁻³
+  const c = sc.carriers(5e28, 1, 1.5e16); near(c.ne, 5e22, 1e-6); near(c.nh, 4.5e9, 1e-6);
+  // Example 14.4 (Fig. 14.17): 10 mA at 0.7 V, 20 mA at 0.8 V, so 10 Ω; −1 μA at −10 V, so 1.0 × 10⁷ Ω; almost none below the cut-in
+  near(sc.diodeCurrent(.7), 10e-3); near(sc.diodeCurrent(.8), 20e-3); near(.1 / (sc.diodeCurrent(.8) - sc.diodeCurrent(.7)), 10);
+  near(-sc.diodeCurrent(-10), 1e-6, 1e-6); assert.ok(sc.diodeCurrent(.4) < 1e-6); near(sc.dynamicResistance(.75), 10, .05);
+  near(sc.diodeCurrent(.2, 'Ge'), 10e-3);                         // germanium's cut-in, about 0.2 V
+  // a rectifier: half-wave passes only positive halves; full-wave both; a capacitor's ripple shrinks as CR_L grows
+  assert.equal(sc.rectified(.75, 'half', 10), 0); near(sc.rectified(.75, 'full', 10), 10); near(sc.rectified(.25, 'half', 10, .7), 9.3);
+  const ripple = (tau: number) => { const p = sc.filtered('full', 10, tau, 3).filter(([t]) => t >= 1).map(x => x[1]); return Math.max(...p) - Math.min(...p); };
+  assert.ok(ripple(5) < ripple(2) && ripple(2) < ripple(.5), `${ripple(.5)} ${ripple(2)} ${ripple(5)}`);
+  const facts = (spec: object) => (compile({verb: 'semiconductor', ...spec} as any).scene!.meta as any).facts.join(' | ');
+  assert.match(facts({show: 'bands', materials: ['C', 'Si', 'Ge', 'Sn']}), /C: Eg = 5\.4 eV \| Si: Eg = 1\.1 eV \| Ge: Eg = 0\.7 eV \| Sn: the bands touch/);
+  assert.match(facts({show: 'doped', type: 'n', atoms: 5e28, ppm: 1, ni: 1.5e16}), /nₑ ≈ N_D = 5 × 10²² m⁻³ \| nₕ = nᵢ²\/nₑ = 4\.5 × 10⁹ m⁻³/);
+  assert.match(facts({show: 'iv', resistance: true}), /= 10 Ω \| r_rb = 10 V \/ 1 μA = 1\.0 × 10⁷ Ω/);
+  assert.match(facts({show: 'lattice', dopant: 'As'}), /about 0\.05 eV in Si/); assert.match(facts({show: 'lattice', dopant: 'P', material: 'Ge'}), /about 0\.01 eV in Ge/);
+  // bias: forward narrows the depletion layer and lowers the barrier; reverse widens and raises them
+  const layer = (spec: object) => { const a = (compile({verb: 'semiconductor', ...spec} as any).scene!.meta as any).anchors; return [a.right[0] - a.left[0], a.barrier[1]]; };
+  const [w0, b0] = layer({show: 'junction'}), [wf, bf] = layer({show: 'bias', V: .4}), [wr, br] = layer({show: 'bias', bias: 'reverse', V: 5});
+  assert.ok(wf < w0 && w0 < wr, `widths ${wf} ${w0} ${wr}`); assert.ok(bf > b0, 'forward barrier lower');      // y grows downward
+  assert.ok(br < bf, 'reverse barrier higher');
+  // a hole moves along E: the field pushes it right
+  const h = (compile({verb: 'semiconductor', show: 'lattice', field: true} as any).scene!.meta as any).anchors; assert.ok(h.hole[0] > h.site1[0]);
+  const shows: object[] = [{show: 'bands'}, {show: 'bands', temperature: 'zero'}, {show: 'bands', materials: ['C', 'Si', 'Ge', 'Sn']}, {show: 'bands', materials: ['Si']},
+    {show: 'lattice'}, {show: 'lattice', stage: 'intact'}, {show: 'lattice', stage: 'broken'}, {show: 'lattice', field: true}, {show: 'lattice', dopant: 'As'},
+    {show: 'lattice', dopant: 'B'}, {show: 'lattice', dopant: 'In', field: true}, {show: 'doped'}, {show: 'doped', type: 'p'}, {show: 'doped', type: 'n', atoms: 5e28, ppm: 1, ni: 1.5e16},
+    {show: 'levels'}, {show: 'levels', type: 'p'}, {show: 'levels', material: 'Ge'}, {show: 'junction'}, {show: 'bias'}, {show: 'bias', bias: 'reverse', V: 20}, {show: 'bias', V: .6},
+    {show: 'iv'}, {show: 'iv', material: 'Ge'}, {show: 'iv', resistance: true, V: .75}, {show: 'iv', V: -2}, {show: 'rectifier'}, {show: 'rectifier', kind: 'full'},
+    {show: 'rectifier', filter: true, tau: 5}, {show: 'rectifier', kind: 'full', filter: true, drop: true, peak: 12}].map(s => ({verb: 'semiconductor', ...s}));
+  for (const spec of shows) { const r = compile(spec as any); assert.deepEqual(r.errors, [], JSON.stringify(spec)); assert.deepEqual(check(r.scene!), [], JSON.stringify(spec)); }
+  for (const spec of shows) {
+    const s = compile({...spec, illustrative: true} as any).scene!;
+    for (const p of s.props) if (p.type === 'text' && p.id !== 'title' && (p as any).text) assert.doesNotMatch((p as any).text, /\d/, `${JSON.stringify(spec)}: ${(p as any).text}`);
+  }
+  const err = (spec: object) => compile({verb: 'semiconductor', ...spec} as any).errors.join(' | ');
+  assert.match(err({show: 'junction', V: .3}), /V is not used/);
+  assert.match(err({show: 'bias', V: .7}), /leaves no barrier/);
+  assert.match(err({show: 'bias', bias: 'reverse', V: 50}), /break down/);
+  assert.match(err({show: 'doped', type: 'p', ppm: 1}), /n-type crystal/);
+  assert.match(err({show: 'iv', resistance: true, material: 'Ge'}), /silicon diode/);
+  assert.match(err({show: 'rectifier', tau: 3}), /set filter: true/);
+  assert.match(err({show: 'lattice', dopant: 'As', stage: 'moving'}), /leave stage out/);
+  assert.match(err({show: 'lattice', stage: 'intact', field: true}), /no carrier/);
+  assert.match(err({show: 'bands', materials: ['Cu']}), /materials is a list/);
+});
+
 test('a graph can be drawn against a Greek letter (leph2-03 C5)', async () => {
   // the graph of Kmax against ν had to call its axis n, which read on screen as 'n (Hz)'
   const {compile} = await import('../src/index.ts');

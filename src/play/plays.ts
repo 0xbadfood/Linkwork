@@ -495,6 +495,28 @@ export const PLAYS: Play[] = [
     ],
     probe: (v, s) => { const a = s.meta.anchors; return [[a.edge1[0] - a.nucleus1[0], radiusAt(Math.round(n(v, 'A')))]]; },
   },
+  {
+    id: 'diode-iv', chapter: 'leph2-06', title: 'Bias a diode',
+    intro: 'Set the voltage across a silicon diode, forward or reverse, and read the current off its V-I curve. Guess before you look: does a little more voltage give a little more current?',
+    controls: [{id: 'V', label: 'Voltage across the diode (negative: reverse bias)', kind: 'slider', min: -2, max: 1, step: .01, unit: 'V', start: .3}],
+    spec: v => ({verb: 'semiconductor', title: 'A silicon diode', show: 'iv', V: n(v, 'V')}),
+    setup: 4,
+    reading: v => { const V = n(v, 'V'), I = diodeAt(V);
+      return [['Current', ampText(I)], ['The diode', V < 0 ? 'reverse biased: only the tiny saturation current' : V < .6 ? 'forward biased, below the cut-in: almost no current' : 'forward biased, past the cut-in: conducting']]; },
+    predict: {
+      question: 'At 0.7 V the diode carries 10 mA. You raise the voltage by only 0.1 V, to 0.8 V. What is the current now?',
+      options: [{text: 'About 11 mA: the voltage rose only one-seventh'}, {text: 'About 20 mA: it doubles', right: true}, {text: 'Still 10 mA: the diode is already on'}],
+      runs: [{V: .7}, {V: .8}],
+      why: 'Past the cut-in the current rises steeply: 0.1 V more doubles it. ΔV/ΔI = 0.1 V / 10 mA = 10 Ω is the diode\'s dynamic resistance (Example 14.4).',
+    },
+    challenges: [
+      {text: 'Drive a current of 15 mA through the diode (within 1 mA).', start: {V: .5}, hit: v => Math.abs(diodeAt(n(v, 'V')) - 15e-3) < 1e-3, hint: v => '10 mA flows at 0.7 V and 20 mA at 0.8 V.'},
+      {text: 'Find the forward voltage at which the current first reaches 1 mA (within 0.01 V).', start: {V: .3}, hit: v => Math.abs(n(v, 'V') - .5913) < .01, hint: v => `At ${n(v, 'V')} V the current is ${ampText(diodeAt(n(v, 'V')))}.`},
+      {text: 'Reverse the diode until the current is 99% of the reverse saturation current, 1 μA.', start: {V: .3}, hit: v => diodeAt(n(v, 'V')) <= -.99e-6, hint: v => 'Reverse means a negative voltage; the current soon stops growing.'},
+    ],
+    // forward only: there the current axis is one mA scale (reverse is drawn in μA, as the book draws it)
+    probe: (v, s) => { const a = s.meta.anchors, I = diodeAt(n(v, 'V')); return [[I > 1e-4 ? a.origin[1] - a.point[1] : NaN, I]]; },
+  },
 ];
 
 /** A photon's energy in eV at ν (10¹⁴ Hz), and the threshold ν₀ (10¹⁴ Hz) of a work function in eV (as the photoelectric verb computes them). */
@@ -503,6 +525,10 @@ const thresholdAt = (phi: number) => phi * 1.602e-19 / 6.626e-34 / 1e14;
 
 /** The distance of closest approach in fm of an α of K MeV head-on to gold (as the rutherford verb computes it). */
 const closestAt = (K: number) => 2 * 79 * 1.44 / K;
+
+/** A silicon diode's current in A at V (as the semiconductor verb computes it): 10 mA at 0.7 V, 20 mA at 0.8 V, −1 μA reverse. */
+const diodeAt = (V: number) => V < 0 ? -1e-6 * (1 - Math.exp(V / .026)) : .002 * Math.log1p(Math.exp((V - .6) / .02));
+const ampText = (I: number) => { const a = Math.abs(I), s = I < 0 ? '−' : ''; return a >= 1e-3 ? `${s}${+(a * 1e3).toPrecision(3)} mA` : a >= 1e-6 ? `${s}${+(a * 1e6).toPrecision(3)} μA` : `${s}${+(a * 1e9).toPrecision(2)} nA`; };
 
 /** A nucleus's radius in fm, R = 1.2 A^⅓ (as the nucleus verb computes it). */
 const radiusAt = (A: number) => 1.2 * Math.cbrt(A);

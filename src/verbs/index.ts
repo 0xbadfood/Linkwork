@@ -47,6 +47,7 @@ import {huygens, huygensErrors, type HuygensSpec, interference, interferenceErro
 import {photoelectric, photoelectricErrors, type PhotoelectricSpec, matterWave, matterWaveErrors, type MatterWaveSpec} from './dual-nature.ts';
 import {rutherford, rutherfordErrors, type RutherfordSpec, bohr, bohrErrors, type BohrSpec} from './atoms.ts';
 import {nucleus, nucleusErrors, type NucleusSpec} from './nuclei.ts';
+import {semiconductor, semiconductorErrors, type SemiconductorSpec} from './semiconductor.ts';
 import {capacitor, capacitorErrors, potential, potentialErrors, type CapacitorSpec, type PotentialSpec} from './potential.ts';
 import {centreOfMass, comErrors, type ComSpec} from './com.ts';
 import {gravityLaw, gravityLawErrors, orbit, orbitErrors, type GravityLawSpec, type OrbitSpec} from './gravitation.ts';
@@ -62,7 +63,7 @@ export type Spec = WaveSpec | ElectricSpec | PotentialSpec | CapacitorSpec | Shm
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
   | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
-  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec;
+  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec | SemiconductorSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -160,6 +161,8 @@ export const VERBS: Record<string, Verb<any>> = {
     about: "Class 12 Bohr model of hydrogen, computed from e, h, m and ε₀: the classical orbit (K, U, E), the classical spiral into the nucleus, Bohr's orbits to one scale (rₙ = n²a₀, vₙ = v₁/n), de Broglie's standing wave round an orbit (2πr = nλ), the energy levels with the Lyman to Pfund series, and a series' lines on a wavelength strip"} as Verb<BohrSpec>,
   nucleus: {errors: nucleusErrors, compile: nucleus,
     about: "Class 12 nuclei (and ICSE radioactivity), computed from the book's masses: nuclides as protons and neutrons with ᴬ_Z X (isotopes, isobars), nuclei to one scale R = 1.2A^⅓ fm, the mass defect and binding energy, the binding energy per nucleon curve with fission and fusion marked, the nucleon-pair potential, α, β and γ decay, α, β and γ bent in a field and stopped by paper, aluminium and lead, U-235 fission, a chain reaction, and the book's fusion reactions and p-p cycle with Q from the masses"} as Verb<NucleusSpec>,
+  semiconductor: {errors: semiconductorErrors, compile: semiconductor,
+    about: "Class 12 semiconductor electronics, from the book's numbers: valence and conduction bands of a metal, an insulator and a semiconductor (C, Si, Ge, Sn to one energy scale), the Si lattice with a broken bond and a moving hole, As and B dopants, n- and p-type carriers (Example 14.2), donor and acceptor levels, a p-n junction's diffusion, depletion layer and barrier, forward and reverse bias, the diode's V-I curve (Example 14.4) and half- and full-wave rectifiers with a capacitor filter"} as Verb<SemiconductorSpec>,
   induction: {errors: inductionErrors, compile: induction,
     about: 'Class 12 electromagnetic induction, computed: Faraday\'s experiments with a magnet, coil and galvanometer, the tapping key, Φ = BA cos θ, ε = −N dΦ/dt with its graph, Lenz\'s law for a coil and for a loop crossing a field\'s edge, the rod on rails ε = Blv, a turning rod ε = ½Bωl², mutual and self inductance, back emf, ½LI², and the ac generator.'},
   magnetic_matter: {errors: matterErrors, compile: magneticMatter,
