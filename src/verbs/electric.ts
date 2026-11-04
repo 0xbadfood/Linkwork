@@ -64,6 +64,23 @@ export function windowPieces(line: P2[], xr: number, yr: number): P2[][] {
   return pieces.filter(p => p.length >= 3);
 }
 
+/** Where each traced line first cuts each element (a short bar normal to the field at el.at, `size` long). */
+function elementCuts(cs: Charge[], traced: P2[][], elements: {at: [number, number]}[], size: number) {
+  return elements.map(el => {
+    const [ex, ey] = fieldAt(cs, el.at[0], el.at[1]), m = hyp(ex, ey), nx = -ey / m, ny = ex / m;
+    const a: P2 = [el.at[0] - nx * size / 2, el.at[1] - ny * size / 2], b: P2 = [el.at[0] + nx * size / 2, el.at[1] + ny * size / 2], hits: P2[] = [];
+    for (const path of traced) for (let j = 1; j < path.length; j++) if (crosses(path[j - 1], path[j], a, b)) { hits.push(meet(path[j - 1], path[j], a, b)); break; }
+    return {a, b, hits};
+  });
+}
+
+/** The reach a lines or superposition scene draws to: its charges, point and elements all fit. */
+function reachOf(s: ElectricSpec): number {
+  const pts: P2[] = s.charges!.map(c => [c.x, c.y]); if (s.at) pts.push(s.at); for (const el of s.elements ?? []) pts.push(el.at);
+  const far = Math.max(...pts.map(p => Math.max(Math.abs(p[0]), Math.abs(p[1]))));
+  return Math.max(s.reach ?? 0, far * (s.reach === undefined ? 1.7 : 1.15)) || 1;
+}
+
 export function traceLines(cs: Charge[], reach: number, per = 12): P2[][] {
   const pos = cs.filter(c => c.q > 0), reversed = !pos.length, starts = reversed ? cs : pos, top = Math.max(...cs.map(c => Math.abs(c.q)));
   const step = reach / 90, near = reach * 0.035, out: P2[][] = [];
@@ -149,6 +166,14 @@ export function electricErrors(s: ElectricSpec): string[] {
     else if (s.charges && !e.length) for (const el of s.elements) {
       const [ex, ey] = fieldAt(s.charges, el.at[0], el.at[1]);
       if (s.charges.some(c => hyp(c.x - el.at[0], c.y - el.at[1]) < 1e-9) || hyp(ex, ey) === 0) e.push(`${W}: element ${el.name ?? JSON.stringify(el.at)} sits where the field has no direction (on a charge, or where it cancels); move it`);
+    }
+    // Compared elements must differ: R and S each cut by one line showed no difference (leph1-01 C5 S13, 2026-11-04)
+    if (!e.length && s.charges && s.elements.length > 1) {
+      const reach = reachOf(s), counts = elementCuts(s.charges, traceLines(s.charges, reach, s.per ?? 12), s.elements, s.size ?? reach * 0.25).map(c => c.hits.length);
+      const names = s.elements.map((el, i) => el.name ?? `element ${i + 1}`);
+      if (Math.max(...counts) === Math.min(...counts))
+        e.push(`${W}: the elements cut ${counts.map((c, i) => `${names[i]} ${c}`).join(', ')} lines: equal counts show no difference. Put the stronger one nearer the charge, raise size or per, until the counts differ`);
+      else if (counts.some(c => c === 0)) e.push(`${W}: element ${names[counts.indexOf(0)]} cuts no line: move it onto the lines or raise size`);
     }
   }
   if (s.show === 'density' && s.kind !== undefined && !['line', 'surface', 'volume'].includes(s.kind)) e.push(`${W}: kind is line, surface or volume`);
@@ -288,9 +313,8 @@ export function electric(s: ElectricSpec): Scene {
     second = r2 ? 'Change the distance and the force goes as 1/r²' : 'F = k q₁q₂/r²: equal and opposite, even when the charges differ';
     facts.push(`k = 1/4πε₀ = ${sci(K, 'N m²/C²')}`);
   } else if (s.show === 'superposition' || s.show === 'lines') {
-    const cs = s.charges!, pts: P2[] = cs.map(c => [c.x, c.y]); if (s.at) pts.push(s.at); for (const el of s.elements ?? []) pts.push(el.at);
     // a reach too small for its own charges or point would draw them off the canvas: it widens to hold them
-    const far = Math.max(...pts.map(p => Math.max(Math.abs(p[0]), Math.abs(p[1])))), reach = Math.max(s.reach ?? 0, far * (s.reach === undefined ? 1.7 : 1.15)) || 1, ppm = S / 2 / reach;
+    const cs = s.charges!, reach = reachOf(s), ppm = S / 2 / reach;
     const to = (p: P2): P2 => [cx + p[0] * ppm, cy - p[1] * ppm];
     if (s.show === 'lines') {
       const traced = traceLines(cs, reach, s.per ?? 12);
@@ -308,12 +332,9 @@ export function electric(s: ElectricSpec): Scene {
       facts.push('field lines never cross; their density shows the strength of the field', 'the number of lines is proportional to the charge');
       if (s.elements?.length) {
         // equal small areas set normal to the field (edge on, a short bar); every traced line that cuts one is marked where it cuts
-        const size = s.size ?? reach * 0.25, counts: number[] = [];
+        const cuts = elementCuts(cs, traced, s.elements, s.size ?? reach * 0.25), counts = cuts.map(c => c.hits.length);
         s.elements.forEach((el, i) => {
-          const [ex, ey] = fieldAt(cs, el.at[0], el.at[1]), m = hyp(ex, ey), nx = -ey / m, ny = ex / m, t0 = 3.6 + i * 1.6;
-          const a: P2 = [el.at[0] - nx * size / 2, el.at[1] - ny * size / 2], b: P2 = [el.at[0] + nx * size / 2, el.at[1] + ny * size / 2], hits: P2[] = [];
-          for (const path of traced) for (let j = 1; j < path.length; j++) if (crosses(path[j - 1], path[j], a, b)) { hits.push(meet(path[j - 1], path[j], a, b)); break; }
-          counts.push(hits.length);
+          const {a, b, hits} = cuts[i], t0 = 3.6 + i * 1.6;
           const A = to(a), B = to(b), c = to(el.at);
           line(A, B, 'good', 10, {layer: 2, show: [t0, 1e9]}); anchors[el.name ?? `element${i + 1}`] = c;
           // the name sits past the bar's end, clear of the lines it is cut by

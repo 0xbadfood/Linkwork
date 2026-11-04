@@ -50,6 +50,15 @@ export function markable(scene: Scene): {anchors: string[]; units: string | null
     units: meta?.units ? meta.units.name : planes.length === 1 && !meta?.anchorsOnly && !placeholder(scene, planes[0] as Plane) ? "the drawing's own x and y (the numbers on its axes, or metres on a stage)" : null};
 }
 
+const FILLER = new Set('a an the of to in on at by for and or is are be it its this that here there out up so all its with from not no'.split(' '));
+/** A label's words that carry meaning, without plural s: 'fields cancel here' -> field, cancel. */
+const contentWords = (t: string) => (t.toLowerCase().match(/[a-z]+/g) ?? []).filter(w => !FILLER.has(w)).map(w => (w.length > 3 ? w.replace(/s$/, '') : w));
+/** Every meaningful word of the label (two at least) is already in one of the verb's own texts. */
+export function repeats(text: string, own: Set<string>[]): boolean {
+  const words = contentWords(text);
+  return words.length >= 2 && own.some(o => words.every(w => o.has(w)));
+}
+
 /** The scene with its marks drawn: a dot (point: true) and a label just above and to the right of it. */
 export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string): {scene?: Scene; errors: string[]} {
   if (!marks?.length) return {scene, errors: []};
@@ -93,6 +102,13 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
   const labelled = new Set(((meta as {labelled?: string[]})?.labelled ?? []).map(n => n.toLowerCase()));
   // A label the verb already draws, written again (the curve's 'permanent set' twice, keph2-01 C3): it goes back.
   const own = new Set(scene.props.filter(p => p.type === 'text' && p.id !== 'title').map(p => String((p as {text: string}).text).trim().toLowerCase()));
+  // Only the drawing's short labels count, not the panel's lines (long, or starting at the title's x): a panel sentence
+  // speaks generally ('Edge rays cross the axis nearer the mirror than central rays'), and a label naming one place in
+  // it ('central rays' at that focus) is wanted.
+  const panelX = (scene.props.find(p => p.id === 'title') as {x?: number} | undefined)?.x;
+  const ownWords = scene.props.filter(p => p.type === 'text' && p.id !== 'title' && String((p as {text: string}).text).length <= 48
+    && (panelX === undefined || Math.abs((p as {x: number}).x - panelX) > 1))
+    .map(p => new Set(contentWords(String((p as {text: string}).text))));
   marks.forEach((m, i) => {
     if (m.text && /_/.test(m.text) && anchors.includes(m.text.trim())) errors.push(`${verb}: annotate[${i}].text ${JSON.stringify(m.text)} is a point's name: write the words to show, such as ${JSON.stringify(m.text.replace(/_/g, ' '))}`);
     if (m.text && typeof m.at === 'string' && !m.to && labelled.has(m.text.trim().replace(/[₁₂]/g, c => (c === '₁' ? '1' : '2')).toLowerCase()) && m.text.trim().toLowerCase().replace(/[₁₂]/g, c => (c === '₁' ? '1' : '2')) === m.at.toLowerCase()) {
@@ -100,6 +116,10 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
       m = {...m, text: undefined};
     }
     if (m.text && !m.to && own.has(m.text.trim().toLowerCase())) { errors.push(`${verb}: annotate[${i}].text ${JSON.stringify(m.text)} is already on the picture: leave it out, or give point: true without text for a dot`); return; }
+    // Said again in other words by the drawing ('fields cancel here' beside 'They cancel: no field between the turns';
+    // leph1-04 C7 S07, 2026-11-04): it only clutters, often over the
+    // drawing. Dropped, not refused, so films already made still compile.
+    if (m.text && !m.to && repeats(m.text, ownWords)) { if (!m.point) return; m = {...m, text: undefined}; }
     const at = resolve(m.at, i, 'at');
     if (!at) return;
     const to = m.to === undefined ? undefined : resolve(m.to, i, 'to');

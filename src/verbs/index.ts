@@ -296,8 +296,10 @@ export function compile(spec: {verb: string; illustrative?: boolean} | CompoundS
   return {scene: spec.illustrative ? illustrate(marked.scene) : marked.scene, errors: []};
 }
 
-// Point names (2F₁, F₂, P1, 2F2) are not numbers: they are taken out before looking for digits.
-const NAMES = /(?<![\w.])\d?[A-Z][₀-₉0-9]*(?![\w.])/g;
+// Point names (2F₁, F₂, P1, 2F2) are not numbers: they are taken out before looking for digits. So are lowercase
+// names with a subscript (r2, q₁, m1: vector_add's r2 and r1 vanished from leph1-01 C2 S26, 2026-11-04), but not a
+// number with its unit stuck on (5m).
+const NAMES = /(?<![\w.])(?:\d?[A-Z][₀-₉0-9]*|[a-zα-ω][₀-₉0-9]+)(?![\w.])/g;
 
 /** The scene with its numbers hidden: no readouts, no axis numbers, no text with a figure in it (but the title), dials
  * and watches without their digits; no facts for the narration to quote. */
