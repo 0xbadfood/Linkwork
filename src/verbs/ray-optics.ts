@@ -741,7 +741,14 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
     const heightAt = (hh: number, j: number) => { const [p, sl] = after(transfer(u, hh, 0, lenses.slice(0, upto)), j); return p[1] + sl * (L[j].x - p[0]); };
     // heights: the tallest image (or the object) fills about 0.4 of the height; image heights from the traced rays
     const mags = shown.map((l, j) => Number.isFinite(l.x) ? heightAt(1, j) : 0);
-    const room = bh * .36 / ppc, h = Math.min(room / Math.max(1, ...mags.map(Math.abs)), room * .7);
+    // 2026-11-04 (leph2-01 C6 S26, published): the scale ignored the final image and the rays' heights at the lenses, so the
+    // lenses ran up into the header band. Everything drawn is linear in the object's height h: fit h to the tallest of the
+    // lenses (the rays' heights there, ×1.15), the object and every image, with room for the labels above and below.
+    const unit = [transfer(u, 1, 0, lenses.slice(0, upto)), transfer(u, 1, -1 / (0 - u), lenses.slice(0, upto))];
+    const atLens = Math.max(1, ...unit.flatMap(r => r.pts.slice(1).map(q => Math.abs(q[1])))), tallest = Math.max(1, ...mags.map(Math.abs));
+    const stacked = L.some((l, j) => j > 0 && (l.x0 - L[j - 1].x0) * ppc < 70 * k);
+    const avail = Math.min(cy - by - (stacked ? 92 : 60) * k, by + bh - cy - 70 * k);
+    const h = Math.min((avail - 20 * k) / (1.15 * atLens * ppc), (avail - 40 * k) / (tallest * ppc), bh * .3 / ppc);
     line([bx, cy], [bx + bw, cy], 'faint', 2);
     objectArrow(u, h, 'accent');
     label(X(u), cy + 40 * k, 'object', 'accent', 24);
@@ -759,12 +766,16 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
       anchors[`lens${j + 1}`] = [x, cy];
     });
     const T = (j: number) => 1 + 1.6 * j;                                   // when the light reaches lens j
+    const raySegs: P2[][] = [];
     rays.forEach((r, q) => {
       const end = r.pts.at(-1)!, last = shown[upto - 1];
       // past the last lens drawn: on to its image if real and ahead, then a little beyond; else to the frame's edge
       const reach = upto < N ? (Number.isFinite(last.x) && last.x > end[0] ? Math.min(last.x + (last.x - end[0]) * .25, hi) : Math.min(L[upto].x0, hi)) : hi;
-      const pts = [...r.pts, [reach, end[1] + r.slope * (reach - end[0])] as P2];
-      props.push({id: `ray${q}`, type: 'polyline', points: pts.map(P), style: {stroke: q ? 'good' : 'accent', width: 4 * k}, layer: 3, ...drawn(.4, T(upto))} as Prop);
+      // the tail beyond the last image is cut where it would leave the drawing's box
+      const pts = [...r.pts, [reach, end[1] + r.slope * (reach - end[0])] as P2].map(P), tail = pts.at(-1)!, prev = pts.at(-2)!, yLo = by + 4 * k, yHi = by + bh - 4 * k;
+      if (tail[1] < yLo || tail[1] > yHi) { const yc2 = tail[1] < yLo ? yLo : yHi, f = (yc2 - prev[1]) / (tail[1] - prev[1]); pts[pts.length - 1] = [prev[0] + f * (tail[0] - prev[0]), yc2]; }
+      raySegs.push(pts);
+      props.push({id: `ray${q}`, type: 'polyline', points: pts, style: {stroke: q ? 'good' : 'accent', width: 4 * k}, layer: 3, ...drawn(.4, T(upto))} as Prop);
       // each image the rays do not pass through: dashed lines to it
       shown.forEach((l, j) => {
         if (!Number.isFinite(l.x)) return;
@@ -779,8 +790,19 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
       if (!Number.isFinite(l.x)) { label(X(l.x0) + 16 * k, Y(-half) + 40 * k, `${name}: parallel, at infinity`, 'muted', 22, {align: 'start', show: [at, 1e9]}); return; }
       const hj = h * mags[j], real = l.x > l.x0, colour = finalOne ? 'good' : 'cool';
       objectArrow(l.x, hj, real ? colour : 'muted', !real, [at, 1e9]);
-      const crowded = L.some(o => Math.abs(o.x0 - l.x) * ppc < 50 * k);
-      label(X(l.x) + (crowded ? 16 * k : 0), hj >= 0 ? Y(hj) - 18 * k : Y(hj) + 36 * k, name + (num && Number.isFinite(l.m) ? `, m${sub(j + 1)} = ${fm(l.m)}` : ''), real ? colour : 'muted', 24, {show: [at, 1e9], layer: 5, ...(crowded ? {align: 'start'} : {}), style: {fill: real ? colour : 'muted', stroke: 'paper', width: 6 * k}});
+      // the label where no ray, lens or edge crosses it: beside the arrow's middle, then past its tip, then by its foot
+      const text = name + (num && Number.isFinite(l.m) ? `, m${sub(j + 1)} = ${fm(l.m)}` : ''), tw = text.length * 14 * k, xI = X(l.x), yT = Y(hj), dir = hj >= 0 ? -1 : 1;
+      const spots: [number, number, 'start' | 'end' | 'middle'][] = [];
+      for (const f of [.5, .3, .7]) spots.push([xI + 14 * k, cy + (yT - cy) * f + 9 * k, 'start'], [xI - 14 * k, cy + (yT - cy) * f + 9 * k, 'end']);
+      spots.push([xI, yT + dir * 22 * k + (dir > 0 ? 18 * k : 0), 'middle']);
+      for (const d of [32, 64, 96]) spots.push([xI + 14 * k, cy - dir * d * k + 9 * k, 'start'], [xI - 14 * k, cy - dir * d * k + 9 * k, 'end'], [xI, cy - dir * d * k + 9 * k, 'middle']);
+      const boxOf = ([x, y, al]: [number, number, string]) => { const x0 = al === 'start' ? x : al === 'end' ? x - tw : x - tw / 2; return [x0 - 4 * k, y - 24 * k, x0 + tw + 4 * k, y + 6 * k]; };
+      // a spot's cost: leaving the box rules it out; then every sampled ray point and lens inside the label counts
+      const cost = (b: number[]) => (b[0] < bx || b[2] > bx + bw || b[1] < by || b[3] > by + bh ? 1e6 : 0)
+        + raySegs.reduce((n, seg) => n + seg.reduce((n2, p, m) => n2 + (m ? Array.from({length: 41}, (_, q) => { const f = q / 40; return [seg[m - 1][0] + f * (p[0] - seg[m - 1][0]), seg[m - 1][1] + f * (p[1] - seg[m - 1][1])]; }).filter(([x, y]) => x > b[0] && x < b[2] && y > b[1] && y < b[3]).length : 0), 0), 0)
+        + 10 * L.filter(o => X(o.x0) > b[0] - 6 * k && X(o.x0) < b[2] + 6 * k && b[1] < cy + half * ppc && b[3] > cy - half * ppc).length;
+      const spot = spots.map((sp, n) => [sp, cost(boxOf(sp)) + n * .01] as const).sort((p2, q2) => p2[1] - q2[1])[0][0];
+      label(spot[0], spot[1], text, real ? colour : 'muted', 24, {show: [at, 1e9], layer: 5, align: spot[2], style: {fill: real ? colour : 'muted', stroke: 'paper', width: 6 * k}});
       anchors[`image${j + 1}`] = P([l.x, hj]);
     });
     anchors.object = P([u, h]); anchors.image = anchors[`image${upto}`] ?? P([L[upto - 1].x0, 0]);

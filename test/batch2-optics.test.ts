@@ -148,3 +148,30 @@ test('polaroid: an unpolarised wave\'s plane changes at random; one polaroid pas
   assert.match(err({verb: 'polaroid', show: 'unpolarised', plane: 200}), /plane is the plane of vibration's angle/);
   assert.match(err({verb: 'polaroid', show: 'sideways'}), /show is one of malus, crossed, unpolarised, one/);
 });
+
+test('lens_chain fits everything it draws below the header band and inside the frame (leph2-01 C6 S26, published)', () => {
+  // 2026-11-04: the scale ignored the final image and the rays' heights at the lenses: lenses ran up into the header band,
+  // rays left the top of the frame and I₂'s label sat on a ray at the top edge.
+  for (const [gap, u] of [[35, -20], [45, -15]]) for (const illustrative of [true, false]) for (const width of [1920, 960]) {
+    const spec = {verb: 'optical_instrument', title: 'Magnifications multiply', show: 'lens_chain', focal: [10, 10], gaps: [gap], u, images: 2, illustrative, width, height: 1080};
+    const r = compile(spec as never); assert.deepEqual(r.errors, []); assert.deepEqual(check(r.scene!), []);
+    const top = .14 * 1080, name = `gaps ${gap}, u ${u}, ${width} px${illustrative ? ', illustrative' : ''}`;
+    for (const p of r.scene!.props) {
+      if (p.id === 'title') continue;
+      const q = p as unknown as {x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number; points?: [number, number][]; size?: number; text?: string};
+      const pts: [number, number][] = [...(q.points ?? []), ...(q.x1 !== undefined ? [[q.x1, q.y1!], [q.x2!, q.y2!]] as [number, number][] : []), ...(q.x !== undefined ? [[q.x, q.y! - (p.type === 'text' ? q.size! : 0)]] as [number, number][] : [])];
+      for (const [x, y] of pts) assert.ok(y >= top - 1e-6 && y <= 1080 && x >= 0 && x <= width, `${name}: ${p.id} ${q.text ?? ''} at (${x.toFixed(0)}, ${y.toFixed(0)})`);
+    }
+    // the image labels sit clear of the rays: no ray passes through the middle of one
+    const rays = r.scene!.props.filter(p => /^ray\d$/.test(p.id)).map(p => (p as unknown as {points: [number, number][]}).points);
+    for (const t of r.scene!.props.filter(p => p.type === 'text' && /^I[₁₂]/.test((p as unknown as {text: string}).text))) {
+      const q = t as unknown as {x: number; y: number; size: number; text: string; align?: string}, w = q.text.length * q.size * .5;
+      const x0 = q.align === 'start' ? q.x : q.align === 'end' ? q.x - w : q.x - w / 2, y0 = q.y - q.size * .8, y1 = q.y;
+      const crossed = rays.some(seg => seg.some((pt, m) => m > 0 && Array.from({length: 81}, (_, j) => j / 80).some(f => {
+        const x = seg[m - 1][0] + f * (pt[0] - seg[m - 1][0]), y = seg[m - 1][1] + f * (pt[1] - seg[m - 1][1]);
+        return x > x0 + w * .2 && x < x0 + w * .8 && y > y0 && y < y1;
+      })));
+      assert.ok(!crossed, `${name}: a ray crosses the label ${q.text}`);
+    }
+  }
+});
