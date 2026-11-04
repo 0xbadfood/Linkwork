@@ -9,7 +9,7 @@
 import type {Key} from '../keys.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
-import {wrapText} from '../svg.ts';
+import {textWidth, wrapText} from '../svg.ts';
 import {round, type Vec} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
 import {frame} from './vectors.ts';
@@ -189,12 +189,31 @@ export function verticalCircle(s: VerticalCircleSpec): Scene {
   const Fhere = Math.max(last.T, g), vs = (show === 'circle' ? 0.5 : 0.6) * L / vmax, fs = show === 'circle' ? 0.6 * L / Tmax : show === 'forces' ? 0.75 * L / Fhere : 0.45 * L / Tmax;
   const wantV = s.velocity !== false, wantW = s.weight !== false;
   const nameGap = 30 * k * pxl;
-  // a name beyond the arrow's tip, or (side) beside its middle, clear of what lies at its tip (T points at O)
+  // the string as it is drawn at the end (wavy at C in the top show), which a name must keep clear of
+  const finalString = Array.from({length: PIECES + 1}, (_, i) => stringPoint(last, i, wiggleFrom < 1e9 ? 1 : 0));
+  /** How far a name's box at p stays from the string (plane units; below 0 it sits on it). */
+  const clearance = (p: Vec, label: string) => {
+    const hw = (textWidth(label, 30 * k) / 2 + 8 * k) * pxl, hh = (15 * k + 6 * k) * pxl;
+    let best = Infinity;
+    for (let i = 0; i < PIECES; i++) for (let j = 0; j <= 8; j++) {
+      const a = finalString[i], b = finalString[i + 1], x = a[0] + (b[0] - a[0]) * j / 8, y = a[1] + (b[1] - a[1]) * j / 8;
+      best = Math.min(best, Math.max(Math.abs(x - p[0]) - hw, Math.abs(y - p[1]) - hh));
+    }
+    return best;
+  };
+  // a name beyond the arrow's tip, or (side) beside its middle, clear of what lies at its tip (T points at O); a name
+  // that would sit on the string moves beside the arrow, on the side away from the string (2026-11-05, keph1-05 C8:
+  // mg at C pointed down the slack string and its name lay on the string's wave)
   const arrow = (id: string, from: (q: Sample) => Vec, to: (q: Sample) => Vec, stroke: string, label: string, on: number, off = 1e9, width = 5, side = false,
     seen?: (q: Sample) => number) => {
     const fadeKeys = seen ? {opacity: keyed(seen)} : {};
-    const q0 = samples[0], tip = (q: Sample): Vec => { const a = from(q), b = to(q), d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, u: Vec = [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
-      return side ? [(a[0] + b[0]) / 2 + u[1] * nameGap, (a[1] + b[1]) / 2 - u[0] * nameGap] : [b[0] + u[0] * nameGap, b[1] + u[1] * nameGap]; };
+    const spot = (q: Sample, how: 'tip' | 'left' | 'right'): Vec => { const a = from(q), b = to(q), d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, u: Vec = [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
+      const sg = how === 'right' ? -1 : 1, aside = sg * Math.max(nameGap, (textWidth(label, 30 * k) / 2 + 24 * k) * pxl);
+      return how === 'tip' ? [b[0] + u[0] * nameGap, b[1] + u[1] * nameGap] : [(a[0] + b[0]) / 2 + u[1] * aside, (a[1] + b[1]) / 2 - u[0] * aside]; };
+    const tries: ('tip' | 'left' | 'right')[] = side ? ['left', 'right'] : ['tip', 'left', 'right'];
+    const room = tries.map(h => clearance(spot(last, h), label));
+    const pick = tries[room.findIndex(r => r >= 6 * k * pxl)] ?? tries[room.indexOf(Math.max(...room))];
+    const q0 = samples[0], tip = (q: Sample): Vec => spot(q, pick);
     props.push({id, type: 'arrow', plane: 'p', x1: from(q0)[0], y1: from(q0)[1], x2: to(q0)[0], y2: to(q0)[1], head: 16 * k, layer: 2,
       keys: {x1: keyed(q => from(q)[0]), y1: keyed(q => from(q)[1]), x2: keyed(q => to(q)[0]), y2: keyed(q => to(q)[1]), ...fadeKeys},
       style: {stroke, width: width * k}, show: [on, off], fade: 0.25} as Prop);

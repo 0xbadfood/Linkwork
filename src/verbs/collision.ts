@@ -72,7 +72,9 @@ export function collision2d(s: Collision2dSpec): Scene {
   // the window: everything the balls, arrows and angle marks reach, at equal scale
   const reach: Vec[] = [start, [0, 0], contact, end1, end2, [contact[0] + 2.4, b], [2.4, 0]];
   if (vel !== 'none') reach.push([start[0] + v1i * vsc + 0.6, b], [end1[0] + v1f[0] * vsc, end1[1] + v1f[1] * vsc], [end2[0] + v2f[0] * vsc, end2[1] + v2f[1] * vsc]);
-  if (s.impact) reach.push([2.6, 0]);
+  // b is marked on the incoming side, left of where m1 starts, so neither ball nor θ arcs ever reach it
+  const xb = start[0] - r1 - 0.35;
+  if (s.impact) reach.push([xb - 0.75, b]);
   const fr = frame(W, H, k, s.title), narrow = W < 1.3 * H, box = fr.box, lineSize = (narrow ? 25 : 30) * k;
   const pad = 0.9;
   const x0 = Math.min(...reach.map(p => p[0])) - pad, x1 = Math.max(...reach.map(p => p[0])) + pad + (vel === 'values' ? 1.2 : 0);   // room for 'v2f = 1.60 m/s'
@@ -93,7 +95,7 @@ export function collision2d(s: Collision2dSpec): Scene {
   const dashed = {stroke: 'muted', width: 3 * k, dash: [10 * k, 8 * k], opacity: 0.75};
 
   // the horizontal through m2 (the x direction), and the paths drawn behind the balls
-  props.push({id: 'xline', type: 'line', plane: 'p', x1: plane.x[0] + 0.3, y1: 0, x2: s.impact ? 2.5 : 2.4, y2: 0, style: {stroke: 'faint', width: 2 * k}} as Prop);
+  props.push({id: 'xline', type: 'line', plane: 'p', x1: plane.x[0] + 0.3, y1: 0, x2: 2.4, y2: 0, style: {stroke: 'faint', width: 2 * k}} as Prop);
   props.push({id: 'path1in', type: 'line', plane: 'p', x1: start[0], y1: b, x2: start[0], y2: b, keys: {x2: keyed(t => Math.min(at1(t)[0], contact[0]))}, style: dashed} as Prop);
   props.push({id: 'path1out', type: 'line', plane: 'p', x1: contact[0], y1: b, x2: contact[0], y2: b, keys: {x2: keyed(t => at1(Math.max(t, Tin))[0]), y2: keyed(t => at1(Math.max(t, Tin))[1])}, style: dashed, show: [tc, 1e9]} as Prop);
   props.push({id: 'path2out', type: 'line', plane: 'p', x1: 0, y1: 0, x2: 0, y2: 0, keys: {x2: keyed(t => at2(t)[0]), y2: keyed(t => at2(t)[1])}, style: dashed, show: [tc, 1e9]} as Prop);
@@ -118,14 +120,15 @@ export function collision2d(s: Collision2dSpec): Scene {
   }
   const anchors: Record<string, Vec> = {m2: toScene(plane, [0, 0]), contact: toScene(plane, contact), m1_end: toScene(plane, end1), m2_end: toScene(plane, end2)};
 
-  // the impact parameter: from m2's centre up to m1's line of motion, beside m2
+  // the impact parameter: from the horizontal through m2's centre up to m1's line of motion, on the incoming side
+  // behind m1's start (2026-11-05, keph1-05 C13: marked beside m2, b sat on θ2's arc name near the line of motion)
   if (s.impact) {
-    const xb = 2.1, on = lead;               // right of θ2's reference line (it reaches 1.7)
-    props.push({id: 'bline', type: 'line', plane: 'p', x1: contact[0], y1: b, x2: xb + 0.25, y2: b, style: {...dashed, opacity: 0.5}, show: [on, 1e9]} as Prop);
+    const on = lead;
+    props.push({id: 'bline', type: 'line', plane: 'p', x1: xb - 0.25, y1: b, x2: start[0], y2: b, style: {...dashed, opacity: 0.5}, show: [on, 1e9]} as Prop);
     if (b > 0.02) {
       props.push({id: 'bmeasure', type: 'line', plane: 'p', x1: xb, y1: 0, x2: xb, y2: b, style: {stroke: 'good', width: 4 * k}, show: [on, 1e9]} as Prop);
       for (const y of [0, b]) props.push({id: `btick${y ? 1 : 0}`, type: 'line', plane: 'p', x1: xb - 0.1, y1: y, x2: xb + 0.1, y2: y, style: {stroke: 'good', width: 4 * k}, show: [on, 1e9]} as Prop);
-      props.push({id: 'lb', type: 'text', plane: 'p', x: xb + 0.12 + 18 * k * per, y: b / 2, text: 'b', size: 32 * k, weight: 700, style: {fill: 'good', stroke: 'paper', width: 7 * k}, show: [on, 1e9]} as Prop);
+      props.push({id: 'lb', type: 'text', plane: 'p', x: xb - 0.12 - 10 * k * per, y: b / 2, text: 'b', size: 32 * k, weight: 700, align: 'end', style: {fill: 'good', stroke: 'paper', width: 7 * k}, show: [on, 1e9]} as Prop);
     }
     anchors.b = toScene(plane, [xb, b / 2]);
   }

@@ -6,11 +6,15 @@
 // the way the larger moment turns it; with two supports it solves both reactions. A lever names its effort and load:
 // mechanical advantage = load / effort = effort arm / load arm. A couple: two equal, opposite, parallel forces on a free
 // rod, no net force, so it turns without moving off: its moment F d is the same about every point.
+// A ladder: a uniform ladder AB leaning on a smooth wall, its foot A on the floor at AC from the wall (NCERT Class 11
+// Example 6.8, Fig. 6.27): its weight W at its centre of gravity D, the wall's reaction F1 horizontal at B, the floor's
+// reaction as N up and friction f toward the wall at A; solved from N = W, f = F1 and moments about A:
+// F1 × BC = W × AC/2. (2026-11-05: keph1-06 C9 S36 "Forces on the Ladder" drew a box labelled ladder.)
 import {nameError} from './names.ts';
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
-import {wrapText} from '../svg.ts';
+import {textWidth, wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
 import {frame} from './vectors.ts';
@@ -18,9 +22,20 @@ import {frame} from './vectors.ts';
 type Force = {name: string; magnitude?: number | '?'; mass?: number; x: number | '?'; dir?: 'down' | 'up'};
 export type MomentsSpec = {verb: 'moments'; length?: number; pivot?: number; supports?: [number, number]; forces?: Force[];
   beam_mass?: number; g?: number; effort?: string; load?: string; couple?: {magnitude: number; d: number};
+  /** a ladder of length L (m), its foot `foot` m from a smooth wall, mass (kg) for the numbers; solve adds the moment
+   * equation and the values */
+  ladder?: LadderStatics;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
+export type LadderStatics = {L: number; foot: number; mass?: number; wall?: 'smooth'; solve?: boolean};
+
 const DEG = Math.PI / 180;
+
+/** The ladder's forces from the book's three equations: N = W, f = F1, F1 × BC = W × AC/2 (W in N; per unit W without a mass). */
+export function ladderForces(L: number, foot: number, mass?: number, g = 9.8) {
+  const BC = Math.sqrt(L * L - foot * foot), W = mass ? mass * g : 1, F1 = W * foot / (2 * BC), N = W, f = F1;
+  return {BC, W, F1, N, f, F2: Math.hypot(N, f), alpha: Math.atan2(N, f) / DEG, theta: Math.acos(foot / L) / DEG};
+}
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const f = (v: number) => n2(round(v, 9), Math.abs(v) >= 100 || Number.isInteger(round(v, 9)) ? 0 : 2);
 
@@ -60,6 +75,23 @@ function solve(s: MomentsSpec): Solved {
 
 export function momentsErrors(s: MomentsSpec): string[] {
   const e: string[] = [];
+  if (s.ladder !== undefined) {
+    const q = s.ladder;
+    if (typeof q !== 'object' || q === null) return ['moments: ladder is {L (m), foot (m from the wall), mass? (kg), wall?: smooth, solve?: true}'];
+    if (!(isNum(q.L) && q.L >= 0.5 && q.L <= 50)) e.push("moments: ladder.L is the ladder's length in m, 0.5 to 50");
+    else if (!(isNum(q.foot) && q.foot > 0 && q.foot < q.L)) e.push(`moments: ladder.foot is the distance of its foot from the wall in m, above 0 and less than L (${f(q.L)} m)`);
+    else {
+      const th = Math.acos(q.foot / q.L) / DEG;
+      if (th < 30 - 1e-9 || th > 80 + 1e-9) e.push(`moments: ladder.foot makes the ladder ${f(th)}° to the floor; keep it 30° to 80°: foot between ${f(q.L * Math.cos(80 * DEG))} and ${f(q.L * Math.cos(30 * DEG))} m for L = ${f(q.L)} m`);
+    }
+    if (q.mass !== undefined && !(isNum(q.mass) && q.mass > 0)) e.push("moments: ladder.mass is the ladder's mass in kg, above 0 (its weight W = mg acts at its middle)");
+    if (q.wall !== undefined && q.wall !== 'smooth') e.push("moments: ladder.wall is smooth (frictionless, as in the book); a rough wall's friction can't be found from the equilibrium equations alone: leave wall out");
+    if (q.solve !== undefined && typeof q.solve !== 'boolean') e.push('moments: ladder.solve is true or false');
+    if (q.solve && q.mass === undefined && !s.illustrative) e.push('moments: ladder.solve needs ladder.mass (kg) for the values; or leave solve out to name the forces only');
+    const extra = (['forces', 'pivot', 'supports', 'beam_mass', 'couple', 'effort', 'load', 'length'] as const).filter(x => s[x] !== undefined);
+    if (extra.length) e.push(`moments: a ladder is the whole scene: leave out ${extra.join(', ')}`);
+    return e;
+  }
   if (s.couple) {
     if (!(isNum(s.couple.magnitude) && s.couple.magnitude > 0 && isNum(s.couple.d) && s.couple.d > 0)) e.push('moments: couple is {magnitude (N), d (m, the distance between the two forces)}');
     if (s.forces || s.pivot !== undefined || s.supports) e.push('moments: a couple acts on a free rod: leave out forces, pivot and supports');
@@ -105,6 +137,7 @@ export function moments(s: MomentsSpec): Scene {
   const arrowP = (id: string, x1: number, y1: number, x2: number, y2: number, stroke: string, when: number, extra: Partial<Prop> = {}) =>
     props.push({id, type: 'arrow', x1, y1, x2, y2, head: 20 * k, style: {stroke, width: 6 * k}, show: [when, 1e9], fade: 0.3, layer: 3, ...extra} as Prop);
 
+  if (s.ladder) return ladderScene(s, s.ladder);
   if (s.couple) {
     // a free rod turning under a couple: the forces ride at its ends, square to it
     const {magnitude: F, d} = s.couple, half = 0.36 * bw, n = 60, t0 = 1.6, t1 = 6.5, turn = 120;
@@ -225,4 +258,110 @@ export function moments(s: MomentsSpec): Scene {
   }
   facts.push(...sol.forces.map(q => `${q.name}: ${f(q.F)} N ${q.up ? 'up' : 'down'} at ${f(q.x)} m from the left end`));
   return scene(s, W, H, s.effort ? 7.4 : tip ? t0 + 2.4 : 6, plane, props, [], {verb: 'moments', facts});
+}
+
+/** A ladder AB leaning on a smooth wall, foot A on the floor, wall foot C, centre of gravity D at its middle: the
+ * forces on it drawn to one scale (W, F1, N, f), named as the book names them; solve adds the equations and values. */
+function ladderScene(s: MomentsSpec, q: LadderStatics): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, g = s.g ?? 9.8, narrow = W < 1.3 * H;
+  const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], facts: string[] = [];
+  const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
+  const px = fr.px, ptext = panel(W, k), size = (narrow ? 25 : 29) * k;
+  let row = fr.row;
+  const line = (id: string, t: string, when: number, extra: Partial<Prop> = {}) => {
+    props.push(ptext(id, px, row, t, size, {show: [when, 1e9], ...extra}));
+    row += wrapText(t, size, W - px - 40 * k).length * 1.3 * size + 6 * k;
+  };
+  const {L, foot: a} = q, sol = ladderForces(L, a, q.mass, g), {BC: h} = sol, solved = !!q.solve, nums = solved && q.mass !== undefined && !s.illustrative;
+  const bw = box[2] - box[0], bh = box[3] - box[1];
+  // to one scale: W the longest arrow; a small force still long enough to read
+  const lW = (narrow ? 0.22 : 0.24) * bh, len = (F: number) => Math.max((narrow ? 56 : 80) * k, lW * F / sol.W);
+  // the floor high enough for N (drawn from below, its head at A) and the dimension under it; the wall a quarter in
+  const yF = box[3] - lW - (narrow ? 60 : 84) * k, xW = box[0] + 0.24 * bw;
+  const ppm = Math.min((yF - box[1] - 60 * k) / h, 0.56 * bw / a);
+  const th = sol.theta * DEG, u = [-Math.cos(th), -Math.sin(th)], nrm = [Math.sin(th), -Math.cos(th)];   // up the ladder; square to it, up and away from the wall
+  // A and B where the ladder touches the floor and the wall: the ends of its rail nearer the wall, which is the
+  // book's line AB; D, the centre of gravity, in the middle of the ladder, between its rails
+  const rail = 12 * k;
+  const A: [number, number] = [xW + a * ppm, yF], B: [number, number] = [xW, yF - h * ppm], C: [number, number] = [xW, yF];
+  const D: [number, number] = [(A[0] + B[0]) / 2 + nrm[0] * rail, (A[1] + B[1]) / 2 + nrm[1] * rail];
+  const thick = 40 * k;
+  // the wall (shaded, behind its face) and the floor
+  props.push({id: 'wall', type: 'rect', x: xW - thick, y: box[1], w: thick, h: yF - box[1], style: {fill: 'faint'}} as Prop,
+    {id: 'wallface', type: 'line', x1: xW, y1: box[1], x2: xW, y2: yF, style: {stroke: 'muted', width: 4 * k}} as Prop,
+    {id: 'floor', type: 'line', x1: xW - thick, y1: yF, x2: box[2], y2: yF, style: {stroke: 'muted', width: 4 * k}} as Prop);
+  // the ladder: the rail AB, a second rail beside it (away from the wall), ends cut square, and rungs between
+  const Lpx = L * ppm, rungs = Math.max(4, Math.round(Lpx / (58 * k)));
+  for (const side of [0, 2]) props.push({id: side ? 'railR' : 'railL', type: 'line', x1: A[0] + side * nrm[0] * rail, y1: A[1] + side * nrm[1] * rail,
+    x2: B[0] + side * nrm[0] * rail, y2: B[1] + side * nrm[1] * rail, style: {stroke: 'ink', width: 6 * k}, layer: 1} as Prop);
+  for (let i = 1; i < rungs; i++) {
+    const m = [A[0] + u[0] * Lpx * i / rungs, A[1] + u[1] * Lpx * i / rungs];
+    props.push({id: `rung${i}`, type: 'line', x1: m[0], y1: m[1], x2: m[0] + 2 * nrm[0] * rail, y2: m[1] + 2 * nrm[1] * rail, style: {stroke: 'ink', width: 4 * k}, layer: 1} as Prop);
+  }
+  // the points, as the book names them
+  const name = (id: string, x: number, y: number, t: string, align: 'start' | 'middle' | 'end' = 'middle') =>
+    props.push(text(id, x, y, t, 30 * k, {weight: 700, align, style: {fill: 'ink', stroke: 'paper', width: 7 * k}, layer: 4}));
+  name('lA', A[0] + 24 * k, yF - 22 * k, 'A', 'start');
+  name('lB', B[0] + 18 * k, B[1] - 40 * k, 'B', 'start');
+  name('lC', C[0] - thick - 10 * k, yF + 24 * k, 'C', 'end');
+  props.push({id: 'D', type: 'circle', x: D[0], y: D[1], r: 8 * k, style: {fill: 'accent', stroke: 'ink', width: 2 * k}, layer: 3} as Prop);
+  name('lD', D[0] + nrm[0] * 38 * k, D[1] + nrm[1] * 38 * k, 'D');
+  // the forces, each named clear of the ladder, the wall and each other (their values go in the panel: beside the
+  // arrows they ran into one another between the wall and the foot)
+  const val = (nm: string, _F: number) => nm;
+  const arrow = (id: string, x1: number, y1: number, x2: number, y2: number, stroke: string, when: number) =>
+    props.push({id, type: 'arrow', x1, y1, x2, y2, head: 20 * k, style: {stroke, width: 6 * k}, show: [when, 1e9], fade: 0.3, layer: 3} as Prop);
+  const label = (id: string, x: number, y: number, t: string, stroke: string, when: number, align: 'start' | 'middle' | 'end' = 'middle') =>
+    props.push(text(id, x, y, t, 29 * k, {weight: 700, align, style: {fill: stroke, stroke: 'paper', width: 7 * k}, show: [when, 1e9], fade: 0.3, layer: 4}));
+  const tW = 0.6, tF1 = 1.4, tFloor = 2.2;
+  arrow('W', D[0], D[1], D[0], D[1] + lW, 'accent', tW);
+  // W named beside its arrow, away from the ladder; on a steep ladder (no room before the wall) under its tip
+  // (over the wall's shading, behind a halo, when even that has no room: a steep ladder in a half-width part)
+  const wName = textWidth('W', 29 * k);
+  if (D[0] - xW >= wName + 30 * k || D[1] + lW + 26 * k > yF - 26 * k) label('lW', D[0] - 16 * k, D[1] + 0.6 * lW, val('W', sol.W), 'accent', tW, 'end');
+  else label('lW', D[0], D[1] + lW + 26 * k, val('W', sol.W), 'accent', tW);
+  const lF1 = len(sol.F1);
+  arrow('F1', B[0], B[1], B[0] + lF1, B[1], 'good', tF1);
+  label('lF1', B[0] + lF1 + 14 * k, B[1], val('F1', sol.F1), 'good', tF1, 'start');
+  arrow('N', A[0], yF + lW, A[0], yF, 'cool', tFloor);
+  label('lN', A[0] + 16 * k, yF + 0.55 * lW, val('N', sol.N), 'cool', tFloor, 'start');
+  // friction along the floor toward the wall, never reaching it; named under the floor
+  const lf = Math.min(len(sol.f), 0.85 * a * ppm);
+  arrow('f', A[0], yF, A[0] - lf, yF, 'bad', tFloor);
+  label('lf', A[0] - lf / 2, yF + 28 * k, val('f', sol.f), 'bad', tFloor);
+  // the distances the moments use, once solved: AC under the floor, BC beside the wall, AB along the ladder
+  const tEq = 3.8;
+  if (solved) {
+    const yd = yF + lW + 34 * k, xd = xW - thick - 34 * k, dim = {stroke: 'muted', width: 2.5 * k};
+    props.push({id: 'dAC', type: 'line', x1: C[0], y1: yd, x2: A[0], y2: yd, style: dim, show: [tEq, 1e9], fade: 0.3} as Prop,
+      ...[C[0], A[0]].map((x, i) => ({id: `tAC${i}`, type: 'line', x1: x, y1: yd - 10 * k, x2: x, y2: yd + 10 * k, style: dim, show: [tEq, 1e9], fade: 0.3} as Prop)),
+      {id: 'dBC', type: 'line', x1: xd, y1: B[1], x2: xd, y2: yF, style: dim, show: [tEq, 1e9], fade: 0.3} as Prop,
+      ...[B[1], yF].map((y, i) => ({id: `tBC${i}`, type: 'line', x1: xd - 10 * k, y1: y, x2: xd + 10 * k, y2: y, style: dim, show: [tEq, 1e9], fade: 0.3} as Prop)));
+    props.push(text('lAC', (C[0] + A[0]) / 2, yd + 26 * k, `AC = ${f(a)} m`, 25 * k, {align: 'middle', style: {fill: 'muted'}, show: [tEq, 1e9]}),
+      text('lBC', xd - 14 * k, (B[1] + yF) / 2, `BC = ${f(h)} m`, 25 * k, {align: 'end', style: {fill: 'muted'}, show: [tEq, 1e9]}));
+    const m3 = [A[0] + u[0] * 0.72 * Lpx + nrm[0] * 46 * k, A[1] + u[1] * 0.72 * Lpx + nrm[1] * 46 * k];
+    props.push(text('lAB', m3[0], m3[1], `AB = ${f(L)} m`, 25 * k, {align: 'start', style: {fill: 'muted'}, show: [tEq, 1e9]}));
+  }
+  // the story, in the narration's order
+  line('l1', 'Its weight W acts at its centre of gravity D, the middle of the ladder', tW, {style: {fill: 'accent'}});
+  line('l2', 'The wall is smooth, so its reaction F1 is horizontal', tF1, {style: {fill: 'good'}});
+  line('l3', 'The floor pushes up with N and holds the foot with friction f, toward the wall', tFloor, {style: {fill: 'cool'}});
+  line('l4', 'Without f the foot would slide away from the wall', tFloor + 0.8, {style: {fill: 'muted'}});
+  let end = tFloor + 0.8;
+  if (solved) {
+    line('s1', 'In equilibrium: N = W and f = F1', tEq, {weight: 700});
+    line('s2', 'Moments about A: F1 × BC = W × AC/2 (D is halfway out from the wall)', tEq + 0.8);
+    if (nums) {
+      line('s3', `W = ${f(sol.W)} N, so F1 = ${f(sol.W)} × ${f(a / 2)} / ${f(h)} = ${f(sol.F1)} N`, tEq + 1.6, {style: {fill: 'good'}, weight: 700});
+      line('s4', `f = ${f(sol.f)} N toward the wall, N = ${f(sol.N)} N`, tEq + 2.4, {style: {fill: 'cool'}, weight: 700});
+      line('s5', `The floor's whole reaction: ${f(sol.F2)} N at ${f(sol.alpha)}° to the floor`, tEq + 3.2, {style: {fill: 'muted'}});
+      end = tEq + 3.2;
+    } else end = tEq + 0.8;
+  }
+  const per = (F: number) => (q.mass ? `${f(F)} N` : Math.abs(F / sol.W - 1) < 1e-9 ? 'W' : `${f(F / sol.W)} W`);
+  facts.push(`ladder AB = ${f(L)} m, foot A at AC = ${f(a)} m from the smooth wall, top B at BC = ${f(h)} m, ${f(sol.theta)}° to the floor`,
+    ...(q.mass ? [`weight W = ${f(q.mass)} × ${f(g)} = ${f(sol.W)} N at the centre of gravity D`] : []),
+    `wall's reaction F1 = ${per(sol.F1)} (horizontal); friction f = ${per(sol.f)} toward the wall; N = ${per(sol.N)}`,
+    `moments about A: F1 × ${f(h)} = W × ${f(a / 2)}`, `floor's reaction F2 = ${per(sol.F2)} at ${f(sol.alpha)}° to the floor`);
+  return scene(s, W, H, end + 2, plane, props, [], {verb: 'moments', facts, anchors: {A, B, C, D}});
 }
