@@ -214,8 +214,10 @@ export function emWaves(s: EmWavesSpec): Scene {
       label(o[0] + bw * .3, cy + S * .38 + S * .16, 'E further out: the same swing, later', 'accent', 22);
       }
       anchors.waves = [o[0] + bw * .3, o[1] - S * .3];
-      story = energy ? 'The wave\'s energy comes at the expense of its source' : 'An oscillating charge accelerates: its changing E makes a changing B, which makes E again, and the pair travels out at c';
-      second = energy ? 'The accelerated charge supplies it, so it loses energy as it radiates: its swing dies away' : 'The wave has the frequency of the charge\'s oscillation; its energy comes from the source';
+      story = energy ? 'The energy of the wave is supplied by the accelerated charge' : 'An oscillating charge accelerates: its changing E makes a changing B, which makes E again, and the pair travels out at c';
+      // energy: no claim about the swing (2026-11-04, leph1-08 C2 S12: a reviewer refused "its swing dies away" four
+      // times, since a driven antenna keeps its swing), and no "travels out at c"
+      second = energy ? 'So the charge loses energy as it radiates: the waves carry it away' : 'The wave has the frequency of the charge\'s oscillation; its energy comes from the source';
     }
     anchors.charge = o;
   } else if (s.show === 'hertz') {

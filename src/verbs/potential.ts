@@ -240,23 +240,28 @@ export function potential(s: PotentialSpec): Scene {
       story = `A unit positive charge moved from ${from} to ${to}, against the field`; second = 'Along the perpendicular between the surfaces, the shortest way across';
     }
   } else if (s.show === 'conductor') {
-    // a sphere: exact. V = kQ/R through the metal and on its surface; outside V = kQ/r, E = kQ/r² normal to the surface
-    const Q = s.q ?? 1e-9, R = s.R ?? 0.1, V0 = K0 * Q / R, Rp = S * .26, c: P2 = [cx, cy]; dur = 7;
+    // a sphere: exact. V = kQ/R through the metal and on its surface; outside V = kQ/r, E = kQ/r² normal to the surface.
+    // With no q given the picture asserts no sign and no field: only one V inside and on the surface (2026-11-04, leph1-02
+    // C9 S17: a reviewer refused + signs, outward arrows and 'no work' that the narration never stated, and read V₀ as a number)
+    const signed = s.q !== undefined, Q = s.q ?? 1e-9, R = s.R ?? 0.1, V0 = K0 * Q / R, Rp = S * (signed ? .26 : .4), c: P2 = [cx, cy]; dur = signed ? 7 : 6;
     props.push({id: 'metal', type: 'circle', x: cx, y: cy, r: Rp, style: {fill: 'faint', stroke: 'cool', width: 6 * k}, layer: 1} as Prop);
-    for (let i = 0; i < 12; i++) { const th = i * Math.PI / 6; label(cx + (Rp + 18 * k) * Math.cos(th), cy + (Rp + 18 * k) * Math.sin(th) + 9 * k, Q > 0 ? '+' : '−', Q > 0 ? 'bad' : 'cool', 26); }
-    // equipotentials outside, at V0 × f: radius R/f
-    const fs = [.72, .55].filter(f => Rp / f < Math.min(bw, bh) / 2 - 10 * k);
-    fs.forEach((f, i) => ring(c, Rp / f, Rp / f, 'cool', 2, true, on(4.6 + i * .5)));
-    // the same V at points inside and on the surface
-    const spots: P2[] = [[0, 0], [.5, .3], [-.45, -.4], [Math.cos(rad(-45)), Math.sin(rad(-45))]];
-    spots.forEach(([u, v], i) => { const p: P2 = [cx + u * Rp, cy - v * Rp], t0 = 1 + i * .7, edge = i === spots.length - 1;
+    if (signed) {
+      for (let i = 0; i < 12; i++) { const th = i * Math.PI / 6; label(cx + (Rp + 18 * k) * Math.cos(th), cy + (Rp + 18 * k) * Math.sin(th) + 9 * k, Q > 0 ? '+' : '−', Q > 0 ? 'bad' : 'cool', 26); }
+      // equipotentials outside, at V0 × f: radius R/f
+      [.72, .55].filter(f => Rp / f < Math.min(bw, bh) / 2 - 10 * k).forEach((f, i) => ring(c, Rp / f, Rp / f, 'cool', 2, true, on(4.6 + i * .5)));
+      // E normal to the surface, outward for a positive charge
+      for (let i = 0; i < 8; i++) { const th = i * Math.PI / 4 + Math.PI / 8, u: P2 = [Math.cos(th), Math.sin(th)], a: P2 = [cx + u[0] * (Rp + 34 * k), cy + u[1] * (Rp + 34 * k)], b: P2 = [cx + u[0] * (Rp + 34 * k + S * .1), cy + u[1] * (Rp + 34 * k + S * .1)]; Q > 0 ? arrow(a, b, 'accent', 3, on(4)) : arrow(b, a, 'accent', 3, on(4)); }
+    }
+    // the same V at points inside and on the surface: one plain letter everywhere
+    const spots: P2[] = [[0, 0], [.5, .3], [-.45, -.4], [Math.cos(rad(-45)), Math.sin(rad(-45))], [Math.cos(rad(135)), Math.sin(rad(135))]];
+    spots.forEach(([u, v], i) => { const p: P2 = [cx + u * Rp, cy - v * Rp], t0 = 1 + i * .6, edge = i >= 3, inward = edge ? -Math.sign(u) : 0;
       props.push({id: `spot${i}`, type: 'circle', x: p[0], y: p[1], r: 8 * k, style: {fill: 'ink'}, layer: 3, show: [t0, 1e9]} as Prop);
-      label(p[0] - (edge ? 30 : 0) * k, p[1] - (edge ? 26 : 16) * k, 'V₀', 'ink', 26, {show: [t0, 1e9]}); anchors[edge ? 'surface' : `inside${i}`] = p; });
-    // E normal to the surface, outward for a positive charge
-    for (let i = 0; i < 8; i++) { const th = i * Math.PI / 4 + Math.PI / 8, u: P2 = [Math.cos(th), Math.sin(th)], a: P2 = [cx + u[0] * (Rp + 34 * k), cy + u[1] * (Rp + 34 * k)], b: P2 = [cx + u[0] * (Rp + 34 * k + S * .1), cy + u[1] * (Rp + 34 * k + S * .1)]; Q > 0 ? arrow(a, b, 'accent', 3, on(4)) : arrow(b, a, 'accent', 3, on(4)); }
-    anchors.centre = c;
-    facts.push(`V = kQ/R = ${sci(V0, 'V')} everywhere inside and on the surface`, 'E = 0 inside, so no work moves a charge within it: ΔV = 0', `outside V falls as 1/r: ${sci(V0 * .72, 'V')} at ${sci(R / .72, 'm')}`);
-    story = 'The potential is the same throughout the conductor, and the same on its surface'; second = 'No field inside, so no work moves a charge there; outside, E leaves the surface at right angles';
+      label(p[0] + inward * 30 * k, p[1] + (edge ? Math.sign(v) * 34 + 10 : -20) * k, 'V', 'ink', 28, {show: [t0, 1e9]}); anchors[edge ? `surface${i - 2}` : `inside${i + 1}`] = p; });
+    anchors.surface = anchors.surface1; anchors.centre = c;
+    if (signed) facts.push(`V = kQ/R = ${sci(V0, 'V')} everywhere inside and on the surface`, 'E = 0 inside the conductor; just outside, E is normal to the surface', `outside V falls as 1/r: ${sci(V0 * .72, 'V')} at ${sci(R / .72, 'm')}`);
+    else facts.push('the potential has one value throughout the conductor and on its surface');
+    story = 'The potential is the same throughout the conductor, and the same on its surface';
+    second = signed ? 'Outside, it falls away from the surface; the field there is normal to it' : 'Every point inside, and every point on the surface, has the same V';
   } else if (s.show === 'assemble') {
     const cs = s.charges!, far = Math.max(...cs.flatMap(c => [Math.abs(c.x), Math.abs(c.y)])), reach = Math.max(s.reach ?? 0, (far || .1) * 1.5), ppm = S / 2 / reach, to = (c: Charge): P2 => [cx + c.x * ppm, cy - c.y * ppm]; dur = 2 + cs.length * 2 + 2; let sum = 0;
     cs.forEach((c, i) => {

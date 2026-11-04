@@ -108,11 +108,16 @@ test('electric resultants: NCERT Example 1.7, q, q and −q on an equilateral tr
 test('potential conductor: one potential kQ/R inside and on the surface, E normal outside', () => {
   const s = made({verb: 'potential', show: 'conductor', q: 1e-9, R: 0.1});
   assert.match((s.meta as any).facts[0], /V = kQ\/R = 89\.9 V everywhere inside and on the surface/);
-  const ill = made(BEATS.S17), at = frame(ill, ill.duration - 0.01).props as any[];
-  assert.equal(at.filter(p => p.type === 'text' && p.text === 'V₀').length, 4, 'the same V₀ at three points inside and one on the surface');
-  // no field drawn inside the metal: every arrow starts outside it
-  const metal = at.find(p => p.id === 'metal');
-  for (const a of at.filter(p => p.type === 'arrow')) assert.ok(Math.hypot(a.x1 - metal.x, a.y1 - metal.y) > metal.r && Math.hypot(a.x2 - metal.x, a.y2 - metal.y) > metal.r);
+  // with q given: its sign on the surface, E normal outside, and no field drawn inside the metal
+  const sig = frame(s, s.duration - 0.01).props as any[], metal = sig.find(p => p.id === 'metal'), arrows = sig.filter(p => p.type === 'arrow');
+  assert.ok(arrows.length && sig.some(p => p.type === 'text' && p.text === '+'));
+  for (const a of arrows) assert.ok(Math.hypot(a.x1 - metal.x, a.y1 - metal.y) > metal.r && Math.hypot(a.x2 - metal.x, a.y2 - metal.y) > metal.r);
+  // with no q (leph1-02 C9 S17, refused five times): no sign, no field, no 'no work'; one plain V inside and on the surface
+  const ill = made(BEATS.S17), at = frame(ill, ill.duration - 0.01).props as any[], words = texts(ill, ill.duration - 0.01);
+  assert.equal(words.filter(t => t === 'V').length, 5, 'the same V at three points inside and two on the surface');
+  assert.ok(!words.some(t => /V₀|^[+−]$|work|leaves|E = /.test(t)), words.join(' | '));
+  assert.ok(!at.some(p => p.type === 'arrow') && !at.some(p => p.type === 'polyline'), 'no field and no outside equipotentials');
+  assert.deepEqual((made({...BEATS.S17, illustrative: false}).meta as any).facts, ['the potential has one value throughout the conductor and on its surface']);
   assert.match(errs({verb: 'potential', show: 'conductor', q: 0}), /needs a charge q/);
   assert.match(errs({verb: 'potential', show: 'curves', R: 0.1}), /R is the conductor's radius/);
 });

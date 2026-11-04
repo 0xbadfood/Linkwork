@@ -90,6 +90,9 @@ test('an oscillating source loses the energy its waves carry away: the two bars 
     assert.ok(w('bar-bad', t) <= last + 1e-9); last = w('bar-bad', t);
   }
   assert.ok(energyLeft(T, T) < 0.25 && energyLeft(0.5, T) === 1);
+  const said = texts(scene).join(' ');
+  assert.match(said, /supplied by the accelerated charge/); assert.match(said, /loses energy as it radiates/);
+  assert.doesNotMatch(said, /swing|travels out at c/, 'the panel claims nothing the narration does not');
   // the swing shrinks with √(energy left): the charge's widest excursion late is smaller than early
   const charge = scene.props.find(p => p.type === 'circle' && (p as never as {keys?: {y?: unknown}}).keys?.y) as never as {id: string; y: number};
   const swing = (t0: number) => Math.max(...[0, .25, .5, .75, 1, 1.25, 1.5, 1.75].map(d => Math.abs(at(scene, charge.id, t0 + d).y - charge.y)));

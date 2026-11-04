@@ -469,7 +469,7 @@ function fresnel(s: DiffractionSpec): Scene {
     label(bx + 6 * k, yT - h - 16 * k, 'aperture much larger than λ', 'ink', 24, {align: 'start', show: [.3, 1e9]});
     label(bx + bw - 20 * k, yT + 40 * k, 'a ray: straight on', 'good', 24, halo(k, 'good', {align: 'end', show: [2.4, 1e9], layer: 5}));
     label(bx + 6 * k, yB - h - 16 * k, 'aperture about λ wide', 'ink', 24, {align: 'start', show: [3.2, 1e9]});
-    label(bx + bw - 20 * k, yB + h + 30 * k, 'spreads every way: no ray', 'bad', 24, halo(k, 'bad', {align: 'end', show: [5.2, 1e9], layer: 5}));
+    label(bx + bw - 20 * k, yB + h + 30 * k, 'spreads out: diffraction dominates', 'bad', 24, halo(k, 'bad', {align: 'end', show: [5.2, 1e9], layer: 5}));
     Object.assign(anchors, {wide: [xa, yT] as P2, narrow: [xa, yB] as P2, ray: [bx + bw - 20 * k, yT] as P2});
     story = 'Through an aperture many wavelengths wide, light goes on straight: a ray';
     second = 'When the aperture is about a wavelength, diffraction dominates and the idea of a ray loses its meaning';
@@ -488,17 +488,22 @@ function fresnel(s: DiffractionSpec): Scene {
   const inH = Math.max(half * .5, gap / 2 + 14 * k);
   for (let m = 0; m < 4; m++) { const x = xa - 56 * k - m * S * .045; line([x, yc - inH], [x, yc + inH], col, 3, on(.2 + m * .1, .7 + m * .1)); }
   arrow([bx + 4 * k, yc - inH - 24 * k], [xa - 56 * k, yc - inH - 24 * k], 'muted', 3, on(.2, .8));
-  const lw = num ? `λ = ${lam} nm` : 'λ';
+  // with L the result says only the Fresnel number and its verdict (2026-11-04 rebeat: z_F, a and λ were refused as unstated)
+  const brief = stage === 'result' && L !== undefined;
+  const lw = num && !brief ? `λ = ${lam} nm` : 'λ';
   label(bx + 2 * k, yc + inH + 34 * k, lw, col, 22, halo(k, col, {align: 'start', layer: 5}));
   // a, bracketed beside the gap
   const ax = xa - 26 * k;
   const aEnd = radius ? yc : yc + gap / 2;
   line([ax, yc - gap / 2], [ax, aEnd], 'accent', 3); for (const y of [yc - gap / 2, aEnd]) line([ax - 8 * k, y], [ax + 8 * k, y], 'accent', 3);
-  const aWord = radius ? (num ? `aperture ${sig(A)} mm across, radius a` : 'aperture of radius a') : (num ? `aperture a = ${sig(a)} mm` : 'aperture a');
+  // labelled by the value the spec gives, never a derived diameter the narration did not say
+  // A film that defines a as the radius names the aperture by its size across ("a 0.1 mm aperture", N_F = 0.005 from
+  // a = 0.05 mm: leph2-01 C1): with a_is radius the label gives that size, and the planner gives a as half of it.
+  const aWord = radius ? (num ? `aperture ${sig(2 * a)} mm across, radius a` : 'aperture of radius a') : (num ? `aperture a = ${sig(a)} mm` : 'aperture a');
   if (stage === 'setup') { label(xa + 18 * k, yc - gap / 2 - 18 * k, aWord, 'accent', 24, halo(k, 'accent', {align: 'start', layer: 5})); if (L !== undefined) line([xa + 12 * k, yc], [xP, yc], 'faint', 2, on(1, 2), true); }
   else label(ax - 12 * k, (yc - gap / 2 + aEnd) / 2 + 9 * k, 'a', 'accent', 26, halo(k, 'accent', {align: 'end', layer: 5}));
   // the point observed and its distance
-  if (L !== undefined) {
+  if (L !== undefined && !brief) {
     props.push({id: 'P', type: 'circle', x: xP, y: yc, r: 9 * k, style: {fill: 'ink'}, layer: 4} as Prop);
     label(xP + 18 * k, yc + 9 * k, 'P', 'ink', 28, halo(k, 'ink', {align: 'start', layer: 5}));
     const yd = Math.min(yc + half * 1.15 + 30 * k, by + bh - 72 * k);
@@ -521,7 +526,7 @@ function fresnel(s: DiffractionSpec): Scene {
       label((xa + x) / 2, yc + half * .98, 'rays hold', 'good', 24, halo(k, 'good', {show: [T + 2.6, 1e9], layer: 5}));
       label((x + X(Z)) / 2, yc + half * 1.1 - 4 * k, 'spreading', 'bad', 24, halo(k, 'bad', {show: [T + 2.8, 1e9], layer: 5}));
       anchors.zF = [x, yc];
-    } else if (zF >= Z * .97) {
+    } else if (zF >= Z * .97 && !brief) {
       label(xP, yc - half * 1.15 - 16 * k, num ? `z_F = ${sig(zF)} m, far beyond` : 'Fresnel distance far beyond', 'cool', 24, halo(k, 'cool', {align: 'end', show: [T + 2.2, 1e9], layer: 5}));
     }
     const verdict = NF === undefined ? '' : NF >= 10 ? 'a straight beam: rays hold' : NF <= .1 ? 'spread wide: diffraction dominates' : 'rays only roughly: diffraction matters';
@@ -547,9 +552,8 @@ function fresnel(s: DiffractionSpec): Scene {
     } else if (NF >= 10) { story = 'The Fresnel number a²/λL is large: the beam goes on straight, and rays describe it'; second = 'Rays are good for apertures many wavelengths across'; }
     else if (NF <= .1) { story = 'The Fresnel number a²/λL is small: diffraction spreads the light, and the ray picture fails'; second = 'The beam is far wider than the aperture'; }
     else { story = 'The Fresnel number a²/λL is near one: the beam is starting to spread'; second = 'Ray optics is only rough here'; }
-    facts.push(`${named}: Fresnel distance z_F = a²/λ = ${sig(zF)} m`);
-    if (NF !== undefined) facts.push(`at L = ${sig(L!)} m the Fresnel number a²/λL = ${sig(NF, 2)}: ${NF >= 10 ? 'ray optics holds' : NF <= .1 ? 'diffraction dominates' : 'between the two'}`);
-    facts.push(`the beam spreads by about λ/${radius ? '2a' : 'a'} = ${sig(lam * 1e-6 / A, 2)} rad`);
+    if (NF !== undefined) facts.push(`the Fresnel number a²/λL is about ${sig(NF, 2)}: ${NF >= 10 ? 'ray optics holds' : NF <= .1 ? 'diffraction dominates' : 'between the two'}`);
+    else facts.push(`${named}: Fresnel distance z_F = a²/λ = ${sig(zF)} m`, `the beam spreads by about λ/${radius ? '2a' : 'a'} = ${sig(lam * 1e-6 / A, 2)} rad`);
   }
   return finish('diffraction', s as never, dur, story, second, facts, anchors, s.illustrative);
 }

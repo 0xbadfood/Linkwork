@@ -12,7 +12,7 @@ const texts = (spec: object) => compile(spec as never).scene!.props.filter(p => 
 // The specs offered for the seven beats: each must compile, pass check, and stay legible beside another part.
 const BEATS: Record<string, object> = {
   'leph2-01 C1 S07 Scale Separation': {verb: 'diffraction', title: 'Scale separation', show: 'fresnel', stage: 'compare', illustrative: true},
-  'leph2-01 C1 S09 Small Aperture Setup': {verb: 'diffraction', title: 'A 0.1 mm aperture', show: 'fresnel', stage: 'setup', a: 0.05, a_is: 'radius', lambda: 500, L: 1},
+  'leph2-01 C1 S09 Small Aperture Setup': {verb: 'diffraction', title: 'A 0.1 mm aperture', show: 'fresnel', stage: 'setup', a: 0.1, lambda: 500, L: 1},
   'leph2-01 C1 S11 Larger Aperture: Rays Valid': {verb: 'diffraction', title: 'A 1 cm aperture: rays hold', show: 'fresnel', stage: 'result', a: 5, a_is: 'radius', lambda: 500, L: 1},
   'leph2-01 C6 S26 One lens forms an image': {verb: 'optical_instrument', title: 'One lens forms an image', show: 'lens_chain', focal: [10, 10], gaps: [45], u: -15, images: 1, illustrative: true},
   'leph2-01 C4 S27 Light Leaks from the Fibre': {verb: 'tir', title: 'Light leaks from the fibre', show: 'fibre', bend: 2, losses: true, illustrative: true},
@@ -42,15 +42,26 @@ test('diffraction fresnel: the book\'s Fresnel distance and the film\'s Fresnel 
   // Example: a = 3 mm, λ = 500 nm gives z_F = 18 m; radius 0.05 mm or 5 mm at 1 m: N_F 0.005 and 50
   near(wo.fresnelDistance(3, 500), 18); near(wo.fresnelNumber(.05, 500, 1), .005); near(wo.fresnelNumber(5, 500, 1), 50);
   assert.match(facts({verb: 'diffraction', show: 'fresnel'}), /z_F = a²\/λ = 18 m/);
-  assert.match(facts({verb: 'diffraction', show: 'fresnel', a: .05, a_is: 'radius', lambda: 500, L: 1}), /Fresnel number a²\/λL = 0\.005: diffraction dominates/);
-  assert.match(facts({verb: 'diffraction', show: 'fresnel', a: 5, a_is: 'radius', lambda: 500, L: 1}), /Fresnel number a²\/λL = 50: ray optics holds/);
+  assert.match(facts({verb: 'diffraction', show: 'fresnel', a: .05, a_is: 'radius', lambda: 500, L: 1}), /Fresnel number a²\/λL is about 0\.005: diffraction dominates/);
+  assert.match(facts({verb: 'diffraction', show: 'fresnel', a: 5, a_is: 'radius', lambda: 500, L: 1}), /Fresnel number a²\/λL is about 50: ray optics holds/);
+  // with L the result says only N_F and its verdict: no z_F, no a, no spread, no P (2026-11-04 rebeat)
+  const s11 = {verb: 'diffraction', show: 'fresnel', a: 5, a_is: 'radius', lambda: 500, L: 1};
+  assert.doesNotMatch(facts(s11), /z_F|radius|rad\b/); assert.doesNotMatch(texts(s11).join(' | '), /z_F|Fresnel distance|500 nm|\bP\b|L = /);
+  assert.deepEqual(texts({...s11, illustrative: true}).filter(t => !/^(a|λ)$/.test(t) && !/^The |^Rays /.test(t)), ['a straight beam: rays hold']);
+  // the compare stage does not overstate: diffraction dominates, not 'no ray'
+  assert.ok(texts({verb: 'diffraction', show: 'fresnel', stage: 'compare'}).includes('spreads out: diffraction dominates'));
   // the drawn beam: its far edge is far wider than the gap when N_F is small, the same width when it is large
   const spread = (a: number) => { const sc = compile({verb: 'diffraction', show: 'fresnel', a, a_is: 'radius', lambda: 500, L: 1} as never).scene!; const pts = (sc.props.find(p => p.id === 'beam') as unknown as {points: [number, number][]}).points; return (pts[80][1] - pts[81][1]) / (pts[0][1] - pts[161][1]); };
   near(spread(.05), Math.hypot(.05, 5e-4 / .1 * 1e3) / .05, .01); near(spread(5), 1, .001);
   // setup draws no beam and says no result
   const setup = compile({verb: 'diffraction', show: 'fresnel', stage: 'setup', a: .05, a_is: 'radius', lambda: 500, L: 1} as never).scene!;
   assert.ok(!setup.props.some(p => p.id === 'beam')); assert.doesNotMatch(texts({verb: 'diffraction', show: 'fresnel', stage: 'setup', a: .05, a_is: 'radius', L: 1}).join(' '), /Fresnel|N_F|rays hold|dominates/);
-  assert.match(texts({verb: 'diffraction', show: 'fresnel', stage: 'setup', a: .05, a_is: 'radius', lambda: 500, L: 1}).join(' '), /0\.1 mm across.*|λ = 500 nm|L = 1 m/);
+  // leph2-01 C1 S09 says "a 0.1 millimetre aperture" and defines a as the radius (its N_F of 0.005 needs a = 0.05 mm):
+  // the label gives the size across, as said, and names the radius a
+  const s09 = texts({verb: 'diffraction', show: 'fresnel', stage: 'setup', a: .05, a_is: 'radius', lambda: 500, L: 1}).join(' | ');
+  assert.match(s09, /aperture 0\.1 mm across, radius a/); assert.match(s09, /λ = 500 nm/); assert.match(s09, /L = 1 m/);
+  // a given as the width is labelled as given
+  assert.match(texts({verb: 'diffraction', show: 'fresnel', stage: 'setup', a: .1, lambda: 500, L: 1}).join(' '), /aperture a = 0\.1 mm/);
   // errors
   assert.match(err({verb: 'diffraction', show: 'fresnel', stage: 'later'}), /stage is one of compare, setup, result/);
   assert.match(err({verb: 'diffraction', show: 'fresnel', stage: 'compare', a: 1}), /a is not used by show fresnel, stage compare/);
