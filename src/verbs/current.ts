@@ -18,7 +18,7 @@ export type Branch = {e?: number; R: number; name?: string};
 export type Cell = {e: number; r: number};
 export type CurrentSpec = {verb: 'current'; show: (typeof CURRENT_SHOWS)[number]; E?: number; tau?: number; I?: number; A?: number; n?: number; rho?: number; l?: number; V?: number;
   kind?: string; alpha?: number; T?: number; T0?: number; P?: number; Rc?: number; V2?: number; emf?: number; r?: number; R?: number; cells?: Cell[]; branches?: Branch[]; equivalent?: boolean;
-  currents?: boolean; join?: 'end' | 'side'; field?: boolean; R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
+  currents?: boolean; join?: 'end' | 'side'; result?: boolean; field?: boolean; R1?: number; R2?: number; R3?: number; R4?: number; Rg?: number; gmax?: number; lspan?: number; aspan?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const QE = 1.602e-19, ME = 9.11e-31, isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -59,6 +59,7 @@ export function currentErrors(s: CurrentSpec): string[] {
     if (s.equivalent !== undefined && typeof s.equivalent !== 'boolean') e.push(`${W}: equivalent is true or false`);
   }
   if (s.show === 'kirchhoff' && s.branches !== undefined && (!Array.isArray(s.branches) || s.branches.length !== 3 || s.branches.some(b => !isNum(b?.R) || b.R <= 0 || (b.e !== undefined && !isNum(b.e))))) e.push(`${W}: kirchhoff needs branches: exactly 3 of {e (V, driving up), R (Ω), name}`);
+  if (s.result !== undefined && (!s.join || typeof s.result !== 'boolean')) e.push(`${W}: result goes with join: false shows only the slabs being joined, before the passage gives the resistance`);
   if (s.field !== undefined && (s.show !== 'drift' || typeof s.field !== 'boolean')) e.push(`${W}: field goes with show drift: false keeps the field off (random motion only)`);
   if (s.join !== undefined && (s.show !== 'wire' || !['end', 'side'].includes(s.join))) e.push(`${W}: join goes with show wire: end (two identical slabs end to end, in series) or side (side by side, in parallel)`);
   if (s.show === 'transmission' && s.V !== undefined && s.V2 !== undefined && s.V === s.V2) e.push(`${W}: V and V2 are two different line voltages`);
@@ -130,13 +131,17 @@ export function current(s: CurrentSpec): Scene {
     tag(x0, y0, 0); tag(x2, y2, 1.8);
     const bx0 = x0, bx1 = end ? x0 + 2 * w : x0 + w, byB = end ? y0 + h : y2 + h;
     const count = end ? 4 : 6;
-    for (let i = 0; i < count; i++) { const y = end ? y0 + h * (i + .5) / count : y0 + (2 * h + gap) * (i + .5) / count; arrow([bx0 + 12 * k, y], [bx1 - 12 * k, y], 'accent', 3, on(T1, T1 + 1.2)); }
-    label((bx0 + bx1) / 2, byB + 44 * k, end ? 'twice the length, the same area' : 'the same length, twice the area', 'muted', 26, {show: [T1, 1e9]});
-    label((bx0 + bx1) / 2, byB + 84 * k, end ? 'in series: R + R = 2R' : 'in parallel: 1/R + 1/R, so R/2', 'accent', 28, {show: [T1 + .6, 1e9]});
-    facts.push(end ? `two identical slabs end to end: R = ρ(2l)/A = 2 × ${fmt(R, 'Ω')} = ${fmt(2 * R, 'Ω')} (in series)` : `two identical slabs side by side: R = ρl/(2A) = ${fmt(R, 'Ω')} ÷ 2 = ${fmt(R / 2, 'Ω')} (in parallel)`,
+    // result: false (2026-11-04, leph1-03 C2 S07: the slabs are joined in one sentence and their resistance given in
+    // the next) stops at the joined slabs: no current, no resistance
+    const result = s.result !== false;
+    if (result) for (let i = 0; i < count; i++) { const y = end ? y0 + h * (i + .5) / count : y0 + (2 * h + gap) * (i + .5) / count; arrow([bx0 + 12 * k, y], [bx1 - 12 * k, y], 'accent', 3, on(T1, T1 + 1.2)); }
+    label((bx0 + bx1) / 2, byB + 44 * k, end ? 'joined end to end' : 'joined side by side', 'muted', 26, {show: [1.8, 1e9]});
+    if (result) label((bx0 + bx1) / 2, byB + 84 * k, end ? 'twice the length, the same area: R + R = 2R' : 'the same length, twice the area: R/2', 'accent', 28, {show: [T1 + .6, 1e9]});
+    if (result) facts.push(end ? `two identical slabs end to end: R = ρ(2l)/A = 2 × ${fmt(R, 'Ω')} = ${fmt(2 * R, 'Ω')} (in series)` : `two identical slabs side by side: R = ρl/(2A) = ${fmt(R, 'Ω')} ÷ 2 = ${fmt(R / 2, 'Ω')} (in parallel)`,
       `each slab alone: R = ρl/A = ${fmt(R, 'Ω')}`);
-    story = end ? 'Joined end to end, the slabs are one slab twice as long: in series, R doubles' : 'Joined side by side, the slabs are one slab with twice the area: in parallel, R halves';
-    second = 'R = ρl/A: resistance grows with length and falls with area'; anchors.slab = [cx, cy];
+    story = !result ? (end ? 'Two identical slabs placed end to end: a series arrangement' : 'Two identical slabs placed side by side: a parallel arrangement')
+      : end ? 'Joined end to end, the slabs are one slab twice as long: in series, R doubles' : 'Joined side by side, the slabs are one slab with twice the area: in parallel, R halves';
+    second = result ? 'R = ρl/A: resistance grows with length and falls with area' : ''; anchors.slab = [cx, cy];
   } else if (s.show === 'wire') {
     const rho = s.rho ?? 1.7e-8, l = s.l ?? 1, A = s.A ?? 1e-6, R = rho * l / A, V = s.V ?? 1, I = V / R, J = I / A, ls = s.lspan ?? l, as = s.aspan ?? A;
     const w = bw * .78 * l / ls, h = bh * .5 * Math.sqrt(A / as), x0 = cx - w / 2, y0 = cy - h / 2; dur = 8;

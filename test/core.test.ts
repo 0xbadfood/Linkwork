@@ -2377,6 +2377,8 @@ test('current joins two slabs and draws drift with no field (leph1-03 C2)', () =
   const facts = (spec: object) => ((compile({verb: 'current', ...spec} as any).scene!.meta as any).facts as string[]).join(' | ');
   assert.match(facts({show: 'wire', join: 'end', rho: 1e-6, l: 1, A: 1e-6}), /= 2 × 1 Ω = 2 Ω \(in series\)/);
   assert.match(facts({show: 'wire', join: 'side', rho: 1e-6, l: 1, A: 1e-6}), /1 Ω ÷ 2 = 0\.5 Ω \(in parallel\)/);
+  const setup = compile({verb: 'current', show: 'wire', join: 'end', result: false} as any).scene!;
+  assert.ok(!setup.props.some(p => p.type === 'text' && /2R|doubles/.test((p as any).text)) && !(setup.meta as any).facts.length);   // the resistance waits for the next sentence
   const still = compile({verb: 'current', show: 'drift', field: false} as any).scene!;
   assert.ok(!still.props.some(p => p.id === 'field0'));
   assert.match(facts({show: 'drift', field: false}), /average velocity is zero/);
