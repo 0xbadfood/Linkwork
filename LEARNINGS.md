@@ -121,3 +121,7 @@ Capillary rise looked right in every film, yet a single tube's column stays the 
 ## Symbol names lose their digits in illustrative mode
 
 Illustrative mode drops any text with an ASCII digit, so a label written φ0, V0 or ν1 vanishes from a film whose narration states no numbers, and a story line that names "100 V" vanishes with it. Write symbol subscripts as Unicode (φ₀, V₀, ν₁), which illustrative keeps, and keep the story and second lines free of numbers; numbers belong in facts and readouts.
+
+## A line drawn from the same point as an arrow must leave it at an angle
+
+At the top of a vertical circle the slack string ran from the bob straight down to O, and the weight arrow mg ran straight down from the bob too: a wave symmetric about the string line still left the bob along the vertical, so the two read as one line. Anything drawn from a point where an arrow starts (a string, a rod, a dimension) must leave it well away from the arrow's direction; test the least distance between the arrow and every piece outside the body they share.

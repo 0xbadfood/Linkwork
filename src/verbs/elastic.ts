@@ -28,7 +28,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const f = (v: number, p = 2) => n2(round(v, 9), Number.isInteger(round(v, 9)) ? 0 : p);
 /** A small length in mm, or in powers of ten of a metre when under a hundredth of a mm. */
 const mm = (v: number) => (Math.abs(v) * 1000 >= 0.01 ? `${f(v * 1000, Math.abs(v) * 1000 < 1 ? 3 : 2)} mm` : `${num(v)} m`);
-export const ELASTIC_KINDS = ['tension', 'shear', 'hydraulic', 'curve', 'beam', 'recover'] as const;
+export const ELASTIC_KINDS = ['tension', 'shear', 'hydraulic', 'curve', 'beam', 'recover', 'bonds'] as const;
 
 // The book's Tables 8.1-8.3, in Pa (brass Y is the exercises' 0.91 × 10¹¹); sigma is Poisson's ratio where the book gives it
 export const MATERIALS: Record<string, {Y?: number; G?: number; B?: number; sigma?: number}> = {
@@ -51,7 +51,9 @@ export type ElasticSpec = Common & {verb: 'elastic'; kind: (typeof ELASTIC_KINDS
   /** hydraulic: one step of the book's account, so a beat shows only its own: squeeze (pressed on every side), restoring
    * (internal forces equal and opposite to the fluid's), removed (out of the fluid, back to its shape and size), strain
    * (volume shrinks, shape stays: volume strain). Left out: every step at once, with B and compressibility. */
-  stage?: (typeof HYDRAULIC_STAGES)[number];
+  stage?: (typeof HYDRAULIC_STAGES)[number] | (typeof BOND_STAGES)[number];
+  /** bonds: a small grid of atoms (default) or one row */
+  atoms?: 'grid' | 'row';
   /** Drawn px per real metre of deformation: set by a compound scene so side-by-side parts share one factor (a stiffer
    * beam beside a softer one sagged alike when each part fitted its own sag, C9 of keph2-01). Not a planner field. */
   deform_scale?: number};
@@ -62,8 +64,12 @@ const SPRINGY = /\b(spring|rubber|elastic|steel|wire|ball|band|bow|trampoline)\b
 const DOUGHY = /\b(putty|clay|plasticine|dough|wax|mud|play-?doh|lead shot)\b/i;
 
 export const HYDRAULIC_STAGES = ['squeeze', 'restoring', 'removed', 'strain'] as const;
+/** bonds: stretch (pulled, the bonds lengthen and store the work), release (the force removed, they relax and give it up) */
+export const BOND_STAGES = ['stretch', 'release'] as const;
 const SHOWS: Record<string, string[]> = {tension: ['lateral', 'energy', 'graph'], curve: ['regions', 'unload', 'energy'], beam: ['edge'],
-  shear: [], hydraulic: [], recover: []};
+  shear: [], hydraulic: [], recover: [], bonds: []};
+// a bonds scene is a picture of the atoms, with no numbers: the fields that carry one belong to the other kinds
+const NUMBERED = ['material', 'Y', 'G', 'B', 'sigma', 'L', 'd', 'A', 'F', 'load', 'wires', 'dL', 'compress', 'w', 'p', 'depth', 'V', 'shape', 'compare', 'curve', 'l', 'b', 'names', 'deform_scale'] as const;
 
 /** A modulus from the spec or the material's table entry; undefined when neither gives it. */
 const modulus = (s: {material?: string; Y?: number; G?: number; B?: number}, m: 'Y' | 'G' | 'B') =>
@@ -74,9 +80,18 @@ const force = (s: ElasticSpec) => s.F ?? (isNum(s.load) ? s.load * gOf(s) : unde
 export function elasticErrors(s: ElasticSpec): string[] {
   const e: string[] = [], show = new Set(s.show ?? []);
   if (!ELASTIC_KINDS.includes(s.kind)) return [`elastic: kind is one of ${ELASTIC_KINDS.join(', ')}`];
-  if (s.stage !== undefined) {
-    if (s.kind !== 'hydraulic') e.push(`elastic: stage goes with kind hydraulic (${HYDRAULIC_STAGES.join(', ')}); leave it out of a ${s.kind} scene`);
-    else if (!HYDRAULIC_STAGES.includes(s.stage)) e.push(`elastic: stage is ${HYDRAULIC_STAGES.join(', ')}: squeeze (pressed on every side), restoring (internal forces equal and opposite to the fluid's), removed (out of the fluid, back to its shape and size), strain (volume strain); leave it out for every step at once`);
+  if (s.atoms !== undefined) {
+    if (s.kind !== 'bonds') e.push(`elastic: atoms goes with kind bonds; leave it out of a ${s.kind} scene`);
+    else if (!['grid', 'row'].includes(s.atoms)) e.push("elastic: atoms is 'grid' (a small block of atoms, the default) or 'row' (one line of atoms)");
+  }
+  if (s.kind === 'bonds') {
+    const extra = NUMBERED.filter(x => s[x] !== undefined);
+    if (extra.length) e.push(`elastic: kind bonds draws atoms joined by spring-like bonds, with no numbers or material; leave out ${extra.join(', ')} (for a wire's stress, strain or energy use kind tension)`);
+    if (s.stage !== undefined && !BOND_STAGES.includes(s.stage as never))
+      e.push("elastic: a bonds stage is stretch (pulled: the bonds lengthen and store the work as potential energy) or release (the force removed: the bonds relax and give the energy up); leave it out for both in turn");
+  } else if (s.stage !== undefined) {
+    if (s.kind !== 'hydraulic') e.push(`elastic: stage goes with kind hydraulic (${HYDRAULIC_STAGES.join(', ')}) or kind bonds (${BOND_STAGES.join(', ')}); leave it out of a ${s.kind} scene`);
+    else if (!HYDRAULIC_STAGES.includes(s.stage as never)) e.push(`elastic: stage is ${HYDRAULIC_STAGES.join(', ')}: squeeze (pressed on every side), restoring (internal forces equal and opposite to the fluid's), removed (out of the fluid, back to its shape and size), strain (volume strain); leave it out for every step at once`);
     else {
       if (s.compare !== undefined) e.push('elastic: compare goes with the full hydraulic scene; leave stage out to compare compressibilities');
       if (s.V !== undefined && s.stage !== 'strain') e.push(`elastic: V (for ΔV) is shown at stage strain only; leave it out of stage ${s.stage}`);
@@ -597,6 +612,84 @@ export function elastic(s: ElasticSpec): Scene {
     larger();
     facts.push(...rows.map((r, i) => `b = ${f(r.b * 100)} cm, d = ${f(r.d * 100)} cm: sag δ = ${mm(deltas[i])}`), `load W = ${f(F, 1)} N, span l = ${f(l)} m, Y = ${num(Y)} Pa`);
     return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, deltas, ...pin(maxSag / big, 'beam')});
+  }
+
+  if (s.kind === 'bonds') {
+    // The atoms of a solid as balls joined by springs (keph2-01 C9 S13-S14, 2026-11-05: "think of the atoms as balls
+    // joined by springs ... when the force is removed this energy is released"; the planner had only a whole wire with
+    // stress and strain). Pulled at both ends, every spacing along the pull grows by one factor, so the springs along it
+    // lengthen and glow (the work stored in them); across the pull they only move. Released, they return to rest.
+    // A picture only: no numbers, the stretch far larger than real.
+    const grid = (s.atoms ?? 'grid') === 'grid', R = grid ? 3 : 1, C = grid ? 5 : 6, stage = s.stage as (typeof BOND_STAGES)[number] | undefined;
+    const e = 0.3, arrowL = Math.min(110 * k, 0.12 * bw), cx = bx0 + bw / 2, cy = by0 + bh / 2 + (grid ? 0 : 10 * k);
+    const s0 = Math.min((bw - 2 * arrowL - 90 * k) / ((C - 1) * (1 + e) + 0.4), grid ? (bh - 150 * k) / (R - 1 + 0.4) : 1e9, 210 * k);
+    const r = Math.max(12 * k, Math.min(26 * k, 0.2 * s0)), amp = Math.min(14 * k, 0.12 * s0), teeth = 4;
+    const xs = Array.from({length: C}, (_, i) => cx + (i - (C - 1) / 2) * s0), ys = Array.from({length: R}, (_, j) => cy + (j - (R - 1) / 2) * s0);
+    // the clock: the stretch factor F(t) from 1 to 1 + e and (released) back, with the glow of the stored energy beside it
+    const stretch = stage !== 'release', release = stage !== 'stretch';
+    const tP = 1.0, s1 = 1.4, s2 = 3.6, tOff = stretch ? s2 + 0.8 : 1.0, r1 = tOff + 0.4, r2 = r1 + 1.6;
+    const Fk: [number, number, string?][] = [...(stretch ? [[s1, 1], [s2, 1 + e]] : [[0, 1 + e]]) as [number, number][], ...(release ? [[r1, 1 + e], [r2, 1, 'out']] : []) as [number, number, string][]];
+    const glow: [number, number][] = [...(stretch ? [[s1, 0], [s2, 1]] : [[0, 1]]) as [number, number][], ...(release ? [[r1, 1], [r2, 0]] : []) as [number, number][]];
+    const at = (x0: number) => Fk.map(([t, v, ez]) => (ez ? [t, cx + (x0 - cx) * v, ez] : [t, cx + (x0 - cx) * v])) as never;
+    // a zigzag from u = 0 to 1 along a bond: straight leads, then the coils
+    const zig = Array.from({length: 2 * teeth + 3}, (_, m) => m === 0 ? [0, 0] : m === 2 * teeth + 2 ? [1, 0] : [0.15 + 0.7 * (m - 1) / (2 * teeth), m === 1 || m === 2 * teeth + 1 ? 0 : (m % 2 ? amp : -amp)]);
+    // along the pull: the bond between atoms i and i+1 of row j, its ends at the balls' edges, every point moving with F
+    for (let j = 0; j < R; j++) for (let i = 0; i < C - 1; i++) {
+      const xa = xs[i] + r, span = xs[i + 1] - xs[i] - 2 * r, X = (u: number) => xa + span * u;
+      // a point at fraction u: its x is linear in F, so its keys follow F's
+      const xk = (u: number) => Fk.map(([t, v, ez]) => { const x = cx + (xs[i] - cx) * v + r + ((xs[i + 1] - xs[i]) * v - 2 * r) * u; return ez ? [t, x, ez] : [t, x]; }) as never;
+      for (let m = 0; m < zig.length - 1; m++) {
+        const [u1, o1] = zig[m], [u2, o2] = zig[m + 1];
+        for (const glowing of [false, true])
+          props.push({id: `${glowing ? 'g' : 'h'}${j}-${i}-${m}`, type: 'line', x1: X(u1), y1: ys[j] + o1, x2: X(u2), y2: ys[j] + o2, keys: {x1: xk(u1), x2: xk(u2), ...(glowing ? {opacity: glow} : {})},
+            style: {stroke: glowing ? 'good' : 'cool', width: (glowing ? 5 : 4) * k, cap: 'round'}, layer: glowing ? 4 : 3} as Prop);
+      }
+    }
+    // across the pull: the same springs, which only move sideways with their column
+    for (let j = 0; j < R - 1; j++) for (let i = 0; i < C; i++) {
+      const ya = ys[j] + r, span = ys[j + 1] - ys[j] - 2 * r, ak = at(xs[i]);
+      for (let m = 0; m < zig.length - 1; m++) {
+        const [u1, o1] = zig[m], [u2, o2] = zig[m + 1];
+        const sh = (o: number) => (ak as [number, number, string?][]).map(([t, v, ez]) => (ez ? [t, v + o, ez] : [t, v + o])) as never;
+        props.push({id: `v${j}-${i}-${m}`, type: 'line', x1: xs[i] + o1, y1: ya + span * u1, x2: xs[i] + o2, y2: ya + span * u2, keys: {x1: sh(o1), x2: sh(o2)},
+          style: {stroke: 'cool', width: 4 * k, cap: 'round'}, layer: 3} as Prop);
+      }
+    }
+    // where the atoms sit at rest, marked under the bottom row, so the spacing's growth (and return) reads
+    const tick = ys[R - 1] + r + 26 * k;
+    xs.forEach((x, i) => props.push({id: `rest${i}`, type: 'line', x1: x, y1: tick, x2: x, y2: tick + 26 * k, style: {stroke: 'muted', width: 2 * k, dash: [6 * k, 5 * k]}, layer: 2} as Prop));
+    for (let j = 0; j < R; j++) for (let i = 0; i < C; i++)
+      props.push({id: `atom${j}-${i}`, type: 'circle', x: cx + (xs[i] - cx) * (stretch ? 1 : 1 + e), y: ys[j], r, keys: {x: at(xs[i])}, style: {fill: 'figure', stroke: 'ink', width: 2 * k}, layer: 5} as Prop);
+    // the pull: an arrow out of each end of every row, while the force acts
+    const pullOn: [number, number] = stretch ? [tP, release ? tOff : 1e9] : [0, tOff];
+    for (let j = 0; j < R; j++) for (const [sd, i] of [[-1, 0], [1, C - 1]] as const) {
+      const x0 = xs[i] + sd * (r + 6 * k), base = Fk.map(([t, v, ez]) => [t, cx + (xs[i] - cx) * v + sd * (r + 6 * k), ...(ez ? [ez] : [])]);
+      props.push({id: `pull${j}${sd > 0 ? 'r' : 'l'}`, type: 'arrow', x1: x0, y1: ys[j], x2: x0 + sd * arrowL, y2: ys[j], head: 16 * k, show: pullOn, fade: 0.3, layer: 5,
+        keys: {x1: base as never, x2: base.map(([t, v, ...z]) => [t, (v as number) + sd * arrowL, ...z]) as never}, style: {stroke: 'accent', width: 5 * k}} as Prop);
+    }
+    const reach = r + 6 * k + arrowL / 2;
+    label('lpull', xs[C - 1] + reach, ys[0] - 26 * k, 'pull', {align: 'middle', style: {fill: 'accent'}, show: pullOn, fade: 0.3,
+      keys: {x: Fk.map(([t, v, ez]) => [t, cx + (xs[C - 1] - cx) * v + reach, ...(ez ? [ez] : [])]) as never}} as never);
+    // names: one atom and one bond, above the top row
+    const yName = ys[0] - r - 22 * k;
+    label('latom', xs[0], yName, 'atom', {align: 'middle', style: {fill: 'figure'}, keys: {x: at(xs[0])}});
+    label('lbond', (xs[1] + xs[2]) / 2, yName, grid ? 'bond' : 'bond, like a spring', {align: 'middle', style: {fill: 'cool'}, keys: {x: at((xs[1] + xs[2]) / 2)}});
+    if (stretch) {
+      line('l1', 'Atoms joined by bonds, like springs', 0.4, {weight: 700});
+      line('l2', 'Stretching pulls the atoms apart: the bonds stretch', s1, {style: {fill: 'accent'}});
+      line('l3', 'The work done is stored in the bonds as potential energy', s2, {style: {fill: 'good'}});
+      facts.push('the atoms of a solid are held by interatomic bonds that act like springs', 'stretching the solid stretches the bonds along the pull; the work done is stored in them as elastic potential energy');
+    }
+    if (release) {
+      line('r1', 'The force is removed', tOff, {style: {fill: 'accent'}});
+      line('r2', 'The bonds relax back to their natural length', r1 + 0.4, {weight: 700});
+      line('r3', 'The stored energy is given up', r2, {style: {fill: 'good'}});
+      facts.push('when the force is removed the bonds relax to their natural length and the stored energy is given up');
+    }
+    line('lnote', 'The stretch is drawn larger than real', (release ? r2 : s2) + 0.3, {style: {fill: 'muted'}});
+    const Fend = release ? 1 : 1 + e, fin = (x0: number) => cx + (x0 - cx) * Fend;
+    Object.assign(anchors, {atom: [fin(xs[0]), ys[0]], bond: [fin((xs[1] + xs[2]) / 2), ys[0]], left: [fin(xs[0]), cy], right: [fin(xs[C - 1]), cy], centre: [cx, cy]});
+    return scene(s, W, H, (release ? r2 : s2) + 2.4, plane, props, [], {verb: 'elastic', facts, ...pin()});
   }
 
   // recover: a spring and a lump of putty pulled the same way, then let go

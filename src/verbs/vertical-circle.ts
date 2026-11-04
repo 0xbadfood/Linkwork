@@ -159,11 +159,15 @@ export function verticalCircle(s: VerticalCircleSpec): Scene {
   }
 
   // the string: 12 short pieces, straight while taut, bowed once slack (its length kept), wavy at C in the top show
+  // Slack at C (the top show), the string is one loose bow to the side away from the velocity that leaves the bob at a
+  // steep angle: a wave symmetric about the string line left it running straight down from the bob, under the weight
+  // arrow mg, so the two read as one line (keph1-05 C8 "Bob at point C", 2026-11-05). √sin rises steeply at the ends.
   const PIECES = 12, wiggleFrom = show === 'top' ? motionEnd : 1e9;
   const stringPoint = (q: Sample, i: number, wiggle: number): Vec => {
     const d = Math.hypot(...q.p), u: Vec = [q.p[0] / (d || 1), q.p[1] / (d || 1)], nrm: Vec = [-u[1], u[0]], a = i / PIECES;
     const bow = q.taut || d >= L ? 0 : (2 / Math.PI) * Math.sqrt(Math.max(0, d * (L - d)));
-    const off = bow * Math.sin(Math.PI * a) + wiggle * 0.06 * L * Math.sin(2 * Math.PI * a);
+    const away = nrm[0] * q.v[0] + nrm[1] * q.v[1] > 0 ? -1 : 1, sa = Math.sin(Math.PI * a);
+    const off = bow * sa + wiggle * away * L * (0.13 * Math.sqrt(Math.max(0, sa)) + 0.03 * Math.sin(3 * Math.PI * a));
     return [u[0] * d * a + nrm[0] * off, u[1] * d * a + nrm[1] * off];
   };
   for (let i = 0; i < PIECES; i++) {
