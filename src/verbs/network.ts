@@ -129,6 +129,30 @@ export function kirchhoffErrors(s: KirchhoffSpec): string[] {
   });
   if (s.currents !== undefined && !['values', 'names', 'none'].includes(s.currents)) e.push(`${W}: currents is values, names or none`);
   if (e.length) return e;
+  // A wire may not run through another junction or along another wire (2026-11-04, leph1-03 C9 S31: B, C and D in a
+  // line and the 5 V branch drawn straight from D to B, through C: the cell looked as if it sat at C).
+  const at = Object.fromEntries(s.nodes.map(n => [n.id, n.at])) as Record<string, Vec>;
+  const segs = s.branches.map(b => { const pts = [at[b.from], ...(b.via ?? []), at[b.to]]; return pts.slice(1).map((q, i) => [pts[i], q] as [Vec, Vec]); });
+  const onSeg = (p: Vec, [a, b]: [Vec, Vec]) => {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), cross = ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) / (L || 1);
+    const f = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / ((L * L) || 1);
+    return Math.abs(cross) < 0.02 * L + 1e-9 && f > 0.02 && f < 0.98;
+  };
+  // two stretches on one line that share more than a point
+  const alongside = ([a, b]: [Vec, Vec], [c, d]: [Vec, Vec]) => {
+    const L2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2, L = Math.sqrt(L2);
+    const off = (p: Vec) => Math.abs((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) / (L || 1);
+    if (off(c) > 0.02 * L || off(d) > 0.02 * L) return false;
+    const f = (p: Vec) => ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / (L2 || 1);
+    return Math.min(1, Math.max(f(c), f(d))) - Math.max(0, Math.min(f(c), f(d))) > 0.02;
+  };
+  s.branches.forEach((b, i) => {
+    for (const n of s.nodes) if (n.id !== b.from && n.id !== b.to && segs[i].some(sg => onSeg(n.at, sg)))
+      e.push(`${W}: branches[${i}] (${b.from} to ${b.to}) runs straight through junction ${n.id}: give it a via corner to go round, or place the nodes so it doesn't`);
+    s.branches.forEach((_, j) => { if (j > i && segs[i].some(sg => segs[j].some(sh => alongside(sg, sh))))
+      e.push(`${W}: branches[${i}] and branches[${j}] run along the same line: give one a via corner`); });
+  });
+  if (e.length) return e;
   if (!solveNetwork(s.nodes.map(n => n.id), s.branches)) e.push(`${W}: the network has no single solution: every node must connect to the rest, and cells with no resistance must not form a loop on their own`);
   if (s.junction !== undefined && !ids.has(s.junction)) e.push(`${W}: junction is a node id (${[...ids].join(', ')})`);
   if (s.loop !== undefined) {
@@ -326,7 +350,7 @@ export function kirchhoff(s: KirchhoffSpec): Scene {
     const kx: Key[] = [[T0, round(route[0][0], 2)]], ky: Key[] = [[T0, round(route[0][1], 2)]];
     for (let i = 1; i < route.length; i++) { kx.push([round(tAt(cum2[i]), 3), round(route[i][0], 2), 'linear']); ky.push([round(tAt(cum2[i]), 3), round(route[i][1], 2), 'linear']); }
     props.push({id: 'walker', type: 'circle', x: kx[0][1], y: ky[0][1], r: 13 * k, style: {fill: 'bad', stroke: 'paper', width: 3 * k}, layer: 7, show: [T0 - 0.3, 1e9], fade: 0.3, keys: {x: kx, y: ky}} as Prop);
-    say(`Walking the loop ${[...s.loop, ...(s.loop[0] === s.loop.at(-1) ? [] : [s.loop[0]])].join(' → ')}:`, T0 - 0.3, 'cool');
+    say(`Walking the loop ${[...s.loop, ...(s.loop[0] === s.loop.at(-1) ? [] : [s.loop[0]])].join(' → ')}${s.illustrative ? '' : ':'}`, T0 - 0.3, 'cool');
     let sum = 0;
     const sumKeys: Key[] = [[T0, 0]];
     where.sort((a, b) => a.d - b.d);

@@ -2365,10 +2365,13 @@ test('kirchhoff solves any network the book draws (leph1-03: Example 3.6, Fig. 3
   const err = (spec: object) => compile({...ex, ...spec} as any).errors.join(' | ');
   assert.match(compile({...f315, loop: ['a', 'c', 'd', 'a']} as any).errors.join(' | '), /from a to c, but no branch joins them next to each other/);
   assert.match(err({branches: [{from: 'A', to: 'B', parts: [{R: 1}]}, {from: 'A', to: 'Z'}]}), /from and to are node ids/);
-  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [1, 0]}, {id: 'C', at: [2, 0]}], branches: [{from: 'A', to: 'B', parts: [{R: 1}]}, {from: 'B', to: 'A', parts: [{R: 2}]}], loop: undefined}), /no single solution/);
-  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [1, 0]}], branches: [{from: 'A', to: 'B', parts: [{emf: 2, plus: 'to'}]}, {from: 'A', to: 'B', parts: [{emf: 3, plus: 'to'}]}], loop: undefined}), /no single solution/);
-  assert.match(err({nodes: [{id: 'a', at: [0, 0]}, {id: 'd', at: [1, 0]}], branches: [{from: 'a', to: 'd', parts: [{R: 1}]}, {from: 'a', to: 'd', parts: [{R: 2}]}], loop: ['a', 'd', 'a']}), /name a point/);
+  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [1, 0]}, {id: 'C', at: [2, 0]}], branches: [{from: 'A', to: 'B', parts: [{R: 1}]}, {from: 'B', to: 'A', via: [[0.5, 1]], parts: [{R: 2}]}], loop: undefined}), /no single solution/);
+  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [1, 0]}], branches: [{from: 'A', to: 'B', parts: [{emf: 2, plus: 'to'}]}, {from: 'A', to: 'B', via: [[0.5, 1]], parts: [{emf: 3, plus: 'to'}]}], loop: undefined}), /no single solution/);
+  assert.match(err({nodes: [{id: 'a', at: [0, 0]}, {id: 'd', at: [1, 0]}], branches: [{from: 'a', to: 'd', parts: [{R: 1}]}, {from: 'a', to: 'd', via: [[0.5, 1]], parts: [{R: 2}]}], loop: ['a', 'd', 'a']}), /name a point/);
   assert.match(err({branches: [{from: 'A', to: 'B', parts: [{emf: 2}]}, ...ex.branches.slice(1)]}), /plus is from or to/);
+  // B, C, D in a line: D to B straight runs through C (leph1-03 C9 S31 drew the 5 V cell at C)
+  assert.match(err({branches: [...ex.branches.slice(0, 5), {from: 'D', to: 'B', parts: [{emf: 5, plus: 'to'}]}]}), /runs straight through junction C: give it a via corner/);
+  assert.match(err({nodes: [{id: 'A', at: [0, 0]}, {id: 'B', at: [2, 0]}], branches: [{from: 'A', to: 'B', parts: [{R: 1}]}, {from: 'B', to: 'A', parts: [{R: 2}]}], loop: undefined}), /run along the same line/);
 });
 
 test('current joins two slabs and draws drift with no field (leph1-03 C2)', () => {
