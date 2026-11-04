@@ -26,6 +26,7 @@ export type ForceItem = {name: string; kind?: (typeof KINDS)[number]; magnitude?
 export type ForcesSpec = {verb: 'forces'; body?: (typeof BODIES)[number]; label?: string; mass?: number; g?: number;
   surface?: 'none' | 'floor' | 'incline'; angle?: number; forces?: ForceItem[]; a?: P2; show?: (typeof SHOWS)[number][];
   ramp?: {kind: 'push' | 'tilt'; mu_s: number; mu_k?: number; to?: number};
+  hang?: {F: number; cases: {length: number; at: number}[]};
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 /** An illustrative diagram hides every number, so a mass it never states may stand in (2026-10-29: plans for "a book
@@ -108,6 +109,19 @@ export function forcesErrors(spec: ForcesSpec): string[] {
   if (s.g !== undefined && !(isNum(s.g) && s.g > 0)) e.push('forces: g is above 0 (default 9.8)');
   if (s.a !== undefined && !(Array.isArray(s.a) && s.a.length === 2 && s.a.every(isNum))) e.push('forces: a is the acceleration [ax, ay] in m/s² ([0, 0]: at rest or moving uniformly)');
   for (const x of s.show ?? []) if (!SHOWS.includes(x)) e.push(`forces: show items are ${SHOWS.join(', ')}`);
+  if (s.hang) {
+    const h = s.hang;
+    if (s.ramp || s.forces?.length || s.show?.length) e.push('forces: hang draws its own rope, mass and force; leave out ramp, forces and show');
+    if (!(isNum(s.mass) && s.mass > 0)) e.push('forces: hang needs the hanging mass (mass in kg); or, when the narration states no numbers, set illustrative: true');
+    if (!(isNum(h.F) && h.F > 0)) e.push('forces: hang.F is the horizontal force at P in N, above 0');
+    if (!Array.isArray(h.cases) || h.cases.length < 1 || h.cases.length > 3) e.push('forces: hang.cases is 1 to 3 ropes {length (m), at (where F acts: the share of the rope from the support to P, 0.1 to 0.9; 0.5 is the midpoint)}');
+    else h.cases.forEach((c, i) => {
+      if (!(isNum(c?.length) && c.length > 0 && c.length <= 100)) e.push(`forces: hang.cases ${i + 1}: length is the rope's length in m, above 0, up to 100`);
+      if (!(isNum(c?.at) && c.at >= 0.1 && c.at <= 0.9)) e.push(`forces: hang.cases ${i + 1}: at is where F acts, the share of the rope from the support to P, 0.1 to 0.9 (0.5: the midpoint)`);
+    });
+    if (!e.length && Math.atan2(h.F, s.mass! * (s.g ?? 9.8)) / DEG > 70) e.push(`forces: F is so large against mg that the rope lies at over 70° and leaves the frame; lower F or raise the mass`);
+    return e;
+  }
   if (s.ramp) {
     const r = s.ramp;
     if (!['push', 'tilt'].includes(r.kind)) e.push('forces: ramp.kind is push (a growing push on a floor) or tilt (a plane tilted until the block slips)');
@@ -165,6 +179,7 @@ export function forces(spec: ForcesSpec): Scene {
   const label = (id: string, at: P2, t: string, fill: string, from: number, extra: Partial<Prop> = {}) =>
     text(id, at[0], at[1] + 11 * k, t, 32 * k, {weight: 700, align: 'middle', style: {fill}, show: [from, 1e9], ...extra});
   if (s.ramp) return ramp(s, {W, H, k, box, props, facts, plane, px, ptext, label, row});
+  if (s.hang) return hang(s, {W, H, k, box, props, facts, plane, px, ptext, label, row});
 
   const theta = (s.surface === 'incline' ? s.angle ?? 30 : 0) * DEG, m = s.mass, show = new Set(s.show ?? []);
   const {forces: fs, net} = solve(s);
@@ -370,4 +385,60 @@ function ramp(s: ForcesSpec, kit: Kit): Scene {
     say('s2', r.kind === 'push' ? `µs N = ${lim}; now kinetic friction µk N = ${f(muK * m * g)} N, a little less` : `θ = ${lim}: µs = tan θ = ${f(r.mu_s)}`, slipT);
   }
   return scene(s, W, H, lead + T + 3 + 1.5, plane, props, [], {verb: 'forces', facts});
+}
+
+/** A mass hung by a massless rope, pulled sideways by a horizontal force F at a point P on it (the book's 6 kg and 50 N
+ * at the midpoint): below P the rope hangs straight down, above P it leans at θ from the vertical with tan θ = F / mg.
+ * One to three ropes side by side, of different lengths and with F acting at different points, all at one scale: the
+ * same θ on each, since θ depends on neither (2026-11-05, keph1-04 C4 S24 had no picture for "the same angle"). */
+function hang(s: ForcesSpec, kit: Kit): Scene {
+  const {W, H, k, box, props, facts, plane, px, ptext, row: row0} = kit, h = s.hang!, m = s.mass!, g = s.g ?? 9.8, mg = m * g;
+  const th = Math.atan2(h.F, mg), sin = Math.sin(th), cos = Math.cos(th), n = h.cases.length;
+  const bw = box[2] - box[0], bh = box[3] - box[1], cw = bw / n, side = Math.max(Math.min(0.13 * Math.min(bw, bh), 0.42 * cw), 72 * k), bH = 0.7 * side;
+  const Fpx = Math.min(0.22 * cw, 110 * k);
+  let top = box[1] + 0.04 * bh;
+  // one scale for every rope: the longest drop (rope above P leaning, below it straight) and the widest lean fit
+  const ppm = Math.min(...h.cases.map(c => (box[3] - top - bH - 30 * k) / (c.length * c.at * cos + c.length * (1 - c.at))),
+    ...h.cases.map(c => (0.92 * cw - Fpx - 60 * k) / Math.max(c.length * c.at * sin, 1e-9)));
+  // the ropes held mid-height when the width sets the scale
+  const drop = Math.max(...h.cases.map(c => (c.length * c.at * cos + c.length * (1 - c.at)) * ppm)) + bH + 30 * k;
+  top = Math.max(top, box[1] + (bh - drop) / 2);
+  props.push({id: 'ceiling', type: 'line', x1: box[0], y1: top, x2: box[2], y2: top, style: {stroke: 'muted', width: 5 * k}} as Prop);
+  for (let x = box[0] + 12 * k; x < box[2]; x += 26 * k)
+    props.push({id: `hatch${Math.round(x)}`, type: 'line', x1: x, y1: top, x2: x + 14 * k, y2: top - 14 * k, style: {stroke: 'faint', width: 2 * k}} as Prop);
+  let row = row0;
+  const say = (id: string, t: string, at: number, extra: Partial<Prop> = {}) => {
+    const fs = 30 * k;
+    props.push(ptext(id, px, row, t, fs, {show: [at, 1e9], ...extra}));
+    row += wrapText(t, fs, W - px - 40 * k).length * 1.3 * fs + 8 * k;
+  };
+  const step = 2.2, t0 = 0.6;
+  h.cases.forEach((c, i) => {
+    const at = t0 + step * i, show: [number, number] = [at, 1e9], L1 = c.length * c.at * ppm, L2 = c.length * (1 - c.at) * ppm;
+    const S: [number, number] = [box[0] + cw * i + 0.06 * cw, top], P: [number, number] = [S[0] + L1 * sin, S[1] + L1 * cos], B: [number, number] = [P[0], P[1] + L2];
+    const rope = {stroke: 'ink', width: 4 * k};
+    props.push({id: `vert${i}`, type: 'line', x1: S[0], y1: S[1], x2: S[0], y2: S[1] + Math.min(L1 * cos, 0.75 * L1), style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 7 * k]}, show, fade: 0.3} as Prop,
+      {id: `upper${i}`, type: 'line', x1: S[0], y1: S[1], x2: P[0], y2: P[1], style: rope, show, fade: 0.3} as Prop,
+      {id: `lower${i}`, type: 'line', x1: P[0], y1: P[1], x2: B[0], y2: B[1], style: rope, show, fade: 0.3} as Prop,
+      {id: `mass${i}`, type: 'object', name: 'block', x: B[0], y: B[1] + bH, size: side, label: s.label ?? (s.illustrative ? undefined : `${f(m)} kg`), show, fade: 0.3} as Prop,
+      {id: `knot${i}`, type: 'circle', x: P[0], y: P[1], r: 7 * k, style: {fill: 'ink'}, show, fade: 0.3, layer: 2} as Prop,
+      text(`lP${i}`, P[0] - 26 * k, P[1] + 36 * k, 'P', 30 * k, {weight: 700, align: 'middle', show, fade: 0.3}));
+    // the horizontal force at P, then the angle at the support
+    props.push({id: `F${i}`, type: 'arrow', x1: P[0] + 8 * k, y1: P[1], x2: P[0] + 8 * k + Fpx, y2: P[1], head: 18 * k, style: {stroke: 'figure', width: 6 * k}, show: [at + 0.5, 1e9], fade: 0.3, layer: 2} as Prop,
+      text(`lF${i}`, P[0] + Fpx + 34 * k, P[1] + 11 * k, 'F', 32 * k, {weight: 700, align: 'middle', style: {fill: 'figure'}, show: [at + 0.5, 1e9], fade: 0.3}));
+    const r = Math.min(64 * k, 0.4 * L1), arc: [number, number][] = Array.from({length: 13}, (_, j) => [S[0] + r * Math.sin(th * j / 12), S[1] + r * Math.cos(th * j / 12)]);
+    props.push({id: `arc${i}`, type: 'polyline', points: arc, style: {stroke: 'accent', width: 3 * k}, show: [at + 1, 1e9], fade: 0.3} as Prop,
+      text(`lth${i}`, S[0] + (r + 20 * k) * Math.sin(th / 2), S[1] + (r + 20 * k) * Math.cos(th / 2) + 10 * k, 'θ', 30 * k, {weight: 700, align: 'middle', style: {fill: 'accent'}, show: [at + 1, 1e9], fade: 0.3}));
+    // what changed from the rope before, in words (an illustrative scene keeps them)
+    const first = h.cases[Math.max(0, i - 1)], longer = c.length > first.length + 1e-9 ? 'A longer rope' : c.length < first.length - 1e-9 ? 'A shorter rope' : 'The same rope';
+    const moved = c.at < first.at - 1e-9 ? 'F acting higher up' : c.at > first.at + 1e-9 ? 'F acting lower down' : '';
+    say(`case${i}`, i === 0 ? 'A rope with a horizontal force F at P: the upper part leans at θ' : `${longer}${moved ? `, ${moved}` : ''}: the same θ`, at + 1, {style: {fill: i ? 'accent' : 'ink'}});
+  });
+  const end = t0 + step * (n - 1) + 1.6;
+  if (n > 1) say('why', 'The rope is massless, so θ depends neither on its length nor on where along it F acts', end, {weight: 700});
+  say('only', 'This holds for this setup only', end + 0.8, {style: {fill: 'muted'}});
+  if (!s.illustrative) say('num', `tan θ = F / mg = ${f(h.F)} / ${f(mg)}, so θ = ${round(th / DEG, 1).toFixed(1)}° on every rope`, end + 1.4, {style: {fill: 'accent'}});
+  facts.push(`θ = ${round(th / DEG, 1).toFixed(1)}° from the vertical: tan θ = F / mg = ${f(h.F)} / ${f(mg)}`, 'the angle depends on neither the rope\'s length nor where along it F acts (a massless rope)',
+    `tension in the rope above P = √(F² + (mg)²) = ${f(Math.hypot(h.F, mg))} N; below P = mg = ${f(mg)} N`);
+  return scene(s, W, H, end + 3.2, plane, props, [], {verb: 'forces', facts, theta: round(th / DEG, 4)});
 }

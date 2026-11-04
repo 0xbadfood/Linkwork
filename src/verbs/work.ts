@@ -5,20 +5,24 @@
 // −f d for friction, none for N and mg (across the motion). Two bars grow as it moves, the work done on it so far and its
 // kinetic energy, so the work-energy theorem (net work = ΔK) is seen, with or without numbers. Without d, it slides until
 // it stops (a braking cyclist, Example 5.2). Power (W / t, and F v cos θ at the end) when asked.
+// fall: a body falling through h (a raindrop, Example 5.3): gravity does +mgh, a resistive force does negative work found
+// from the final speed (W = ΔK − mgh) or from its size; bars of the two works and ΔK. climb: people of equal mass climbing
+// the same height in different times, a stopwatch beside each: the same work mgh, done faster by one (2026-11-05).
 import {nameError} from './names.ts';
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
-import type {Prop, Scene} from '../scene.ts';
+import type {Actor, Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
-import {n2, panel, scene, text} from './calculus.ts';
+import {n2, panel, scene, text, walking} from './calculus.ts';
 import {frame} from './vectors.ts';
 
 type P2 = [number, number];
 export const WORK_BODIES = ['block', 'car', 'ball'] as const;
 export type WorkSpec = {verb: 'work'; body?: (typeof WORK_BODIES)[number]; label?: string; mass?: number; g?: number; v0?: number;
   force?: {name?: string; magnitude: number; angle?: number}; friction?: {mu?: number; magnitude?: number}; d?: number;
-  show?: ('power')[]; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
+  show?: ('power')[]; fall?: {h: number; v?: number; resist?: number; name?: string}; climb?: {h: number; climbers: {t: number; label?: string}[]};
+  title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const DEG = Math.PI / 180;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -51,6 +55,7 @@ function motion(s: WorkSpec): Motion {
 }
 
 export function workErrors(s: WorkSpec): string[] {
+  if (s.fall !== undefined || s.climb !== undefined) return fallClimbErrors(s);
   const e: string[] = [];
   if (s.body !== undefined && !WORK_BODIES.includes(s.body)) e.push(`work: body is one of ${WORK_BODIES.join(', ')}`);
   if (s.mass !== undefined && !(isNum(s.mass) && s.mass > 0)) e.push('work: mass is in kg, above 0');
@@ -78,6 +83,8 @@ export function workErrors(s: WorkSpec): string[] {
 }
 
 export function work(s: WorkSpec): Scene {
+  if (s.fall) return fall(s);
+  if (s.climb) return climb(s);
   const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
   const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], facts: string[] = [];
   const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
@@ -168,7 +175,8 @@ export function work(s: WorkSpec): Scene {
     line('w3', 'Friction acts against the motion: its work is negative', lead + 0.6, {style: {fill: 'bad'}});
     line('w4', `${s.friction?.mu !== undefined ? `f = µk N = ${f(s.friction.mu)} × ${f(N)} = ${f(fk)} N; ` : ''}W = −f d = ${f(Wf)} J`, end + 0.5, {style: {fill: 'bad'}});
   }
-  line('w5', 'N and mg do no work: they act across the motion', end + 1, {style: {fill: 'muted'}});
+  // on a level floor N and mg are square to the motion (a falling body is fall's, where mg does work: 2026-11-05)
+  line('w5', 'On the level floor N and mg do no work: they act across the motion', end + 1, {style: {fill: 'muted'}});
   row += 4 * k;
   line('w6', 'The net work done equals the change in kinetic energy (the work-energy theorem)', end + 1.6, {weight: 700});
   line('w7', `W net = ${f(Wnet)} J = ½mv² − ½mu² = ${f(K1)} − ${f(K0)} J`, end + 2.2, {weight: 700});
@@ -182,4 +190,153 @@ export function work(s: WorkSpec): Scene {
     `kinetic energy ${f(K0)} J → ${f(K1)} J (ΔK = ${f(K1 - K0)} J)`, `net work = ${f(Wnet)} J = ΔK`);
   if (s.show?.includes('power') && F > 0) facts.push(`average power of ${Fn} = ${f(WF / T)} W`, `power of ${Fn} at the end = ${Fn} v cos θ = ${f(F * vf * Math.cos(th))} W`);
   return scene(s, W, H, end + (s.show?.includes('power') ? 6 : 4.4), plane, props, [], {verb: 'work', facts});
+}
+
+/** Significant figures, not places: a raindrop's 0.001 kg is not "0.00". */
+const sig = (v: number) => (Math.abs(v) < 1e-12 ? '0' : String(Number(round(v, 9).toPrecision(4))).replace('-', '−'));
+
+function fallClimbErrors(s: WorkSpec): string[] {
+  const e: string[] = [];
+  if (s.fall !== undefined && s.climb !== undefined) return ['work: give fall or climb, not both'];
+  if (s.force !== undefined || s.friction !== undefined || s.d !== undefined || s.show !== undefined || s.body === 'car' || s.body === 'block')
+    e.push(`work: ${s.fall ? 'fall' : 'climb'} draws its own body and forces; leave out force, friction, d, show and body`);
+  if (s.mass !== undefined && !(isNum(s.mass) && s.mass > 0)) e.push('work: mass is in kg, above 0');
+  if (s.mass === undefined && !s.illustrative) e.push('work: give mass (kg); or, when the narration states no numbers, set illustrative: true');
+  if (s.g !== undefined && !(isNum(s.g) && s.g > 0)) e.push('work: g is above 0 (default 9.8)');
+  if (s.fall) {
+    const q = s.fall;
+    if (!(isNum(q.h) && q.h > 0)) e.push('work: fall.h is the height it falls through, in m, above 0');
+    if (s.v0 !== undefined && !(isNum(s.v0) && s.v0 >= 0)) e.push('work: v0 is its starting speed downward, m/s (default 0)');
+    if (q.v !== undefined && q.resist !== undefined) e.push('work: give fall.v (the speed it lands with: the resistive work is found from it) or fall.resist (a constant resistive force, N), not both');
+    if (q.v !== undefined && !(isNum(q.v) && q.v > 0)) e.push('work: fall.v is the speed at the bottom, m/s, above 0');
+    if (q.resist !== undefined && !(isNum(q.resist) && q.resist > 0)) e.push('work: fall.resist is the resistive force in N, above 0');
+    if (q.name !== undefined) { const bad = nameError('work: fall.name', q.name, 4, 'R, f'); if (bad) e.push(bad); }
+    if (e.length) return e;
+    const m = s.mass ?? 1, g = s.g ?? 9.8, u = s.v0 ?? 0, free = Math.sqrt(u * u + 2 * g * q.h);
+    if (q.v !== undefined && q.v > free + 1e-9) e.push(`work: falling ${f(q.h)} m it reaches only ${f(free)} m/s with no resistance at all; give v up to ${f(free)} m/s (or leave v out for a free fall)`);
+    if (q.resist !== undefined && q.resist * q.h >= m * g * q.h + m * u * u / 2) e.push(`work: a resistive force of ${f(q.resist)} N is at least its weight mg = ${sig(m * g)} N, so it would not reach the bottom faster than it started; lower resist`);
+    return e;
+  }
+  const c = s.climb!;
+  if (!(isNum(c?.h) && c.h > 0 && c.h <= 200)) e.push('work: climb.h is the height climbed, in m, above 0, up to 200');
+  if (!Array.isArray(c?.climbers) || c.climbers.length < 2 || c.climbers.length > 3) e.push('work: climb.climbers is 2 or 3 people {t: seconds to climb, label?}');
+  else c.climbers.forEach((p, i) => {
+    if (!(isNum(p?.t) && p.t > 0 && p.t <= 600)) e.push(`work: climb.climbers ${i + 1}: t is the time to climb, s, above 0, up to 600`);
+    if (p?.label !== undefined) { const bad = nameError(`work: climb.climbers ${i + 1}: label`, p.label, 8, 'A, B, Ravi'); if (bad) e.push(bad); }
+  });
+  return e;
+}
+
+/** A body falling through h: gravity's work mgh, the resistive work from ΔK, and the bars of each. */
+function fall(s: WorkSpec): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
+  const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], facts: string[] = [];
+  const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
+  const q = s.fall!, m = s.mass ?? 1, g = s.g ?? 9.8, u = s.v0 ?? 0, h = q.h, Rn = q.name ?? 'R';
+  const Wg = m * g * h, K0 = m * u * u / 2;
+  const Wr = q.v !== undefined ? m * q.v * q.v / 2 - K0 - Wg : -(q.resist ?? 0) * h, K1 = K0 + Wg + Wr, v = Math.sqrt(2 * K1 / m), dK = K1 - K0;
+  const resisted = Wr < -1e-12 * Wg;
+  // the drop's column on the left, the bars to its right
+  const bw = box[2] - box[0], bh = box[3] - box[1], cx = box[0] + 0.12 * bw, y0 = box[1] + 0.1 * bh, yG = box[1] + 0.9 * bh, r = 20 * k;
+  const lead = 1, T = 3, n = 60, at = (i: number) => lead + T * i / n;
+  const yAt = (i: number) => y0 + (yG - r - y0) * (i / n) ** 2;          // falling faster as it goes (no force law is drawn)
+  const key = (fn: (i: number) => number) => Array.from({length: n + 1}, (_, i) => (i ? [at(i), fn(i), 'linear'] : [at(i), fn(i)]) as Key);
+  props.push({id: 'ground', type: 'line', x1: box[0], y1: yG, x2: box[0] + 0.3 * bw, y2: yG, style: {stroke: 'muted', width: 4 * k}} as Prop,
+    {id: 'start', type: 'line', x1: cx - 40 * k, y1: y0, x2: cx + 40 * k, y2: y0, style: {stroke: 'faint', width: 2 * k, dash: [6 * k, 6 * k]}} as Prop,
+    {id: 'hline', type: 'line', x1: cx - 56 * k, y1: yG, x2: cx - 56 * k, y2: y0, style: {stroke: 'muted', width: 2.5 * k}} as Prop,
+    {id: 'htick', type: 'line', x1: cx - 68 * k, y1: y0, x2: cx - 44 * k, y2: y0, style: {stroke: 'muted', width: 2.5 * k}} as Prop,
+    text('lh', cx - 76 * k, (y0 + yG) / 2 + 10 * k, 'h', 30 * k, {weight: 700, align: 'middle', style: {fill: 'muted'}}),
+    {id: 'body', type: 'circle', x: cx, y: y0, r, style: {fill: 'cool', stroke: 'ink', width: 3 * k}, layer: 2, keys: {y: key(yAt)}} as Prop);
+  // the forces on it, riding along: mg down; the resistive force up, drawn at its average size W / h
+  const Lg = 0.12 * bh, ride = (id: string, dy: number, len: number, colour: string, name: string) => {
+    props.push({id, type: 'arrow', x1: cx, y1: 0, x2: cx, y2: 0, head: 14 * k, style: {stroke: colour, width: 5 * k}, layer: 3, show: [0, at(n)],
+      keys: {y1: key(i => yAt(i) + dy * (r + 2 * k)), y2: key(i => yAt(i) + dy * (r + 2 * k + len))}} as Prop,
+    text(`l${id}`, 0, 0, name, 28 * k, {weight: 700, style: {fill: colour}, layer: 3, show: [0, at(n)], keys: {x: key(() => cx + 14 * k), y: key(i => yAt(i) + dy * (r + 0.6 * len) + 10 * k)}}));
+  };
+  ride('mg', 1, Lg, 'accent', 'mg');
+  if (resisted) ride('R', -1, Lg * -Wr / Wg, 'bad', Rn);
+  // the bars: gravity's work grows as it falls (mg is constant); the resistive work and ΔK once it has landed
+  const landed = at(n), bx = box[0] + 0.34 * bw, bW = box[2] - bx, zero = bx + (resisted ? 0.48 : 0.04) * bW;
+  const scaleE = (resisted ? 0.48 : 0.9) * bW / Math.max(Wg, -Wr, Math.abs(dK), 1e-12), rowH = Math.max(0.2 * bh, 96 * k), top = box[1] + 0.12 * bh;
+  const bar = (id: string, y: number, fill: string, name: string, value: string, w: number, from: number, to: number, grow?: (i: number) => number) => {
+    props.push(text(`l${id}`, bx, y, name, 28 * k, {weight: 700, style: {fill}, show: [from, 1e9]}));
+    const keys = grow ? {x: key(i => zero + Math.min(0, grow(i)) * scaleE), w: key(i => Math.max(1e-6, Math.abs(grow(i)) * scaleE))}
+      : {x: [[from, zero], [to, zero + Math.min(0, w) * scaleE, 'linear']] as Key[], w: [[from, 1e-6], [to, Math.abs(w) * scaleE, 'linear']] as Key[]};
+    props.push({id, type: 'rect', x: zero, y: y + 18 * k, w: 0, h: 0.32 * rowH, style: {fill, opacity: 0.85}, show: [from, 1e9], keys} as Prop,
+      {id: `${id}0`, type: 'line', x1: zero, y1: y + 10 * k, x2: zero, y2: y + 26 * k + 0.32 * rowH, style: {stroke: 'muted', width: 2 * k}, show: [from, 1e9]} as Prop);
+    const vx = w < 0 ? zero + w * scaleE - 12 * k : zero + Math.max(w * scaleE, 0) + 12 * k;
+    props.push(text(`v${id}`, vx, y + 18 * k + 0.16 * rowH + 10 * k, value, 26 * k, {weight: 700, align: w < 0 ? 'end' : 'start', style: {fill}, show: [grow ? landed : to, 1e9]}));
+  };
+  const J = (w: number) => `${w > 0 ? '+' : ''}${sig(w)} J`;
+  bar('bg', top, 'good', 'work by gravity', J(Wg), Wg, lead, landed, i => Wg * (yAt(i) - y0) / (yG - r - y0));
+  if (resisted) bar('br', top + rowH, 'bad', 'work by the resistive force', J(Wr), Wr, landed + 0.4, landed + 1.2);
+  bar('bk', top + (resisted ? 2 : 1) * rowH, 'accent', 'net work = change in K', J(dK), dK, landed + 1.6, landed + 2.2);
+  // the story
+  const px = fr.px, ptext = panel(W, k);
+  let row = fr.row;
+  const line = (id: string, t: string, when: number, extra: Partial<Prop> = {}) => {
+    props.push(ptext(id, px, row, t, 28 * k, {show: [when, 1e9], ...extra}));
+    row += wrapText(t, 28 * k, W - px - 40 * k).length * 1.28 * 28 * k + 6 * k;
+  };
+  line('f1', 'Gravity acts along the fall: its work is positive, mgh', lead, {style: {fill: 'good'}});
+  if (!s.illustrative) line('f2', `mgh = ${sig(m)} × ${sig(g)} × ${sig(h)} = ${sig(Wg)} J`, landed, {style: {fill: 'good'}});
+  if (resisted) {
+    line('f3', 'The resistive force acts against the motion: its work is negative', landed + 0.4, {style: {fill: 'bad'}});
+    if (!s.illustrative) line('f4', q.v !== undefined ? `Its work = ΔK − mgh = ${sig(dK)} − ${sig(Wg)} = ${sig(Wr)} J`
+      : `Its work = −${Rn}h = −${sig(q.resist!)} × ${sig(h)} = ${sig(Wr)} J`, landed + 1.2, {style: {fill: 'bad'}});
+  }
+  line('f5', 'The net work equals the change in kinetic energy', landed + 1.6, {weight: 700});
+  if (!s.illustrative) line('f6', `W net = ${resisted ? `${sig(Wg)} − ${sig(-Wr)}` : sig(Wg)} = ${sig(dK)} J = ΔK`, landed + 2.2, {weight: 700, style: {fill: 'accent'}});
+  facts.push(`work done by gravity = mgh = ${sig(Wg)} J`, ...(resisted ? [`work done by the resistive force = ${sig(Wr)} J (negative)`] : []),
+    `kinetic energy ${sig(K0)} J → ${sig(K1)} J (ΔK = ${sig(dK)} J)`, `net work = ${sig(dK)} J = ΔK`, `speed at the bottom = ${sig(v)} m/s`);
+  return scene(s, W, H, landed + 3.6, plane, props, [], {verb: 'work', facts});
+}
+
+/** Equal masses climbing the same height h in different times: the same work mgh, a stopwatch beside each. */
+function climb(s: WorkSpec): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080;
+  const fr = frame(W, H, k, s.title), box = fr.box, props: Prop[] = [...fr.titles], actors: Actor[] = [], facts: string[] = [];
+  const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
+  const c = s.climb!, m = s.mass ?? 1, g = s.g ?? 9.8, Wk = m * g * c.h, n = c.climbers.length, steps = 8;
+  const names = c.climbers.map((p, i) => p.label ?? 'ABC'[i]);
+  // screen time: the slowest climb takes up to 7 s; every climb at the same pace factor, so their times compare truly
+  const lead = 0.8, slow = Math.max(...c.climbers.map(p => p.t)), pace = Math.min(1, 7 / slow);
+  const bw = box[2] - box[0], bh = box[3] - box[1], cw = bw / n, figH = 0.24 * bh;
+  const base = box[1] + 0.9 * bh, rise = (0.62 * bh) / steps, tread = Math.min(0.56 * cw / steps, 1.4 * rise);
+  const fast = c.climbers.reduce((b, p, i) => (p.t < c.climbers[b].t ? i : b), 0);
+  c.climbers.forEach((p, i) => {
+    const x0 = box[0] + cw * i + 0.06 * cw, Ts = p.t * pace, done = lead + Ts;
+    // the stairs: the same flight for each
+    const pts: [number, number][] = [[x0, base]];
+    for (let j = 0; j < steps; j++) pts.push([x0 + tread * j, base - rise * (j + 1)], [x0 + tread * (j + 1), base - rise * (j + 1)]);
+    pts.push([x0 + tread * steps, base]);
+    props.push({id: `stairs${i}`, type: 'polyline', points: pts, closed: true, style: {fill: 'faint', stroke: 'muted', width: 3 * k}} as Prop,
+      {id: `floor${i}`, type: 'line', x1: x0 - 0.06 * cw, y1: base, x2: x0 + tread * steps + 0.02 * cw, y2: base, style: {stroke: 'muted', width: 4 * k}} as Prop);
+    // the climber: a step up every tread, at an even pace
+    const foot = (j: number): [number, number] => [x0 + tread * (j - 0.5), base - rise * j];
+    const path = [{t: 0, at: [x0 - 0.04 * cw, base] as [number, number]}, {t: lead, at: [x0 - 0.04 * cw, base] as [number, number]}];
+    for (let j = 1; j <= steps; j++) path.push({t: lead + Ts * j / steps, at: foot(j)});
+    actors.push({id: `climber${i}`, rig: 'figure', at: path[0].at, scale: figH / 176, facing: 1, layer: 3,
+      pose: [{t: 0, pose: 'stand'}, ...walking(lead, done, Math.min(0.3, Ts / steps / 2))],
+      base: path.map((q, j) => ({t: q.t, at: q.at, ...(j > 1 ? {ease: 'linear' as const} : {})}))});
+    props.push(text(`name${i}`, x0 + tread * steps / 2, base + 50 * k, names[i], 34 * k, {weight: 700, align: 'middle'}));
+    // the stopwatch runs until this climber reaches the top
+    // beside the stairs' tall side, clear of the climber
+    props.push({id: `watch${i}`, type: 'object', name: 'stopwatch', x: (x0 + tread * steps + box[0] + cw * (i + 1)) / 2, y: base - 0.25 * rise * steps, size: Math.min(1.4 * 70 * k, 0.3 * cw), a: 0,
+      keys: {a: [[lead, 0], [done, p.t, 'linear']] as Key[]}} as Prop);
+  });
+  const px = fr.px, ptext = panel(W, k);
+  let row = fr.row;
+  const line = (id: string, t: string, when: number, extra: Partial<Prop> = {}) => {
+    props.push(ptext(id, px, row, t, 30 * k, {show: [when, 1e9], ...extra}));
+    row += wrapText(t, 30 * k, W - px - 40 * k).length * 1.3 * 30 * k + 8 * k;
+  };
+  const first = lead + c.climbers[fast].t * pace, last = lead + slow * pace;
+  line('c1', `${n === 2 ? 'Two' : 'Three'} people of equal mass climb the same stairs`, lead);
+  line('c2', 'Each does the same work against gravity, W = mgh', lead + 0.8, {weight: 700, style: {fill: 'good'}});
+  if (!s.illustrative) line('c3', `W = ${sig(m)} × ${sig(g)} × ${sig(c.h)} = ${sig(Wk)} J for each`, lead + 1.4, {style: {fill: 'good'}});
+  line('c4', `${names[fast]} reaches the top first: the same work in less time`, first + 0.3, {weight: 700, style: {fill: 'accent'}});
+  if (!s.illustrative) line('c5', c.climbers.map((p, i) => `${names[i]}: ${sig(p.t)} s`).join(',  '), last, {style: {fill: 'muted'}});
+  facts.push(`each climber does work mgh = ${sig(Wk)} J against gravity`, ...c.climbers.map((p, i) => `${names[i]} takes ${sig(p.t)} s`));
+  return {...scene(s, W, H, last + 1.6, plane, props, actors, {verb: 'work', facts})};
 }

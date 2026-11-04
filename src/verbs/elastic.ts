@@ -47,7 +47,11 @@ export type ElasticSpec = Common & {verb: 'elastic'; kind: (typeof ELASTIC_KINDS
   Y?: number; G?: number; B?: number; sigma?: number; L?: number; d?: number; A?: number; F?: number; load?: number;
   wires?: Wire[]; dL?: number; compress?: boolean; w?: number; p?: number; depth?: number; V?: number; shape?: 'sphere' | 'cube';
   compare?: string[]; curve?: 'metal' | 'rubber'; g?: number; l?: number; b?: number; names?: [string, string];
-  show?: ('lateral' | 'energy' | 'regions' | 'unload' | 'edge')[];
+  show?: ('lateral' | 'energy' | 'graph' | 'regions' | 'unload' | 'edge')[];
+  /** hydraulic: one step of the book's account, so a beat shows only its own: squeeze (pressed on every side), restoring
+   * (internal forces equal and opposite to the fluid's), removed (out of the fluid, back to its shape and size), strain
+   * (volume shrinks, shape stays: volume strain). Left out: every step at once, with B and compressibility. */
+  stage?: (typeof HYDRAULIC_STAGES)[number];
   /** Drawn px per real metre of deformation: set by a compound scene so side-by-side parts share one factor (a stiffer
    * beam beside a softer one sagged alike when each part fitted its own sag, C9 of keph2-01). Not a planner field. */
   deform_scale?: number};
@@ -57,7 +61,8 @@ export type ElasticSpec = Common & {verb: 'elastic'; kind: (typeof ELASTIC_KINDS
 const SPRINGY = /\b(spring|rubber|elastic|steel|wire|ball|band|bow|trampoline)\b/i;
 const DOUGHY = /\b(putty|clay|plasticine|dough|wax|mud|play-?doh|lead shot)\b/i;
 
-const SHOWS: Record<string, string[]> = {tension: ['lateral', 'energy'], curve: ['regions', 'unload', 'energy'], beam: ['edge'],
+export const HYDRAULIC_STAGES = ['squeeze', 'restoring', 'removed', 'strain'] as const;
+const SHOWS: Record<string, string[]> = {tension: ['lateral', 'energy', 'graph'], curve: ['regions', 'unload', 'energy'], beam: ['edge'],
   shear: [], hydraulic: [], recover: []};
 
 /** A modulus from the spec or the material's table entry; undefined when neither gives it. */
@@ -67,8 +72,16 @@ const gOf = (s: ElasticSpec) => s.g ?? 9.8;   // the book takes g = 10 in some e
 const force = (s: ElasticSpec) => s.F ?? (isNum(s.load) ? s.load * gOf(s) : undefined);
 
 export function elasticErrors(s: ElasticSpec): string[] {
-  const e: string[] = [];
+  const e: string[] = [], show = new Set(s.show ?? []);
   if (!ELASTIC_KINDS.includes(s.kind)) return [`elastic: kind is one of ${ELASTIC_KINDS.join(', ')}`];
+  if (s.stage !== undefined) {
+    if (s.kind !== 'hydraulic') e.push(`elastic: stage goes with kind hydraulic (${HYDRAULIC_STAGES.join(', ')}); leave it out of a ${s.kind} scene`);
+    else if (!HYDRAULIC_STAGES.includes(s.stage)) e.push(`elastic: stage is ${HYDRAULIC_STAGES.join(', ')}: squeeze (pressed on every side), restoring (internal forces equal and opposite to the fluid's), removed (out of the fluid, back to its shape and size), strain (volume strain); leave it out for every step at once`);
+    else {
+      if (s.compare !== undefined) e.push('elastic: compare goes with the full hydraulic scene; leave stage out to compare compressibilities');
+      if (s.V !== undefined && s.stage !== 'strain') e.push(`elastic: V (for ΔV) is shown at stage strain only; leave it out of stage ${s.stage}`);
+    }
+  }
   for (const x of s.show ?? []) if (!SHOWS[s.kind].includes(x))
     e.push(`elastic: a ${s.kind} scene shows ${SHOWS[s.kind].length ? SHOWS[s.kind].map(v => `'${v}'`).join(', ') : 'nothing extra (leave show out)'}`);
   if (s.material !== undefined && !(typeof s.material === 'string' && MATERIALS[s.material.toLowerCase()]))
@@ -101,11 +114,14 @@ export function elasticErrors(s: ElasticSpec): string[] {
         if (force(s) !== undefined || s.wires.some(w => w?.load !== undefined)) e.push('elastic: with dL the load is solved; leave F, load and the wires\' loads out');
       } else if (force(s) === undefined && !s.wires.some(w => isNum(w?.load))) e.push('elastic: give the wires loads (kg), or F or load at the bottom, or dL to solve the load');
       if ((s.show ?? []).includes('lateral')) e.push("elastic: 'lateral' thinning is shown for one wire; leave wires out");
+      if ((s.show ?? []).includes('graph')) e.push("elastic: 'graph' (the pull rising with the extension) is drawn for one wire; leave wires out");
     } else {
       if (!(isNum(s.L) && s.L > 0 && s.L <= 100)) e.push('elastic: L is the wire or rod length in m');
       if (!((isNum(s.d) && s.d > 0 && s.d < 2) || (isNum(s.A) && s.A > 0 && s.A < 4))) e.push('elastic: give d (diameter, m) or A (cross-section, m²)');
       needForce(); needModulus('Y');
       if (s.sigma !== undefined && !(isNum(s.sigma) && s.sigma > 0 && s.sigma < 0.5)) e.push("elastic: sigma is Poisson's ratio, 0 to 0.5 (steel about 0.29)");
+      if (show.has('graph') && s.compress) e.push("elastic: 'graph' draws a hanging wire pulled longer; leave compress out");
+      if (show.has('graph') && show.has('lateral')) e.push("elastic: 'graph' and 'lateral' do not fit one drawing: show one");
     }
   }
   if (s.kind === 'shear') {
@@ -196,6 +212,48 @@ export function elastic(s: ElasticSpec): Scene {
     const wpx = ws.map(w => (lateral ? 80 * k : 14 * k + 22 * k * Math.sqrt(w.A) / dmax));
     const cx = bx0 + (narrow ? 0.4 : 0.45) * bw;
     facts.push(...ws.map((w, i) => `${w.name ?? `wire ${i + 1}`}: L = ${f(w.L)} m, A = ${num(w.A)} m², Y = ${num(w.Y)} Pa, tension ${f(T[i], 1)} N, stress ${num(T[i] / w.A)} Pa, strain ${num(dL[i] / w.L)}, elongation ΔL = ${mm(dL[i])}`));
+    if (show.has('graph')) {
+      // keph2-01 C9 S08 (2026-11-05): "the force does not stay constant, it rises steadily from zero to its final value as
+      // the wire stretches". The pull is an arrow growing with the stretch, and the force-extension graph is traced beside
+      // it from the origin, both linear in one clock so the point stays on the line. The triangle's area and ½ F l are the
+      // next beats' (graph, energy): not drawn here.
+      const F = T[0], l = dL[0], cxw = bx0 + (narrow ? 0.2 : 0.16) * bw, arrowMax = 120 * k, wp = 26 * k;
+      const h0 = (bh - 70 * k - arrowMax) / 1.14, D = s.deform_scale ? s.deform_scale * l : 0.14 * h0, h1 = h0 + D;
+      const lin = (a: number, b: number) => [[t0, a], [t1, b, 'linear']];
+      hatch('ceiling', cxw - 90 * k, cxw + 90 * k, top, false);
+      rect('wire0', cxw - wp / 2, top, wp, h0, {fill: 'cool', stroke: 'ink', width: 2 * k}, {keys: {h: lin(h0, h1)}} as never);
+      props.push({id: 'Ldim0', type: 'line', x1: cxw - 50 * k, y1: top, x2: cxw - 50 * k, y2: top + h0, style: {stroke: 'muted', width: 2 * k}, layer: 2} as Prop);
+      label('lL0', cxw - 62 * k, top + h0 / 2, 'L', {align: 'end', style: {fill: 'muted'}});
+      props.push({id: 'was', type: 'line', x1: cxw + 20 * k, y1: top + h0, x2: cxw + 110 * k, y2: top + h0, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, layer: 2} as Prop,
+        {id: 'dLdim', type: 'line', x1: cxw + 100 * k, y1: top + h0, x2: cxw + 100 * k, y2: top + h0, keys: {y2: lin(top + h0, top + h1)}, style: {stroke: 'bad', width: 3 * k}, layer: 4} as unknown as Prop);
+      label('ldL', cxw + 116 * k, top + h0 + D / 2 + 10 * k, 'l', {show: [t1 - 0.6, 1e9], style: {fill: 'bad'}});
+      // the pull: its length is the force, from (almost) nothing to its final value
+      const ya = (h: number) => top + h + 6 * k;
+      props.push({id: 'F', type: 'arrow', x1: cxw, y1: ya(h0), x2: cxw, y2: ya(h0) + 4 * k, head: 16 * k, style: {stroke: 'accent', width: 5 * k}, show: [t0, 1e9], layer: 5,
+        keys: {y1: lin(ya(h0), ya(h1)), y2: lin(ya(h0) + 4 * k, ya(h1) + arrowMax)}} as unknown as Prop);
+      label('lF', cxw + 18 * k, ya(h0) + 24 * k, 'F', {style: {fill: 'accent'}, show: [t0 + 0.3, 1e9], keys: {y: lin(ya(h0) + 24 * k, ya(h1) + arrowMax / 2 + 9 * k)}} as never);
+      // the force-extension graph, drawn as the wire stretches
+      const gx0 = bx0 + (narrow ? 0.44 : 0.36) * bw, gx1 = bx1 - 0.05 * bw, gy0 = by0 + 0.1 * bh, gy1 = by1 - 0.14 * bh, ex1 = gx0 + 0.82 * (gx1 - gx0), ey1 = gy1 - 0.8 * (gy1 - gy0);
+      props.push({id: 'gx', type: 'arrow', x1: gx0, y1: gy1, x2: gx1, y2: gy1, head: 14 * k, style: {stroke: 'ink', width: 3 * k}, layer: 2} as Prop,
+        {id: 'gy', type: 'arrow', x1: gx0, y1: gy1, x2: gx0, y2: gy0, head: 14 * k, style: {stroke: 'ink', width: 3 * k}, layer: 2} as Prop);
+      label('lgx', gx1, gy1 + 40 * k, 'extension', {align: 'end', style: {fill: 'muted'}});
+      label('lgy', gx0 + 16 * k, gy0 + 4 * k, 'force', {style: {fill: 'muted'}});
+      props.push({id: 'fline', type: 'polyline', points: [[gx0, gy1], [ex1, ey1]], draw: 0, keys: {draw: lin(0, 1)}, style: {stroke: 'accent', width: 5 * k}, layer: 4} as unknown as Prop,
+        {id: 'fpt', type: 'circle', x: gx0, y: gy1, r: 10 * k, keys: {x: lin(gx0, ex1), y: lin(gy1, ey1)}, style: {fill: 'accent', stroke: 'ink', width: 2 * k}, layer: 6} as unknown as Prop);
+      // at the end, the final values read off on the axes
+      props.push({id: 'gl', type: 'line', x1: ex1, y1: ey1, x2: ex1, y2: gy1, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, show: [t1, 1e9], fade: 0.3, layer: 2} as Prop,
+        {id: 'gF', type: 'line', x1: ex1, y1: ey1, x2: gx0, y2: ey1, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, show: [t1, 1e9], fade: 0.3, layer: 2} as Prop);
+      label('lgl', ex1 + 12 * k, gy1 - 14 * k, 'l', {style: {fill: 'bad'}, show: [t1, 1e9]});   // above the axis: below it, it ran into 'extension'
+      label('lgF', gx0 - 14 * k, ey1 + 9 * k, 'F', {align: 'end', style: {fill: 'accent'}, show: [t1, 1e9]});
+      line('l1', ill ? 'The pull is not constant: it rises steadily from zero as the wire stretches' : `The pull rises steadily from 0 to F = ${f(F, 1)} N as the wire stretches`, t0, {style: {fill: 'accent'}});
+      line('l2', 'Force against extension: a line rising from the origin', t0 + 0.8, {style: {fill: 'cool'}});
+      line('l3', ill ? 'At the extension l, the force reaches its final value F' : `At the extension l = ${mm(l)}, the force reaches its final value`, t1, {weight: 700});
+      if (show.has('energy')) line('l5', ill ? 'The work done is stored: U = ½ F l' : `Energy stored U = ½ F l = ${num(F * l / 2)} J`, t1 + 0.4, {style: {fill: 'good'}});
+      line('lnote', 'The stretch is drawn larger than real', t1 + 0.3, {style: {fill: 'muted'}});
+      facts.push(`the pull rises from 0 to F = ${f(F, 1)} N; extension l = ${mm(l)}`, ...(show.has('energy') ? [`work done = energy stored = ½ F l = ${num(F * l / 2)} J`] : []));
+      Object.assign(anchors, {top: [cxw, top], wire: [cxw, top + h1 / 2], bottom: [cxw, top + h1], origin: [gx0, gy1], graph_end: [ex1, ey1], line: [(gx0 + ex1) / 2, (gy1 + ey1) / 2]});
+      return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, dL, T, F, extension: l, ...pin(D / l, 'tension')});
+    }
     if (comp) {
       // a rod standing on the ground, a load pressed on its top: it shortens
       const w = ws[0], ground = by1 - 30 * k, h0 = w.L * sc, h1 = h0 - dL[0] * ex * sc, x = cx - wpx[0] / 2;
@@ -311,30 +369,72 @@ export function elastic(s: ElasticSpec): Scene {
   }
 
   if (s.kind === 'hydraulic') {
-    const B = modulus(s, 'B') ?? 1e10, p = s.p ?? 1000 * g * s.depth!, strain = p / B;
+    const B = modulus(s, 'B') ?? 1e10, p = s.p ?? 1000 * g * s.depth!, strain = p / B, stage = s.stage;
     const cx = bx0 + bw / 2, cy = by0 + bh / 2, r0 = 0.3 * Math.min(bw, bh), r1 = r0 * 0.86, cube = s.shape === 'cube';
-    rect('fluid', bx0 + 10 * k, by0 + 10 * k, bw - 20 * k, bh - 20 * k, {fill: 'cool', opacity: 0.16}, {layer: 1});
-    label('lfluid', bx0 + 30 * k, by0 + 50 * k, s.depth !== undefined ? 'water, deep down' : 'fluid at pressure p', {style: {fill: 'cool'}});
+    // A stage shows one step of the book's account and no more (keph2-01 C2, 2026-11-05: the full scene put the volume
+    // strain and B on screen in beats that only said "restoring forces" or "it restores its shape", which came later).
+    // removed: the body starts squeezed in the fluid; the fluid goes, and the body grows back to its dashed outline.
+    const out = stage === 'removed', tOut = 1.0, g0 = tOut + 0.5, g1 = g0 + 1.4, tR = t1 + 0.4;
+    // restoring: the fluid's pushes and the restoring forces inside are one length (equal and opposite), short enough to fit inside
+    const la = stage === 'restoring' ? Math.min(72 * k, 0.32 * r1) : 72 * k, lo = 8 * k, hi = la + lo;
+    const size = (f: (r: number) => number) => (out ? key(g0, g1, f(r1), f(r0)) : key(t0, t1, f(r0), f(r1))), r00 = out ? r1 : r0;
+    const inFluid = out ? {show: [0, tOut] as [number, number], fade: 0.4} : {};
+    rect('fluid', bx0 + 10 * k, by0 + 10 * k, bw - 20 * k, bh - 20 * k, {fill: 'cool', opacity: 0.16}, {layer: 1, ...inFluid});
+    label('lfluid', bx0 + 30 * k, by0 + 50 * k, s.depth !== undefined ? 'water, deep down' : 'fluid at pressure p', {style: {fill: 'cool'}, ...inFluid});
     if (cube) {
       props.push({id: 'was', type: 'rect', x: cx - r0, y: cy - r0, w: 2 * r0, h: 2 * r0, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, layer: 2} as Prop);
-      rect('body', cx - r0, cy - r0, 2 * r0, 2 * r0, {fill: 'figure', stroke: 'ink', width: 3 * k}, {keys: {x: key(t0, t1, cx - r0, cx - r1), y: key(t0, t1, cy - r0, cy - r1), w: key(t0, t1, 2 * r0, 2 * r1), h: key(t0, t1, 2 * r0, 2 * r1)}});
+      rect('body', cx - r00, cy - r00, 2 * r00, 2 * r00, {fill: 'figure', stroke: 'ink', width: 3 * k}, {keys: {x: size(r => cx - r), y: size(r => cy - r), w: size(r => 2 * r), h: size(r => 2 * r)}});
     } else {
       props.push({id: 'was', type: 'circle', x: cx, y: cy, r: r0, style: {stroke: 'muted', width: 2 * k, dash: [8 * k, 6 * k]}, layer: 2} as Prop,
-        {id: 'body', type: 'circle', x: cx, y: cy, r: r0, keys: {r: key(t0, t1, r0, r1)}, style: {fill: 'figure', stroke: 'ink', width: 3 * k}, layer: 3} as Prop);
+        {id: 'body', type: 'circle', x: cx, y: cy, r: r00, keys: {r: size(r => r)}, style: {fill: 'figure', stroke: 'ink', width: 3 * k}, layer: 3} as Prop);
     }
-    // pushes along the normal at every point of the surface, moving in with it
+    // pushes along the normal at every point of the surface, moving in with it; restoring forces inside, as long, outward
     const dirs: P2[] = cube ? [-0.5, 0, 0.5].flatMap(q => [[q, -1], [q, 1], [-1, q], [1, q]] as P2[]) : Array.from({length: 12}, (_, i) => [Math.cos(i * Math.PI / 6), Math.sin(i * Math.PI / 6)] as P2);
     dirs.forEach(([ux, uy], i) => {
       const n: P2 = cube ? (Math.abs(ux) === 1 ? [ux, 0] : [0, uy]) : [ux, uy];
-      const at = (r: number): P2 => (cube ? [cx + ux * r, cy + uy * r] : [cx + ux * r, cy + uy * r]);
-      const [a0, a1] = [at(r0), at(r1)];
-      props.push({id: `push${i}`, type: 'arrow', x1: a0[0] + n[0] * 80 * k, y1: a0[1] + n[1] * 80 * k, x2: a0[0] + n[0] * 8 * k, y2: a0[1] + n[1] * 8 * k, head: 14 * k,
-        keys: {x1: key(t0, t1, a0[0] + n[0] * 80 * k, a1[0] + n[0] * 80 * k), y1: key(t0, t1, a0[1] + n[1] * 80 * k, a1[1] + n[1] * 80 * k),
-          x2: key(t0, t1, a0[0] + n[0] * 8 * k, a1[0] + n[0] * 8 * k), y2: key(t0, t1, a0[1] + n[1] * 8 * k, a1[1] + n[1] * 8 * k)},
-        style: {stroke: 'accent', width: 4 * k}, show: [lead + 0.4, 1e9], fade: 0.3, layer: 4} as Prop);
+      const at = (r: number): P2 => [cx + ux * r, cy + uy * r];
+      const [a0, a1] = [at(r00), at(r1)], ends = (a: P2, d1: number, d2: number) => ({x1: a[0] + n[0] * d1, y1: a[1] + n[1] * d1, x2: a[0] + n[0] * d2, y2: a[1] + n[1] * d2});
+      const moving = out ? {show: [0, tOut] as [number, number]} : {show: [lead + 0.4, 1e9] as [number, number], keys: {x1: key(t0, t1, a0[0] + n[0] * hi, a1[0] + n[0] * hi), y1: key(t0, t1, a0[1] + n[1] * hi, a1[1] + n[1] * hi),
+        x2: key(t0, t1, a0[0] + n[0] * lo, a1[0] + n[0] * lo), y2: key(t0, t1, a0[1] + n[1] * lo, a1[1] + n[1] * lo)}};
+      props.push({id: `push${i}`, type: 'arrow', ...ends(a0, hi, lo), head: 14 * k, style: {stroke: 'accent', width: 4 * k}, fade: 0.3, layer: 4, ...moving} as Prop);
+      if (stage === 'restoring') props.push({id: `restore${i}`, type: 'arrow', ...ends(a1, -hi, -lo), head: 14 * k, style: {stroke: 'good', width: 4 * k}, show: [tR, 1e9], fade: 0.4, layer: 5} as Prop);
     });
-    label('lV', cx, cy + 9 * k, 'V', {align: 'middle', style: {fill: 'paper'}, layer: 7});
-    line('l1', ill ? 'The fluid presses equally, at right angles to every part of the surface' : `Hydraulic stress = pressure p = ${num(p)} Pa${s.depth !== undefined ? ` (ρgh at ${f(s.depth)} m)` : ''}`, lead + 0.4, {style: {fill: 'accent'}});
+    if (!stage || stage === 'strain') label('lV', cx, cy + 9 * k, 'V', {align: 'middle', style: {fill: 'paper'}, layer: 7});
+    const presses = ill ? 'The fluid presses equally, at right angles to every part of the surface' : `Hydraulic stress = pressure p = ${num(p)} Pa${s.depth !== undefined ? ` (ρgh at ${f(s.depth)} m)` : ''}`;
+    if (stage === 'squeeze' || stage === 'restoring') {
+      line('l1', presses, lead + 0.4, {style: {fill: 'accent'}});
+      if (stage === 'squeeze') line('l2', 'Squeezed on every side: the body is under hydraulic compression', t0 + 0.6, {weight: 700});
+      else {
+        // inside the body when there is room between the arrows (a half-width part has none: the panel's green line says it)
+        if (r1 - hi > 125 * k) label('lrestore', cx, cy + 9 * k, 'restoring forces', {align: 'middle', style: {fill: 'paper'}, layer: 7, show: [tR, 1e9]});
+        label('lpush', cx + 0.5 * r1 + 20 * k, cy - r1 - hi + 4 * k, "the fluid's forces", {style: {fill: 'accent'}, show: [tR, 1e9]});
+        line('l2', "Inside, restoring forces arise, equal and opposite to the fluid's", tR, {weight: 700, style: {fill: 'good'}});
+        line('l3', ill ? 'Restoring force per unit area = the hydraulic pressure, the applied force per unit area' : `Restoring force per unit area = hydraulic pressure p = ${num(p)} Pa`, tR + 1.4, {style: {fill: 'good'}});
+      }
+      facts.push(`pressure p = ${num(p)} Pa`);
+      larger();
+      Object.assign(anchors, {body: [cx, cy], surface: [cx, cy - r1], fluid: [bx0 + 30 * k, by0 + 80 * k]});
+      return scene(s, W, H, stage === 'squeeze' ? t1 + 2 : tR + 3.6, plane, props, [], {verb: 'elastic', facts, ...pin()});
+    }
+    if (out) {
+      line('l1', 'Taken out of the fluid', tOut, {weight: 700, style: {fill: 'cool'}});
+      line('l2', 'It regains its original shape and size', g1, {weight: 700, style: {fill: 'good'}});
+      line('lnote', 'The deformation is drawn larger than real', g1 + 0.3, {style: {fill: 'muted'}});
+      facts.push('out of the fluid, the restoring forces return the body to its original shape and size');
+      Object.assign(anchors, {body: [cx, cy], surface: [cx, cy - r0], fluid: [bx0 + 30 * k, by0 + 80 * k]});
+      return scene(s, W, H, g1 + 1.8, plane, props, [], {verb: 'elastic', facts, ...pin()});
+    }
+    if (stage === 'strain') {
+      line('l1', presses, lead + 0.4, {style: {fill: 'accent'}});
+      line('l2', 'The volume shrinks, the shape stays the same', t0 + 0.6, {weight: 700});
+      line('l3', ill ? 'So the strain is a volume strain, ΔV / V' : `Volume strain ΔV / V = ${num(strain)}`, t1, {style: {fill: 'bad'}});
+      if (isNum(s.V) && !ill) line('l4', `ΔV = ${num(s.V * strain)} m³ of ${num(s.V)} m³`, t1 + 0.3, {style: {fill: 'bad'}});
+      facts.push(`pressure p = ${num(p)} Pa`, `volume strain ΔV/V = ${num(strain)} (${num(100 * strain)} %)`, ...(isNum(s.V) ? [`volume change ΔV = ${num(s.V * strain)} m³`] : []));
+      larger();
+      Object.assign(anchors, {body: [cx, cy], surface: [cx, cy - r1], fluid: [bx0 + 30 * k, by0 + 80 * k]});
+      return scene(s, W, H, t1 + 2.4, plane, props, [], {verb: 'elastic', facts, strain, ...pin()});
+    }
+    line('l1', presses, lead + 0.4, {style: {fill: 'accent'}});
     line('l2', ill ? 'The volume shrinks, the shape stays: volume strain ΔV / V' : `Volume strain ΔV / V = p / B = ${num(strain)}`, t0 + 0.6, {style: {fill: 'bad'}});
     if (isNum(s.V) && !ill) line('l3', `ΔV = ${num(s.V * strain)} m³ of ${num(s.V)} m³`, t1, {style: {fill: 'bad'}});
     line('l4', ill ? 'Bulk modulus B = p / (ΔV / V); compressibility k is its reciprocal' : `B = ${num(B)} Pa${s.material ? ` (${s.material})` : ''}, compressibility k = 1 / B = ${num(1 / B)} Pa⁻¹`, t1 + 0.4, {weight: 700});

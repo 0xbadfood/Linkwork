@@ -59,12 +59,15 @@ import {gasProcess, gasProcessErrors, heatEngine, heatEngineErrors} from './ther
 import {kineticErrors, kineticGas, type KineticSpec} from './kinetic.ts';
 import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
+import {verticalCircle, verticalCircleErrors, type VerticalCircleSpec} from './vertical-circle.ts';
+import {collision2d, collision2dErrors, type Collision2dSpec} from './collision.ts';
 
 export type Spec = WaveSpec | ElectricSpec | PotentialSpec | CapacitorSpec | ShmSpec | LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
   | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
   | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
-  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec | SemiconductorSpec | KirchhoffSpec;
+  | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec | SemiconductorSpec | KirchhoffSpec
+  | VerticalCircleSpec | Collision2dSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -218,6 +221,10 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'kinetic theory, computed: molecules in a box to one speed scale, a molecule hitting a wall and P = ⅓nm⟨v²⟩, v_rms of gases as bars, degrees of freedom with Cᵥ, Cₚ, γ, a solid\'s 3R against the book\'s table, Dalton\'s law, the mean free path'},
   sig_figs: {errors: sigFigsErrors, compile: sigFigsScene,
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
+  vertical_circle: {errors: verticalCircleErrors, compile: verticalCircle,
+    about: "a bob on a string in a vertical circle, computed: v² = v₀² − 2gL(1 − cos θ) and T − mg cos θ = mv²/L at every angle, live θ, h, v and T; the book's bob (v₀ = √(5gL)) with T = 6mg at A and the string just slack at the top C, where v = √(gL), the least speed for a taut string; slower, slack before C; the instant at C (string slack, velocity horizontal); the bob held at an angle with mg's parts"} as Verb<VerticalCircleSpec>,
+  collision_2d: {errors: collision2dErrors, compile: collision2d,
+    about: 'a collision in two dimensions, computed for smooth balls: m1 moving at v1i strikes m2 at rest off-centre by the impact parameter b, the impulse along the line of centres at contact sets both outgoing directions; momentum conserved along x and y, elastic or with a coefficient of restitution; angles θ1 and θ2 with the horizontal, velocity names or values, momentum components; equal masses, elastic: at right angles; b = 0: head-on, one dimension'} as Verb<Collision2dSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,
     about: 'the plane angle and the solid angle as defined: an arc growing on a circle, θ = s/r in radians (1 rad when the arc equals the radius, 2π for the circle), or a patch spreading on a sphere seen from its centre, Ω = A/r² in steradians (4π for the sphere)'} as Verb<AngleSpec>,
 };
@@ -298,8 +305,8 @@ export function compile(spec: {verb: string; illustrative?: boolean} | CompoundS
 
 // Point names (2F₁, F₂, P1, 2F2) are not numbers: they are taken out before looking for digits. So are lowercase
 // names with a subscript (r2, q₁, m1: vector_add's r2 and r1 vanished from leph1-01 C2 S26, 2026-11-04), but not a
-// number with its unit stuck on (5m).
-const NAMES = /(?<![\w.])(?:\d?[A-Z][₀-₉0-9]*|[a-zα-ω][₀-₉0-9]+)(?![\w.])/g;
+// number with its unit stuck on (5m). A name may end in one more letter: the book's v1f, v2i (collision_2d, 2026-11-05).
+const NAMES = /(?<![\w.])(?:\d?[A-Z][₀-₉0-9]*|[a-zα-ω][₀-₉0-9]+[a-z]?)(?![\w.])/g;
 
 /** The scene with its numbers hidden: no readouts, no axis numbers, no text with a figure in it (but the title), dials
  * and watches without their digits; no facts for the narration to quote. */

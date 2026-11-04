@@ -19,10 +19,14 @@ type Common = {title?: string; width?: number; height?: number; fps?: number; th
 export const GASES: Record<string, number> = {hydrogen: 2.02, helium: 4, neon: 20.2, nitrogen: 28, oxygen: 32, air: 28.8, argon: 39.9, 'carbon dioxide': 44, chlorine: 70.9, 'uranium-235 hexafluoride': 349, 'uranium-238 hexafluoride': 352};
 /** Table 12.3, J mol⁻¹ K⁻¹. */
 export const SOLIDS: Record<string, number> = {aluminium: 24.4, carbon: 6.1, copper: 24.5, lead: 26.5, silver: 25.5, tungsten: 24.9};
-export const KINETIC_KINDS = ['box', 'pressure', 'speeds', 'freedom', 'solid', 'mixture', 'free_path'] as const;
+const UNITS = ['mmHg', 'kPa', 'Pa', 'atm', 'bar'] as const;
+export const KINETIC_KINDS = ['box', 'pressure', 'speeds', 'freedom', 'solid', 'mixture', 'free_path', 'partial'] as const;
 export type KineticSpec = Common & {verb: 'kinetic_gas'; kind: (typeof KINETIC_KINDS)[number]; gas?: string; gases?: string[]; M?: number; T?: number; n?: number; P?: number;
   /** The speed that fills the scale, m/s: fixed, so temperatures and gases can be compared. */
-  window?: number; atoms?: 'mono' | 'di' | 'poly'; vibration?: number; solids?: string[]; mu?: [number, number]; V?: number; d?: number; v?: number; simple?: boolean};
+  window?: number; atoms?: 'mono' | 'di' | 'poly'; vibration?: number; solids?: string[]; mu?: [number, number]; V?: number; d?: number; v?: number; simple?: boolean;
+  /** partial: Dalton's law on a gas mixture's partial pressures: total (default 760) in unit (default mmHg), the water vapour's
+   * partial pressure taken first, fractions of the dry rest ({oxygen: 0.21}), the gas the scene is about, which numbers show. */
+  total?: number; unit?: (typeof UNITS)[number]; vapour?: number; fractions?: Record<string, number>; highlight?: string; numbers?: 'all' | 'highlight'};
 
 const molar = (s: KineticSpec, name = s.gas) => (name ? GASES[name.toLowerCase()] : undefined) ?? s.M ?? 28;
 const rms = (T: number, M: number) => Math.sqrt(3 * R_GAS * T / (M * 1e-3));
@@ -49,6 +53,23 @@ export function kineticErrors(s: KineticSpec): string[] {
   if (s.V !== undefined && !(isNum(s.V) && s.V > 0)) e.push(`${v}: V is the volume in m³`);
   if (s.d !== undefined && !(isNum(s.d) && s.d > 0 && s.d < 1e-8)) e.push(`${v}: d is the molecular diameter in m, such as 2e-10`);
   if (s.n !== undefined && !(isNum(s.n) && s.n > 0)) e.push(`${v}: n is the number of molecules per m³`);
+  const pf = ['total', 'unit', 'vapour', 'fractions', 'highlight', 'numbers'] as const;
+  if (s.kind !== 'partial') { for (const f of pf) if (s[f] !== undefined) e.push(`${v}: ${f} belongs to kind partial (partial pressures of a mixture as one bar)`); return e; }
+  const total = s.total ?? 760;
+  if (s.total !== undefined && !(isNum(s.total) && s.total > 0)) e.push(`${v}: total is the mixture's total pressure, above 0, in unit (760 mmHg at sea level)`);
+  if (s.unit !== undefined && !UNITS.includes(s.unit)) e.push(`${v}: unit is ${UNITS.join(', ')}`);
+  if (s.vapour !== undefined && !(isNum(s.vapour) && s.vapour > 0 && s.vapour < total)) e.push(`${v}: vapour is the water vapour's partial pressure, above 0 and below total (47 mmHg at 37 °C)`);
+  const fr = s.fractions;
+  if (fr !== undefined) {
+    const ent = fr && typeof fr === 'object' && !Array.isArray(fr) ? Object.entries(fr) : [];
+    if (!ent.length || ent.length > 4) e.push(`${v}: fractions is 1 to 4 gases, each its fraction of the dry gas, such as {"oxygen": 0.21}`);
+    else {
+      for (const [g, f] of ent) { if (!(isNum(f) && f > 0 && f <= 1)) e.push(`${v}: fractions: ${g} is a fraction above 0, at most 1 (21 % is 0.21)`); if (g.length > 24) e.push(`${v}: fractions: a gas's name is at most 24 characters`); }
+      if (ent.every(([, f]) => isNum(f)) && ent.reduce((a, [, f]) => a + (f as number), 0) > 1 + 1e-9) e.push(`${v}: fractions add up to more than 1`);
+    }
+  }
+  if (s.highlight !== undefined && !Object.keys(fr ?? {oxygen: 0.21}).includes(s.highlight)) e.push(`${v}: highlight is one of the gases in fractions (${Object.keys(fr ?? {oxygen: 0.21}).join(', ')})`);
+  if (s.numbers !== undefined && !['all', 'highlight'].includes(s.numbers)) e.push(`${v}: numbers is all (every pressure and the sum) or highlight (only the highlighted gas's)`);
   return e;
 }
 
@@ -205,6 +226,43 @@ export function kineticGas(s: KineticSpec): Scene {
     return end('kinetic_gas', 5, {P1, P2, P, labelAt: {box: note}});
   }
 
+  if (s.kind === 'partial') {
+    // keph2-05 C4 S26 (2026-11-05): Dalton's law on inspired air, "inspired oxygen falls to about 150 mmHg". One bar of the
+    // total pressure: water vapour's share taken first, then each gas its fraction of what is left, p = f (P − p_vapour):
+    // 0.21 × (760 − 47) = 149.7 mmHg. numbers 'highlight' prints only the gas the narration names.
+    const unit = s.unit ?? 'mmHg', total = s.total ?? 760, vap = s.vapour ?? 0, fr = s.fractions ?? {oxygen: 0.21}, dry = total - vap;
+    const gases = Object.entries(fr).map(([g, f]) => ({g, p: f * dry})), rest = dry - gases.reduce((a, q) => a + q.p, 0), hl = s.highlight ?? gases[0].g, all = (s.numbers ?? 'all') === 'all';
+    const val = (v: number) => `${Math.abs(+v.toPrecision(3) - v) > 1e-9 ? '≈ ' : ''}${num(v)} ${unit}`;
+    const x = bx0 + 0.24 * bw, w = 0.22 * bw, base = by1 - 0.1 * bh, top = by0 + 0.04 * bh, h = (v: number) => (base - top) * v / total, lx = x + w + 24 * k;
+    const tV = 0.3, tOut = 1.1, tG = 1.6, tGe = 2.6, tints = ['accent', 'good', 'figure', 'bad'];
+    rect('frame', x, top, w, base - top, {stroke: 'ink', width: 3 * k}, {layer: 5});
+    // the dry gases, one block, then split into each gas's share
+    rect('dry', x, base - h(dry), w, h(dry), {fill: 'faint', opacity: 0.6}, {layer: 2});
+    if (vap > 0) {
+      rect('vapour', x, top, w, h(vap), {fill: 'cool', opacity: 0.85}, {layer: 3, show: [tV, 1e9], fade: 0.3, keys: {opacity: [[tOut, 1], [tOut + 0.5, 0.35]]}} as never);
+      label('lvapour', lx, top + h(vap) / 2 + 9 * k, all ? `water vapour, ${val(vap)}` : 'water vapour', {style: {fill: 'cool'}, show: [tV, 1e9]});
+      seg('cut', x - 20 * k, top + h(vap), x + w, top + h(vap), {stroke: 'ink', width: 3 * k, dash: [10 * k, 6 * k]} as never, {show: [tOut, 1e9], layer: 6} as never);
+      anchors.vapour = [x + w / 2, top + h(vap) / 2];
+    }
+    let y = base;
+    gases.forEach(({g, p}, i) => {
+      const hp = h(p), on = g === hl;
+      rect(`gas${i}`, x, y, w, 0, {fill: tints[i % 4], opacity: on ? 0.95 : 0.6}, {layer: 3, show: [tG, 1e9], keys: {y: [[tG, y], [tGe, y - hp, 'inOut']], h: [[tG, 0], [tGe, hp, 'inOut']]}} as never);
+      label(`lgas${i}`, lx, y - hp / 2 + 9 * k, all || on ? `${g}, ${val(p)}` : g, {style: {fill: tints[i % 4]}, show: [tGe, 1e9], ...(on ? {size: 32 * k} : {})});
+      anchors[g] = [x + w / 2, y - hp / 2];
+      y -= hp;
+    });
+    if (rest > 1e-9) label('lrest', lx, y - h(rest) / 2 + 9 * k, all ? `other gases, ${val(rest)}` : 'other gases', {style: {fill: 'muted'}, show: [tGe, 1e9]});
+    label('lbar', x + w / 2, base + 40 * k, all ? `total ${val(total)}` : 'total pressure', {align: 'middle', style: {fill: 'muted'}});
+    const lead = gases.find(q => q.g === hl)!, pct = (f: number) => `${num(100 * f)} %`;
+    if (vap > 0) line('l1', 'Water vapour takes its share of the total first', tV, {style: {fill: 'cool'}});
+    line('l2', `${hl[0].toUpperCase()}${hl.slice(1)}: its share of what is left`, tG, {style: {fill: 'accent'}});
+    const v3 = (x: number) => String(+x.toPrecision(3)), got = val(lead.p);
+    line('l3', all ? `p = ${v3(fr[hl])} × (${v3(total)} − ${v3(vap)}) ${got.startsWith('≈') ? got : `= ${got}`}` : `${hl[0].toUpperCase()}${hl.slice(1)}: about ${num(lead.p)} ${unit}`, tGe, {weight: 700});
+    facts.push(`total ${num(total)} ${unit}${vap ? `, water vapour ${num(vap)} ${unit}, the rest ${num(dry)} ${unit}` : ''}`, ...gases.map(q => `${q.g}: ${pct(fr[q.g])} of ${num(dry)} = ${num(q.p)} ${unit}`));
+    Object.assign(anchors, {bar: [x + w / 2, top]});
+    return end('kinetic_gas', tGe + 1.8, {partial: Object.fromEntries(gases.map(q => [q.g, q.p])), dry, labelEnd: bx1});
+  }
   // free_path: to no scale in the drawing; the panel holds the numbers
   const n = s.n ?? 2.7e25, d = s.d ?? 2e-10, v = s.v ?? 485, l = s.simple ? 1 / (n * Math.PI * d * d) : 1 / (Math.SQRT2 * n * Math.PI * d * d), tau = l / v;
   walls();

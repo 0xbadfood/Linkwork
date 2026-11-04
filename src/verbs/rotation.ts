@@ -6,6 +6,9 @@
 // along one radius share ω while v = ωr grows outwards. With a torque: the work τθ and the power τω. Conservation of
 // angular momentum: two masses slide along the rod from r1 to r2 while nothing turns it from outside, so L = Iω stays
 // fixed and ω rises as I falls (a skater pulling in her arms); the kinetic energy changes, done by the inner pull.
+// rpm: a machine's speed in revolutions per minute rising (or falling) steadily from one value to another in t seconds
+// (a motor wheel, Example 6.11), its rpm and t read live; the drawing turns slowed down so the turning can be followed.
+// No ω, α or I is printed: those are the next steps of the book's working (2026-11-05).
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
@@ -17,7 +20,7 @@ import {frame} from './vectors.ts';
 export const ROT_BODIES = ['disc', 'ring', 'wheel', 'sphere', 'rod'] as const;
 export type RotationSpec = {verb: 'rotation'; body?: (typeof ROT_BODIES)[number]; axis?: 'centre' | 'end'; r?: number; length?: number; mass?: number; I?: number;
   omega0?: number; alpha?: number; torque?: {F: number; phi?: number; at?: number}; t?: number;
-  slide?: {m: number; r1: number; r2: number}; show?: ('particles' | 'momentum' | 'energy')[];
+  slide?: {m: number; r1: number; r2: number}; rpm?: [number, number]; show?: ('particles' | 'momentum' | 'energy')[];
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const DEG = Math.PI / 180;
@@ -42,6 +45,16 @@ export function rotationErrors(s: RotationSpec): string[] {
   if (s.axis !== undefined && !['centre', 'end'].includes(s.axis)) e.push('rotation: axis is centre (default) or end (a rod only)');
   if (s.axis === 'end' && s.body !== 'rod') e.push('rotation: axis end is for a rod; a disc, ring, wheel or sphere turns about its centre');
   for (const k of ['r', 'length', 'mass', 'I'] as const) if (s[k] !== undefined && !(isNum(s[k]) && s[k]! > 0)) e.push(`rotation: ${k} is above 0`);
+  if (s.rpm !== undefined) {
+    if (!(Array.isArray(s.rpm) && s.rpm.length === 2 && s.rpm.every(v => isNum(v) && v >= 0 && v <= 100000) && s.rpm[0] !== s.rpm[1]))
+      e.push('rotation: rpm is [from, to], two different speeds in revolutions per minute, 0 to 100000');
+    if (s.omega0 !== undefined || s.alpha !== undefined || s.torque || s.slide) e.push('rotation: rpm sets the speeds itself; leave out omega0, alpha, torque and slide');
+    if (s.t === undefined) e.push('rotation: with rpm give t, the seconds the change takes');
+    if ((s.show ?? []).some(x => x !== 'particles')) e.push("rotation: with rpm, show takes only 'particles' (no mass or I is given)");
+    if (s.body === 'rod' || s.axis === 'end') e.push('rotation: rpm turns a wheel, disc, ring or sphere about its centre');
+    if (!e.length && s.t !== undefined && !(isNum(s.t) && s.t > 0 && s.t <= 600)) e.push('rotation: t is how long it turns, in s, up to 600');
+    return e;
+  }
   if (s.mass === undefined && s.I === undefined && !s.illustrative) e.push('rotation: give mass (kg) or I (kg m²); or, when the narration states no numbers, set illustrative: true');
   if (s.omega0 !== undefined && !(isNum(s.omega0) && s.omega0 >= 0)) e.push('rotation: omega0 is the starting angular speed in rad/s, 0 or more (anticlockwise)');
   if (s.alpha !== undefined && !isNum(s.alpha)) e.push('rotation: alpha is in rad/s² (negative slows it)');
@@ -77,8 +90,9 @@ export function rotation(s: RotationSpec): Scene {
   const px = fr.px, ptext = panel(W, k);
   let row = fr.row;
   const bw = box[2] - box[0], bh = box[3] - box[1], cx = (box[0] + box[2]) / 2, cy = box[1] + 0.52 * bh;
-  const {R, I: I0, formula} = inertia(s), M = s.mass ?? 1, w0 = s.omega0 ?? 0, T = s.t ?? 4, tau = s.torque ? torqueOf(s) : 0;
-  const alpha = s.alpha ?? (s.torque ? tau / I0 : 0), sl = s.slide;
+  const {R, I: I0, formula} = inertia(s), M = s.mass ?? 1, T = s.t ?? 4, tau = s.torque ? torqueOf(s) : 0;
+  const rpm = s.rpm, sl = s.slide;
+  const w0 = rpm ? 2 * Math.PI * rpm[0] / 60 : s.omega0 ?? 0, alpha = rpm ? 2 * Math.PI * (rpm[1] - rpm[0]) / 60 / T : s.alpha ?? (s.torque ? tau / I0 : 0);
   // the world's motion, sampled; screen time 3 to 8 s whatever the world takes (a slide runs at its own pace)
   const n = 160, lead = 1.2;
   const Ts = sl ? 7 : Math.min(8, Math.max(3, T)), Tw = sl ? Ts : T;
@@ -88,6 +102,8 @@ export function rotation(s: RotationSpec): Scene {
   const w = (t: number) => (sl ? L0 / Iof(t) : w0 + alpha * t);
   const th: number[] = [0];
   for (let i = 1; i <= n; i++) th.push(th[i - 1] + (w(tw(i - 1)) + w(tw(i))) / 2 * (tw(i) - tw(i - 1)));
+  // a machine's thousands of rpm would only flicker: drawn slowed, its fastest at under a turn a second on screen
+  if (rpm) { const c = 0.8 * 2 * Math.PI * Ts / (Math.max(w(0), w(Tw)) * Tw); for (let i = 0; i <= n; i++) th[i] *= c; }
   // a slow world spin still shows: the drawing turns at the true rate, the stripe makes the turning visible
   const key = (fn: (i: number) => number): Key[] => [[0, fn(0)], ...Array.from({length: n + 1}, (_, i) => [at(i), fn(i), 'linear'] as Key)];
   const Rpx = 0.36 * Math.min(bw, bh), ppm = Rpx / R;
@@ -159,6 +175,18 @@ export function rotation(s: RotationSpec): Scene {
     facts.push(`I before = ${f(I1)} kg m², after = ${f(I2)} kg m²`, `ω before = ${f(w0)} rad/s, after = ${f(w2)} rad/s`, `L = Iω = ${f(L0)} kg m²/s throughout`,
       `kinetic energy ${f(K1)} J → ${f(K2)} J`, formula);
     return scene(s, W, H, end + 1.5, plane, props, [], {verb: 'rotation', facts});
+  }
+  if (rpm) {
+    ro('rot', 't = {v} s', i => tw(i), 1, 'muted');
+    ro('rorpm', 'speed = {v} rpm', i => w(tw(i)) * 60 / (2 * Math.PI), 0, 'accent');
+    row += 8 * k;
+    line('m1', rpm[1] > rpm[0] ? `The ${body === 'wheel' ? 'wheel' : body} speeds up` : `The ${body === 'wheel' ? 'wheel' : body} slows down`, lead, {weight: 700});
+    line('m3', 'Drawn turning far slower than the real one', lead + 0.4, {style: {fill: 'muted'}});
+    if (!s.illustrative) line('m2', `${f(rpm[0])} rpm to ${f(rpm[1])} rpm in ${f(T)} s`, end, {style: {fill: 'accent'}});
+    const pi = (v: number) => `${f(v / Math.PI)}π`;
+    facts.push(`speed ${f(rpm[0])} rpm → ${f(rpm[1])} rpm in ${f(T)} s`, `ω0 = 2π × ${f(rpm[0])} / 60 = ${pi(w0)} rad/s`, `ω = 2π × ${f(rpm[1])} / 60 = ${pi(w(T))} rad/s`,
+      `uniform α = (ω − ω0) / t = ${pi(alpha)} rad/s² (${f(alpha)} rad/s²)`);
+    return scene(s, W, H, end + 1.4, plane, props, [], {verb: 'rotation', facts, alpha: round(alpha, 9)});
   }
   ro('rot', 't = {v} s', i => tw(i), 2, 'muted');
   ro('row', 'ω = {v} rad/s', i => w(tw(i)), 2, 'accent');

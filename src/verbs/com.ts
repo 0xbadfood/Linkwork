@@ -7,7 +7,11 @@
 //   piece's velocity is computed) while their CM keeps to the unbroken parabola, until a piece lands.
 // One body also takes turns (the same body at several orientations, its CG = CM point and the plumb line through it on
 // each: one point however it is turned) or gravity: 'uniform' (equal weight arrows; CG at the CM) or 'varying' (g
-// weaker higher up, exaggerated: the weights' centre, the CG, sits below the CM; 2026-10-30, C9 of keph1-06).
+// weaker higher up, exaggerated: the weights' centre, the CG, sits below the CM; 2026-10-30, C9 of keph1-06), or hang:
+// the body hung from one to three points, each copy turned until its CM is straight below the point, a plumb line
+// through it; the lines then drawn on the body cross at the CG (the book's way to find an irregular lamina's CG), or
+// "?" marks along each line for the wrong idea that the CG is just some point on one line (2026-11-05, C9 S26).
+// A polygon (3 to 10 vertices: an irregular lamina) goes with hang, turns, gravity or other bodies.
 import type {Actor, Prop, Scene} from '../scene.ts';
 import type {Plane} from '../plane.ts';
 import {toScene} from '../plane.ts';
@@ -17,11 +21,11 @@ import {n2, panel, scene, text} from './calculus.ts';
 import {frame} from './vectors.ts';
 
 type P2 = [number, number];
-export const COM_SHAPES = ['rod', 'rectangle', 'disc', 'ring', 'triangle'] as const;
+export const COM_SHAPES = ['rod', 'rectangle', 'disc', 'ring', 'triangle', 'polygon'] as const;
 type Body = {shape: (typeof COM_SHAPES)[number]; at?: P2; length?: number; angle?: number; w?: number; h?: number; r?: number; vertices?: P2[]; m?: number; label?: string};
 export type ComSpec = {verb: 'centre_of_mass'; masses?: {m: number; x: number; y?: number; label?: string}[]; bodies?: Body[];
   explode?: {v0: number; angle: number; g?: number; at?: number; pieces: [number, number]; v1: P2};
-  turns?: number[]; gravity?: 'uniform' | 'varying';
+  turns?: number[]; gravity?: 'uniform' | 'varying'; hang?: {from: P2[]; cross?: boolean; guesses?: boolean};
   unit?: string; title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 const DEG = Math.PI / 180;
@@ -41,6 +45,11 @@ function bodyOf(b: Body): {c: P2; size: number; pts: P2[]} {
       return {c: [x, y], size: w * h, pts: [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w / 2, y + h / 2], [x - w / 2, y + h / 2]]}; }
     case 'disc': case 'ring': { const r = b.r ?? 1;
       return {c: [x, y], size: b.shape === 'disc' ? Math.PI * r * r : 2 * Math.PI * r, pts: [[x - r, y - r], [x + r, y + r]]}; }
+    case 'polygon': { const v = b.vertices ?? [[0, 0], [1, 0], [0.5, 0.87]];
+      // the shoelace centroid of a simple polygon
+      let A = 0, cx = 0, cy = 0;
+      v.forEach((p, i) => { const q = v[(i + 1) % v.length], c = p[0] * q[1] - q[0] * p[1]; A += c; cx += (p[0] + q[0]) * c; cy += (p[1] + q[1]) * c; });
+      return {c: [cx / (3 * A), cy / (3 * A)], size: Math.abs(A) / 2, pts: v}; }
     case 'triangle': { const v = b.vertices ?? [[0, 0], [1, 0], [0.5, 0.87]];
       const area = Math.abs((v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1])) / 2;
       return {c: [(v[0][0] + v[1][0] + v[2][0]) / 3, (v[0][1] + v[1][1] + v[2][1]) / 3], size: area, pts: v}; }
@@ -80,14 +89,19 @@ export function comErrors(s: ComSpec): string[] {
       if (b.at !== undefined && !isP(b.at)) e.push(`${at}: at is its centre [x, y]`);
       for (const k of ['length', 'w', 'h', 'r'] as const) if (b[k] !== undefined && !(isNum(b[k]) && b[k]! > 0)) e.push(`${at}: ${k} is above 0`);
       if (b.shape === 'triangle' && !(Array.isArray(b.vertices) && b.vertices.length === 3 && b.vertices.every(isP))) e.push(`${at}: a triangle gives vertices [[x, y], [x, y], [x, y]]`);
+      if (b.shape === 'polygon' && !(Array.isArray(b.vertices) && b.vertices.length >= 3 && b.vertices.length <= 10 && b.vertices.every(isP))) e.push(`${at}: a polygon gives 3 to 10 vertices [[x, y], ...] in order round its edge`);
+      else if (b.shape === 'polygon' && bodyOf(b).size < 1e-9) e.push(`${at}: the polygon's vertices enclose no area`);
       if (b.m !== undefined && !(isNum(b.m) && b.m > 0)) e.push(`${at}: m is above 0`);
     }
     // without masses, mass goes with area: only for flat sheets of one material
     if (s.bodies.length > 1 && s.bodies.some(b => b.m === undefined) && s.bodies.some(b => ['rod', 'ring'].includes(b.shape)))
       e.push('centre_of_mass: a rod or ring with other bodies needs m for every body (without m, mass is taken as area, for flat sheets of one material)');
-    if ((s.turns !== undefined || s.gravity !== undefined) && s.bodies.length !== 1) e.push('centre_of_mass: turns and gravity are for one body');
+    if ((s.turns !== undefined || s.gravity !== undefined || s.hang !== undefined) && s.bodies.length !== 1) e.push('centre_of_mass: turns, gravity and hang are for one body');
+    if (s.bodies.length === 1 && s.bodies[0]?.shape === 'polygon' && s.turns === undefined && s.gravity === undefined && s.hang === undefined)
+      e.push('centre_of_mass: a polygon has no lines of symmetry to draw; give it hang (its CG found by hanging it), turns or gravity, or put it with other bodies');
   }
-  if ((s.turns !== undefined || s.gravity !== undefined) && !s.bodies) e.push('centre_of_mass: turns and gravity go with bodies (one body)');
+  if ((s.turns !== undefined || s.gravity !== undefined || s.hang !== undefined) && !s.bodies) e.push('centre_of_mass: turns, gravity and hang go with bodies (one body)');
+  if (s.hang !== undefined && s.bodies?.length === 1 && !e.length) e.push(...hangErrors(s));
   if (s.turns !== undefined) {
     if (!(Array.isArray(s.turns) && s.turns.length >= 2 && s.turns.length <= 4 && s.turns.every(isNum))) e.push('centre_of_mass: turns is 2 to 4 angles in degrees, the first usually 0');
     if (s.bodies?.some(b => b.shape === 'disc' || b.shape === 'ring')) e.push('centre_of_mass: a disc or ring looks the same turned; use turns with a rod, rectangle or triangle');
@@ -167,6 +181,7 @@ export function centreOfMass(s: ComSpec): Scene {
     return scene(s, W, H, end + 1.2, plane, props, actors, {verb: 'centre_of_mass', facts, cm: [round(X, 6), round(Y, 6)]});
   }
 
+  if (s.bodies && s.hang) return hangScene(s, W, H, k, fr, props, facts, line);
   if (s.bodies && (s.turns || s.gravity)) return gravityScene(s, W, H, k, fr, props, facts, line);
 
   if (s.bodies) {
@@ -361,4 +376,131 @@ function gravityScene(s: ComSpec, W: number, H: number, k: number, fr: ReturnTyp
     facts.push('uniform field: centre of gravity at the centre of mass');
   }
   return scene(s, W, H, 6.4, plane, props, [], {verb: 'centre_of_mass', facts, cm: [round(g0.c[0], 6), round(g0.c[1], 6)], ...(s.gravity === 'varying' ? {cg: [round(g0.c[0] + cg[0], 6), round(g0.c[1] + cg[1], 6)]} : {})});
+}
+
+/** Is q inside the body (or on its edge, within tol)? */
+function inside(b: Body, g: {c: P2; pts: P2[]}, q: P2, tol = 0): boolean {
+  if (b.shape === 'disc' || b.shape === 'ring') return Math.hypot(q[0] - g.c[0], q[1] - g.c[1]) <= (b.r ?? 1) + tol;
+  const v = g.pts;
+  const onEdge = v.some((p, i) => { const r = v[(i + 1) % v.length], dx = r[0] - p[0], dy = r[1] - p[1], L2 = dx * dx + dy * dy || 1e-18;
+    const t = Math.max(0, Math.min(1, ((q[0] - p[0]) * dx + (q[1] - p[1]) * dy) / L2)); return Math.hypot(q[0] - p[0] - t * dx, q[1] - p[1] - t * dy) <= tol; });
+  return onEdge || v.reduce((c, p, i) => { const r = v[(i + 1) % v.length]; return ((p[1] > q[1]) !== (r[1] > q[1])) && q[0] < (r[0] - p[0]) * (q[1] - p[1]) / (r[1] - p[1]) + p[0] ? !c : c; }, false);
+}
+
+function hangErrors(s: ComSpec): string[] {
+  const e: string[] = [], h = s.hang!, b = s.bodies![0];
+  if (s.turns !== undefined || s.gravity !== undefined) e.push('centre_of_mass: hang draws its own plumb lines; leave out turns and gravity');
+  if (b.shape === 'rod') e.push('centre_of_mass: a rod hangs straight down from any point on it, so its lines all coincide; hang a rectangle, triangle, polygon or disc');
+  if (!(Array.isArray(h.from) && h.from.length >= 1 && h.from.length <= 3 && h.from.every(isP))) return [...e, 'centre_of_mass: hang.from is 1 to 3 points of suspension [[x, y], ...] on the body, in its own coordinates'];
+  if (h.cross !== undefined && typeof h.cross !== 'boolean') e.push('centre_of_mass: hang.cross is true or false');
+  if (h.guesses !== undefined && typeof h.guesses !== 'boolean') e.push('centre_of_mass: hang.guesses is true or false');
+  if (h.cross && h.from.length < 2) e.push('centre_of_mass: hang.cross needs two or more points in hang.from: one line has no crossing');
+  if (h.cross && h.guesses) e.push('centre_of_mass: hang.guesses (the wrong idea: any point on a line) and hang.cross (the one point where the lines meet) are two different beats; give one');
+  if (e.length) return e;
+  const g = bodyOf(b), size = Math.max(...g.pts.map(p => Math.hypot(p[0] - g.c[0], p[1] - g.c[1])), b.r ?? 0, 1e-9);
+  h.from.forEach((p, i) => {
+    if (!inside(b, g, p, 1e-6 * size)) e.push(`centre_of_mass: hang.from ${i + 1} (${f(p[0])}, ${f(p[1])}) is not on the body; take a point on its edge or inside it`);
+    else if (Math.hypot(p[0] - g.c[0], p[1] - g.c[1]) < 0.08 * size) e.push(`centre_of_mass: hang.from ${i + 1} is at the CM: hung there it rests in any position and gives no line; take a point nearer the edge`);
+  });
+  for (let i = 0; i < h.from.length; i++) for (let j = i + 1; j < h.from.length; j++) {
+    const a = h.from[i], c = h.from[j], u = [a[0] - g.c[0], a[1] - g.c[1]], v = [c[0] - g.c[0], c[1] - g.c[1]];
+    if (Math.abs(u[0] * v[1] - u[1] * v[0]) < 0.05 * Math.hypot(...u) * Math.hypot(...v)) e.push(`centre_of_mass: hang.from ${i + 1} and ${j + 1} lie on one line with the CM, so their plumb lines coincide; move one`);
+  }
+  return e;
+}
+
+/** The body hung from each point in turn (turned until its CM is straight below), a plumb line through the point;
+ * then either the lines drawn on the body crossing at the CG, or "?" marks along each (the misconception). */
+function hangScene(s: ComSpec, W: number, H: number, k: number, fr: ReturnType<typeof frame>, props: Prop[], facts: string[],
+  line: (id: string, t: string, when: number, extra?: Partial<Prop>) => void): Scene {
+  const b = s.bodies![0], g0 = bodyOf(b), h = s.hang!, box = fr.box, from = h.from, NAMES = ['A', 'B', 'C'];
+  const cross = h.cross ?? (from.length > 1 && !h.guesses), disc = b.shape === 'disc' || b.shape === 'ring', R = b.r ?? 1;
+  const size = Math.max(...g0.pts.map(p => Math.hypot(p[0] - g0.c[0], p[1] - g0.c[1])), disc ? R : 0, 1e-9);
+  // each hung copy: turned about its pivot until the CM is straight below, the pivot then moved to (x, 0)
+  const outline = (pts: P2[], c: P2): P2[] => (disc ? [[c[0] - R, c[1] - R], [c[0] + R, c[1] + R]] : pts);
+  type Copy = {pts: P2[]; c: P2; pivot: P2; a: number; marks: P2[]};
+  const copies: Copy[] = [];
+  let x = 0;
+  // a cross copy's CM level with the hung copies' CMs
+  const hungCM = -from.reduce((a, p) => a + Math.hypot(g0.c[0] - p[0], g0.c[1] - p[1]), 0) / from.length;
+  for (const p of [...from, ...(cross ? [null] : [])]) {
+    const a = p ? -90 - Math.atan2(g0.c[1] - p[1], g0.c[0] - p[0]) / DEG : 0, q = p ?? g0.c;
+    const pts = g0.pts.map(v => turn(v, q, a)), c = turn(g0.c, q, a), marks = from.map(m => turn(m, q, a));
+    const o = outline(pts, c), x0 = Math.min(...o.map(v => v[0])), x1 = Math.max(...o.map(v => v[0]));
+    const dx = x - x0, dy = p ? -q[1] : hungCM - c[1];
+    const shift = (v: P2): P2 => [v[0] + dx, v[1] + dy];
+    copies.push({pts: pts.map(shift), c: shift(c), pivot: shift(q), a, marks: marks.map(shift)});
+    x = x1 + dx + 0.3 * size;
+  }
+  const all = copies.flatMap(c => [...outline(c.pts, c.c), [c.pivot[0], c.pivot[1] + 0.25 * size] as P2, [c.c[0], Math.min(...outline(c.pts, c.c).map(v => v[1])) - 0.25 * size] as P2]);
+  const win = fit(all, box[2] - box[0], box[3] - box[1]);
+  const plane: Plane = {id: 'p', x: win.x, y: win.y, box}, per = (win.x[1] - win.x[0]) / (box[2] - box[0]);
+  const fill = {fill: 'faint', stroke: 'ink', width: 3 * k}, step = 1.6;
+  const drawBody = (id: string, c: Copy, when: number) => props.push(disc
+    ? {id, type: 'circle', plane: 'p', x: c.c[0], y: c.c[1], r: R / per, style: b.shape === 'ring' ? {stroke: 'ink', width: 10 * k} : fill, show: [when, 1e9], fade: 0.3, layer: 1} as Prop
+    : {id, type: 'polyline', plane: 'p', points: c.pts, closed: true, style: fill, show: [when, 1e9], fade: 0.3, layer: 1} as Prop);
+  // a point's name up and to the left, or out along u (scene directions) away from lines through it
+  const name = (id: string, p: P2, t: string, when: number, u?: P2) => {
+    const [sx, sy] = toScene(plane, p);
+    props.push(u ? text(id, sx + u[0] * 30 * k, sy + u[1] * 30 * k + 10 * k, t, 28 * k, {weight: 700, align: 'middle', show: [when, 1e9], fade: 0.3, layer: 6})
+      : text(id, sx - 20 * k, sy - 14 * k, t, 28 * k, {weight: 700, align: 'end', show: [when, 1e9], fade: 0.3, layer: 6}));
+  };
+  // where a vertical through the pivot runs inside the body: its top and bottom there
+  const chord = (c: Copy): [number, number] => {
+    const ys: number[] = [], lo = Math.min(...outline(c.pts, c.c).map(v => v[1])), hi = Math.max(...outline(c.pts, c.c).map(v => v[1]));
+    const body: Body = disc ? {...b, at: c.c} : {...b, shape: 'polygon', vertices: c.pts};
+    for (let i = 0; i <= 200; i++) { const y = lo + (hi - lo) * i / 200; if (inside(body, {c: c.c, pts: c.pts}, [c.pivot[0], y], 1e-9 * size)) ys.push(y); }
+    return [Math.min(...ys), Math.max(...ys)];
+  };
+  from.forEach((p, i) => {
+    const c = copies[i], when = 0.4 + step * i, [ylo] = chord(c), bottom = Math.min(...outline(c.pts, c.c).map(v => v[1])) - 0.15 * size;
+    drawBody(`b${i}`, c, when);
+    props.push({id: `nail${i}`, type: 'line', plane: 'p', x1: c.pivot[0] - 0.12 * size, y1: c.pivot[1] + 0.12 * size, x2: c.pivot[0] + 0.12 * size, y2: c.pivot[1] + 0.12 * size,
+      style: {stroke: 'muted', width: 5 * k}, show: [when, 1e9], fade: 0.3, layer: 2} as Prop,
+      {id: `pin${i}`, type: 'line', plane: 'p', x1: c.pivot[0], y1: c.pivot[1] + 0.12 * size, x2: c.pivot[0], y2: c.pivot[1], style: {stroke: 'muted', width: 3 * k}, show: [when, 1e9], fade: 0.3, layer: 2} as Prop,
+      {id: `pv${i}`, type: 'circle', plane: 'p', x: c.pivot[0], y: c.pivot[1], r: 7 * k, style: {fill: 'ink'}, show: [when, 1e9], fade: 0.3, layer: 4} as Prop);
+    name(`ln${i}`, c.pivot, NAMES[i], when);
+    // the plumb line from the pivot, past the body's lowest point, with its bob
+    props.push({id: `plumb${i}`, type: 'line', plane: 'p', x1: c.pivot[0], y1: c.pivot[1], x2: c.pivot[0], y2: bottom, style: {stroke: 'accent', width: 2.5 * k, dash: [8 * k, 7 * k]}, show: [when + 0.5, 1e9], fade: 0.3, layer: 3} as Prop,
+      {id: `bob${i}`, type: 'circle', plane: 'p', x: c.pivot[0], y: bottom, r: 9 * k, style: {fill: 'accent'}, show: [when + 0.5, 1e9], fade: 0.3, layer: 3} as Prop);
+    if (h.guesses) [0.3, 0.55, 0.8].forEach((fy, j) => {
+      const y = c.pivot[1] - (c.pivot[1] - ylo) * fy - 0 * j, [sx, sy] = toScene(plane, [c.pivot[0], y]);
+      props.push({id: `q${i}-${j}`, type: 'circle', x: sx, y: sy, r: 8 * k, style: {fill: 'paper', stroke: 'cool', width: 3 * k}, show: [when + 1 + 0.25 * j, 1e9], fade: 0.3, layer: 5} as Prop,
+        text(`lq${i}-${j}`, sx + 18 * k, sy + 10 * k, '?', 30 * k, {weight: 700, style: {fill: 'cool'}, show: [when + 1 + 0.25 * j, 1e9], fade: 0.3, layer: 5}));
+    });
+  });
+  let end = 0.4 + step * from.length;
+  if (cross) {
+    // the lines drawn on the body as it lies: each through its point and the CM; they meet at the CG
+    const c = copies[from.length], when = end;
+    drawBody('bx', c, when);
+    c.marks.forEach((m, i) => {
+      const d: P2 = [c.c[0] - m[0], c.c[1] - m[1]], L = Math.hypot(...d), u: P2 = [d[0] / L, d[1] / L], far: P2 = [m[0] + u[0] * (L + 0.35 * size), m[1] + u[1] * (L + 0.35 * size)];
+      props.push({id: `mk${i}`, type: 'circle', plane: 'p', x: m[0], y: m[1], r: 7 * k, style: {fill: 'ink'}, show: [when, 1e9], fade: 0.3, layer: 4} as Prop,
+        {id: `ln-on${i}`, type: 'line', plane: 'p', x1: m[0], y1: m[1], x2: far[0], y2: far[1], style: {stroke: 'accent', width: 2.5 * k, dash: [8 * k, 7 * k]}, show: [when + 0.5 + 0.6 * i, 1e9], fade: 0.3, layer: 3} as Prop);
+      name(`lm${i}`, m, NAMES[i], when, [-u[0], u[1]]);
+    });
+    const [sx, sy] = toScene(plane, c.c), at = when + 0.6 + 0.6 * from.length;
+    props.push({id: 'cg', type: 'circle', x: sx, y: sy, r: 15 * k, style: {fill: 'paper', stroke: 'accent', width: 4 * k}, show: [at, 1e9], fade: 0.3, layer: 5} as Prop,
+      {id: 'cg-dot', type: 'circle', x: sx, y: sy, r: 5 * k, style: {fill: 'accent'}, show: [at, 1e9], fade: 0.3, layer: 5} as Prop,
+      text('lcg', sx + 22 * k, sy - 18 * k, 'CG', 30 * k, {weight: 700, style: {fill: 'accent'}, show: [at, 1e9], fade: 0.3, layer: 6}));
+    end = at + 0.6;
+  }
+  // the story, in the beat's own steps
+  if (h.guesses) {
+    line('l1', from.length > 1 ? 'Hung from different points: a vertical line through each point of support' : 'Hung from a point: the vertical line through it', 0.9);
+    line('l2', `A common misconception: the CG is just some point on ${from.length > 1 ? 'one of these lines' : 'this line'}`, 1.4 + step * (from.length - 1), {weight: 700, style: {fill: 'cool'}});
+    line('l3', 'That is not right', end + 0.4, {weight: 700, style: {fill: 'bad'}});
+    end += 0.4;
+  } else {
+    line('l1', 'Hung from A, the body comes to rest with its CG straight below A: a plumb line marks the vertical through A', 0.9);
+    if (from.length > 1) line('l2', `Hung from ${from.length > 2 ? 'B, then C' : 'B'}: another vertical line`, 0.9 + step);
+    if (cross) {
+      line('l3', 'Drawn on the body, the lines cross at one point', end - 1.2);
+      line('l4', 'That point is the centre of gravity', end - 0.6, {weight: 700, style: {fill: 'accent'}});
+    }
+  }
+  facts.push(`the body is hung from ${from.length} point${from.length > 1 ? 's' : ''}; each time the vertical through the point of suspension passes through the CG`,
+    ...(cross ? [`the lines cross at the CG, (${f(g0.c[0])}, ${f(g0.c[1])}) ${s.unit ?? 'm'} in the body's own coordinates: in a uniform field the CM`] : []));
+  return scene(s, W, H, end + 2.4, plane, props, [], {verb: 'centre_of_mass', facts, cm: [round(g0.c[0], 6), round(g0.c[1], 6)]});
 }

@@ -32,6 +32,8 @@ export type DimensionsSpec = Common & {
   value?: number;
   from?: Partial<Record<'M' | 'L' | 'T', string>>;
   to?: Partial<Record<'M' | 'L' | 'T', string>>;
+  /** formula: also give the SI unit, from the dimensions (kg m² for moment of inertia). */
+  si?: boolean;
   panel?: boolean;
   seconds?: number;
 };
@@ -55,6 +57,10 @@ export const QUANTITIES: Record<string, {dims: Dims; symbol: string}> = {
   angle: {dims: [0, 0, 0, 0, 0], symbol: 'θ'}, strain: {dims: [0, 0, 0, 0, 0], symbol: 'ε'}, 'refractive index': {dims: [0, 0, 0, 0, 0], symbol: 'n'},
   'surface tension': {dims: [1, 0, -2, 0, 0], symbol: 'S'}, 'spring constant': {dims: [1, 0, -2, 0, 0], symbol: 'k'},
   G: {dims: [-1, 3, -2, 0, 0], symbol: 'G'}, 'speed of light': {dims: [0, 1, -1, 0, 0], symbol: 'c'},
+  // rotation (Class 11 System of Particles, 2026-11-05: moment of inertia's M L² and kg m² had no row)
+  'moment of inertia': {dims: [1, 2, 0, 0, 0], symbol: 'I'}, 'angular momentum': {dims: [1, 2, -1, 0, 0], symbol: 'L'},
+  'angular acceleration': {dims: [0, 0, -2, 0, 0], symbol: 'α'}, 'angular speed': {dims: [0, 0, -1, 0, 0], symbol: 'ω'},
+  'angular displacement': {dims: [0, 0, 0, 0, 0], symbol: 'θ'}, 'radius of gyration': {dims: [0, 1, 0, 0, 0], symbol: 'k'},
   current: {dims: [0, 0, 0, 1, 0], symbol: 'I'}, charge: {dims: [0, 0, 1, 1, 0], symbol: 'q'}, temperature: {dims: [0, 0, 0, 0, 1], symbol: 'T'},
 };
 /** Units of mass, length and time, in kg, m and s. */
@@ -76,6 +82,11 @@ export function dimText(d: Dims): string {
   return parts.length ? `[${parts.join(' ')}]` : '[M⁰ L⁰ T⁰]';
 }
 const of = (name: string) => QUANTITIES[name]?.dims;
+/** The SI unit from the dimensions, in base units: [M L²] → kg m², [M L² T⁻¹] → kg m² s⁻¹. */
+export function siUnit(d: Dims): string {
+  const parts = ['kg', 'm', 's', 'A', 'K'].map((u, i) => d[i] ? `${u}${d[i] === 1 ? '' : sup(d[i])}` : '').filter(Boolean);
+  return parts.length ? parts.join(' ') : 'none (a pure number)';
+}
 export function product(factors: Factor[]): Dims {
   const d: Dims = [0, 0, 0, 0, 0];
   for (const [name, p] of factors) of(name).forEach((v, i) => { d[i] += v * p; });
@@ -162,6 +173,7 @@ export function dimensionsErrors(s: DimensionsSpec): string[] {
       for (const [b, name] of Object.entries(u)) if (!(b in UNITS) || !(String(name) in UNITS[b as 'M'])) e.push(`dimensions: ${side}.${b} is one of ${b in UNITS ? Object.keys(UNITS[b as 'M']).join(', ') : 'M, L or T (keys)'}`);
     }
   }
+  if (s.si !== undefined && (typeof s.si !== 'boolean' || s.mode !== 'formula')) e.push('dimensions: si (true: give the SI unit too) goes with mode formula');
   if (s.panel !== undefined && typeof s.panel !== 'boolean') e.push('dimensions: panel is true or false');
   if (s.seconds !== undefined && !(isNum(s.seconds) && s.seconds >= 4 && s.seconds <= 20)) e.push('dimensions: seconds is 4 to 20');
   return e;
@@ -181,7 +193,8 @@ export function dimensionsScene(s: DimensionsSpec): Scene {
     const q = s.quantity!, fs = s.factors!;
     rows.push(...fs.map(([n, p], j) => ({id: `f${j}`, a: `${n}${p === 1 ? '' : ` (power ${frac(p)})`}`, b: dimText(product([[n, p]]))})));
     verdict = {text: `${q} = ${fs.map(([n, p]) => p === 1 ? n : `${n}${sup(p)}`).join(' × ')}  →  ${dimText(of(q))}`, fill: 'accent'};
-    lines.push(`Dimensions of ${q}`, 'Add the powers of M, L and T factor by factor', `${q}: ${dimText(of(q))}`);
+    lines.push(`Dimensions of ${q}`, 'Add the powers of M, L and T factor by factor', `${q}: ${dimText(of(q))}${s.si ? `; SI unit ${siUnit(of(q))}` : ''}`);
+    if (s.si) facts.push(`the SI unit of ${q} is ${siUnit(of(q))}`);
     facts.push(`the dimensions of ${q} are ${dimText(of(q))}: its dimensional formula`, `${q} = ${fs.map(([n, p]) => p === 1 ? n : `${n}^${frac(p)}`).join(' × ')}`);
   } else if (s.mode === 'check') {
     const L = product(s.left!.factors);
@@ -221,7 +234,8 @@ export function dimensionsScene(s: DimensionsSpec): Scene {
     facts.push(`${v} ${unit(s.from)} = ${out.toPrecision(4).replace(/\.?0+(e|$)/, '$1')} ${unit(s.to)} (${q}, dimensions ${dimText(of(q))})`);
   }
   // Rows appear one after another, then the result.
-  const n = rows.length + 1, rowH = Math.min(100 * k, (0.86 * H - top) / n), step = Math.max(0.6, (T - 3) / n);
+  const unit = s.mode === 'formula' && s.si ? `SI unit: ${siUnit(of(s.quantity!))}` : '';
+  const n = rows.length + 1 + (unit ? 1 : 0), rowH = Math.min(100 * k, (0.86 * H - top) / n), step = Math.max(0.6, (T - 3) / n);
   const y0 = top + Math.max(0, (0.8 * H - top - rowH * n) / 2);     // the block sits in the middle of its room
   rows.forEach((r, j) => {
     const y = y0 + rowH * j, t = 0.5 + step * j;
@@ -234,6 +248,12 @@ export function dimensionsScene(s: DimensionsSpec): Scene {
     props.push({id: 'verdict-rule', type: 'line', x1: round(left, 2), y1: round(y - 0.55 * rowH, 2), x2: round(right, 2), y2: round(y - 0.55 * rowH, 2), show: [0.5 + step * rows.length, 1e9], fade: 0.3, style: {stroke: 'faint', width: 2 * k}, layer: 5});
     props.push({id: 'verdict', type: 'text', x: round(left, 2), y: round(y, 2), text: verdict.text, size: 40 * k, weight: 700, width: right - left, show: [0.5 + step * rows.length, 1e9], fade: 0.35, style: {fill: verdict.fill}, layer: 6});
     anchors.verdict = [left, round(y, 2)];
+    if (unit) {
+      // under the verdict however many lines it wraps to (a half-width part wraps it to three)
+      const below = Math.max(rowH, wrapText(verdict.text, 40 * k, right - left).length * 1.25 * 40 * k + 14 * k);
+      props.push({id: 'unit', type: 'text', x: round(left, 2), y: round(y + below, 2), text: unit, size: 40 * k, weight: 700, width: right - left, show: [1.3 + step * rows.length, 1e9], fade: 0.35, style: {fill: 'good'}, layer: 6});
+      anchors.unit = [left, round(y + below, 2)];
+    }
   }
   if (panel) {
     const px = 0.66 * W, pw = W - px - 40 * k;
