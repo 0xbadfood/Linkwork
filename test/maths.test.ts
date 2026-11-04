@@ -21,6 +21,13 @@ test('derivatives are exact: they match finite differences everywhere they are d
   assert.equal(show(derivative(parse('x^3 - 3x'))), '3x² − 3');
 });
 
+test('a number times a power of a number keeps its sign: 100 · 2^(…) never prints as 1002^(…)', () => {
+  assert.equal(show(parse('100 * 2^(-x/10)')), '100 · 2^(−x / 10)');
+  assert.equal(show(parse('3 * 2^2')), '3 · 2²');
+  assert.equal(show(parse('3x^2')), '3x²');
+  assert.equal(show(parse('5 * e^x')), '5e^x');
+});
+
 test('domain and range claims are checked against the function', () => {
   assert.deepEqual(claimErrors('sqrt(x)', -4, 9, 'x >= 0', 'y >= 0'), []);
   assert.deepEqual(claimErrors('1/x', -5, 5, 'x != 0', 'y != 0'), []);

@@ -240,7 +240,7 @@ export function show(n: Node, pretty = true, parent = 0, right = false, parentOp
       if (pretty && n.op === '^' && n.b.k === 'num' && Number.isInteger(n.b.v) && n.b.v >= 0 && n.b.v < 10)
         { s = show(n.a, pretty, 5) + SUP[String(n.b.v)]; p = 4; break; }
       const a = show(n.a, pretty, p, false, n.op), b = show(n.b, pretty, p, true, n.op);
-      if (n.op === '*' && pretty && (n.a.k === 'num' && (n.b.k === 'var' || n.b.k === 'fn' || (n.b.k === 'bin' && n.b.op === '^'))))
+      if (n.op === '*' && pretty && (n.a.k === 'num' && (n.b.k === 'var' || n.b.k === 'fn' || (n.b.k === 'bin' && n.b.op === '^' && (n.b.a.k !== 'num' || !!n.b.a.name)))))
         s = a + b;
       else s = `${a} ${pretty && n.op === '-' ? '−' : pretty && n.op === '*' ? '·' : n.op} ${b}`;
       if (n.op === '^') s = `${a}^${b}`;
