@@ -185,8 +185,10 @@ export function nucleus(s: NucleusSpec): Scene {
       const m = extra.move, keys = m ? {x: [[m[0], px], [m[1], m[2] + u * 2 * rb, 'inOut']], y: [[m[0], py], [m[1], m[3] + v * 2 * rb, 'inOut']]} : undefined;
       ball(px, py, rb, p ? PROTON : NEUTRON, {...(extra.show ? {show: extra.show, fade: .3} : {}), ...(keys ? {keys} : {})});
     });
+    bodies.push([x, y, reach(A) * rb]);
     return reach(A) * rb;
   };
+  const bodies: [number, number, number][] = [];
   const legend = (y: number) => {
     ball(bx + 14 * k, y, 10 * k, PROTON); label(bx + 32 * k, y + 8 * k, 'proton', PROTON, 22, {align: 'start'});
     ball(bx + 150 * k, y, 10 * k, NEUTRON); label(bx + 168 * k, y + 8 * k, 'neutron', 'muted', 22, {align: 'start'});
@@ -529,5 +531,12 @@ export function nucleus(s: NucleusSpec): Scene {
     legend(by + bh * .99);
   }
 
-  return finish('nucleus', s as never, dur, story, second, facts, anchors, s.illustrative);
+  // A planner's words at a nucleus go above it, not across its nucleons (leph2-05 C2, 2026-11-04: '118 neutrons' and
+  // 'gold example only' were written over the gold nucleus)
+  const labelAt: Record<string, P2> = {};
+  for (const [name, [x, y]] of Object.entries(anchors)) {
+    const b = bodies.find(([bx_, by_, r]) => Math.hypot(x - bx_, y - by_) < r * .5);
+    if (b) labelAt[name] = [b[0] - b[2], Math.max(by + 16 * k, b[1] - b[2] - 30 * k)];
+  }
+  return finish('nucleus', s as never, dur, story, second, facts, anchors, s.illustrative, {labelAt});
 }

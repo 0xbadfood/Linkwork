@@ -2250,3 +2250,14 @@ test('a graph can be drawn against a Greek letter (leph2-03 C5)', async () => {
   assert.equal(evaluate(parse('2πθ', ['θ']), {θ: 1}), 2 * Math.PI);
   assert.match(compile({verb: 'graph', x: {name: 'π', range: [0, 1]}, y: {name: 'y', range: [0, 1]}, series: [{label: 'y', expr: 'π'}]} as any).errors.join(), /one letter/);
 });
+
+test("a planner's words at a nucleus sit above it, never across its nucleons", async () => {
+  // leph2-05 C2, 2026-11-04: '118 neutrons' and '79 protons' were written over the gold nucleus
+  const {compile} = await import('../src/index.ts');
+  for (const spec of [{verb: 'nucleus', show: 'make', nuclides: ['Au-197'], annotate: [{text: '79 protons', at: 'nucleus1'}, {text: '118 neutrons', at: 'nucleus1'}]},
+    {verb: 'nucleus', show: 'decay', mode: 'beta-', nuclides: ['P-32'], annotate: [{text: 'neutron becomes proton', at: 'parent'}]}]) {
+    const sc: any = (compile(spec as never) as any).scene, balls = sc.props.filter((p: any) => p.type === 'circle' && p.layer === 3);
+    const top = Math.min(...balls.filter((b: any) => b.r > 6 * sc.height / 1080).map((b: any) => b.y - b.r));
+    for (const t of sc.props.filter((p: any) => p.id.startsWith('note') && p.type === 'text')) assert.ok(t.y + 10 < top, `${t.text} at ${t.y}, nucleus top ${top}`);
+  }
+});
