@@ -165,7 +165,9 @@ export function circuit(s: CircuitSpec): Scene {
     line(`cell${c}-plus`, [X0 - 26 * k, y], [X0 + 26 * k, y], {style: {stroke: 'ink', width: 4 * k}});
     line(`cell${c}-minus`, [X0 - 13 * k, y + 8 * k], [X0 + 13 * k, y + 8 * k], {style: {stroke: 'ink', width: 9 * k}});
   }
-  if (!mains) { text('plus', '+', X0 - 44 * k, bTop + 4 * k, 'accent'); text('minus', '−', X0 - 44 * k, bBot + 4 * k, 'accent'); }
+  // + beside the top (long) plate and − beside the bottom one, at least a glyph apart: with one or two cells the two
+  // plates are 8–16 px apart, so the marks sat on each other (12 published circuit scenes, 2026-11-05).
+  if (!mains) { text('plus', '+', X0 - 44 * k, Math.min(bTop + 4 * k, by - 17 * k), 'accent'); text('minus', '−', X0 - 44 * k, Math.max(bBot + 4 * k, by + 17 * k), 'accent'); }
   anchors.battery = [X0, by];
   const keyX = X0 + 0.22 * (X1 - X0), amX = X0 + 0.5 * (X1 - X0), amR = 26 * k;
   line('wire-top-1', [X0, Y0], [keyX - 22 * k, Y0]);
@@ -291,7 +293,8 @@ export function circuit(s: CircuitSpec): Scene {
     for (const [id, q] of Object.entries(sol.parts)) {
       const glow = props.find(p => p.id === `${id}-glow`);
       if (glow) props.push({...glow, id: `${id}-glow${n}`, show, fade: 0.4, style: {fill: 'accent', opacity: round(0.1 + 0.45 * q.P / maxP, 3)}} as Prop);
-      if (s.power) text(`${id}-P${n}`, `${fmt(q.P, 2)} W`, anchors[id][0], anchors[id][1] + 46 * k, 'accent', 22, 'middle', show);
+      // The power under the item's name (both at +46 put "iron = 57.6 Ω" on "840.28 W", 2026-11-05).
+      if (s.power) text(`${id}-P${n}`, `${fmt(q.P, 2)} W`, anchors[id][0], anchors[id][1] + 76 * k, 'accent', 22, 'middle', show);
     }
     if (panel) {
       const series = s.items.map(x => (isGroup(x) ? `R(${x.id})` : x.id)).join(' + ');

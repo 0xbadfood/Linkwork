@@ -560,7 +560,11 @@ export function semiconductor(s: SemiconductorSpec): Scene {
     }
     anchors.load = [xl, (yTopR + yBotR) / 2];
     // the waveforms
-    const gx = bx + bw * .08, gw = bw * .86, inY = by + bh * .58, outY = by + bh * .92, amp = bh * .12;
+    // The input wave's name starts below the circuit's lowest label (B, or D₂ under the lower diode): in a short frame
+    // the waves rose into the circuit and drew "B" on "input (A to centre tap)" (leph2-06 C6, 2026-11-05). The waves
+    // flatten to make room; a full frame keeps the usual layout.
+    const lowest = B[1] + (full ? 66 : 40) * k, outY = by + bh * .92, amp = Math.min(bh * .12, (outY - lowest - 60 * k) / 3);
+    const gx = bx + bw * .08, gw = bw * .86, inY = Math.max(by + bh * .58, lowest + 31 * k + amp);
     const vin = (u: number) => Math.sin(2 * Math.PI * u);
     const wave = (y: number, f: (u: number) => number, stroke: string, extra: Record<string, unknown>) => poly(Array.from({length: 241}, (_, i) => [gx + gw * i / 240, y - f(i / 240 * periods) * amp] as P2), stroke, 4, extra);
     for (const [y, name] of [[inY, full ? 'input (A to centre tap)' : 'input'], [outY, 'output across R_L']] as [number, string][]) {

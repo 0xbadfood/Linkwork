@@ -158,16 +158,18 @@ export function magneticForce(s: ForceSpec): Scene {
     const solved = fleming({current: given, field: s.field as Way | undefined, force: s.force})!;
     const iso = ([x, y, z]: number[]): Vec => [round(cx + 260 * k * (x + 0.55 * y), 2), round(cy + 40 * k - 260 * k * (z + 0.4 * y), 2)];
     const o = iso([0, 0, 0]);
-    // The ground's directions, faint.
-    ([['E', [1, 0, 0]], ['W', [-1, 0, 0]], ['N', [0, 1, 0]], ['S', [0, -1, 0]]] as [string, number[]][]).forEach(([n, v], j) => {
-      const e = iso(v.map(c => c * 1.4));
-      props.push({id: `ground${j}`, type: 'line', x1: o[0], y1: o[1], x2: e[0], y2: e[1], style: {stroke: 'faint', width: 2 * k, dash: [8 * k, 8 * k]}, layer: 1});
-      text(`ground${j}-name`, n, [e[0] + 18 * k * (v[0] + 0.6 * v[1]), e[1] + 10 * k - 12 * k * v[1]], 'muted', 26);
-    });
     const known = (['field', 'current', 'force'] as const).filter(f => s[f] !== undefined);
     const order = [...known, ...(['field', 'current', 'force'] as const).filter(f => !known.includes(f))];
     const look: Record<string, [string, string]> = {field: ['cool', 'field (forefinger)'], current: ['accent', 'current (middle finger)'], force: ['good', 'force (thumb)']};
     const dir = solved as Record<string, Way>;
+    // The ground's directions, faint. A ground name gives way when an arrow along its line arrives: the arrow's label
+    // ends in that direction's word, and the two were drawn on each other ("E" under "current (middle finger): east",
+    // 7 published scenes, 2026-11-05).
+    ([['E', 'east'], ['W', 'west'], ['N', 'north'], ['S', 'south']] as [string, Way][]).forEach(([n, w], j) => {
+      const v = WAYS[w], e = iso(v.map(c => c * 1.4)), on = order.findIndex(f => dir[f] === w);
+      props.push({id: `ground${j}`, type: 'line', x1: o[0], y1: o[1], x2: e[0], y2: e[1], style: {stroke: 'faint', width: 2 * k, dash: [8 * k, 8 * k]}, layer: 1});
+      text(`ground${j}-name`, n, [e[0] + 18 * k * (v[0] + 0.6 * v[1]), e[1] + 10 * k - 12 * k * v[1]], 'muted', 26, [0, on < 0 ? 1e9 : 0.6 + 1.6 * on]);
+    });
     order.forEach((f, j) => {
       const e = iso(WAYS[dir[f]]), t = 0.6 + 1.6 * j;
       arrow(`${f}-arrow`, o, e, look[f][0], [t, 1e9], 7);

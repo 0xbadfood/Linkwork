@@ -10,6 +10,7 @@ import {toScene} from '../plane.ts';
 import {wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
+import {fadeWhilePassing} from './dodge.ts';
 import {frame} from './vectors.ts';
 import {nameError} from './names.ts';
 
@@ -155,6 +156,9 @@ export function orbit(s: OrbitSpec): Scene {
         text('lvP', P[0] + 14 * k, P[1] - L * vp / 2, 'fastest', 24 * k, {weight: 700, style: {fill: 'good'}, show: [lead + 0.2, 1e9]}),
         text('lvA', A[0] - 14 * k, A[1] + L * va + 10 * k, 'slowest', 24 * k, {weight: 700, align: 'end', style: {fill: 'bad'}, show: [lead + span / 2, 1e9]}));
     }
+    // the planet's name rides above it and crosses every fixed name on the ellipse: each fades while it passes
+    if (s.body) fadeWhilePassing(props, ['lstar', 'lfocus2', 'lP', 'lA', 'lvP', 'lvA'], [{text: s.body, size: 26 * k, align: 'middle',
+      track: ts.map((t, i) => { const q = toScene(plane, at(t)); return {t: screen[i], at: [q[0], q[1] - 16 * k - 12 * k] as [number, number]}; })}]);
     line('l1', `Law of orbits: an ellipse, with the ${s.star ?? 'Sun'} at one focus`, 0.3);
     if (show.has('areas')) {
       line('l2', 'Law of areas: the line to the planet sweeps equal areas in equal times', lead + span * 0.1, {weight: 700});

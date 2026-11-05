@@ -7,7 +7,8 @@
 import {toScene, type Plane} from '../plane.ts';
 import type {Prop, Scene} from '../scene.ts';
 import {round, type Vec} from '../vec.ts';
-import {wrapText} from '../svg.ts';
+import {textWidth, wrapText} from '../svg.ts';
+import {actorsAt, propFrame, type ActorFrame} from '../scene.ts';
 
 /** `to`: a second point, making the mark a measuring line from `at` to it, with the text at its middle (f, R, aperture). */
 export type Mark = {text?: string; at: string | [number, number]; to?: string | [number, number]; point?: boolean; t?: number; colour?: string};
@@ -77,25 +78,27 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     if (at[0] < 0 || at[0] > scene.width || at[1] < 0 || at[1] > scene.height) { errors.push(`${verb}: annotate[${i}].${field} is off the picture`); return; }
     return at;
   };
-  // Labels placed so far (x0, y0, x1, y1): a label that would overlap one is moved up, then down, until it is clear,
-  // so two marks at nearby points (edge and central rays crossing the axis close together) both read.
-  // The verb's own texts count as placed too: a planner's label moved clear of them as well (2026-10-29: 'Red bends
-  // least' landed on the screen's colour names, 'Light bends in air' on the star's label).
-  const placed: [number, number, number, number][] = scene.props.filter(p => p.type === 'text' && !p.id.startsWith('note')).map(p => {
-    const t = p as unknown as {x: number; y: number; text: string; size?: number; align?: string; width?: number};
-    const size = t.size ?? 32, w = Math.min(t.width ?? Infinity, String(t.text).length * size * 0.56), x0 = t.align === 'end' ? t.x - w : t.align === 'middle' ? t.x - w / 2 : t.x;
-    // a wrapped text (a panel's title) covers all its lines: a label once sat on a title's second line (C6, 2026-10-30)
-    const lines = t.width ? wrapText(String(t.text), size, t.width).length : 1;
-    return [x0, t.y - size * 0.6, x0 + w, t.y + size * 0.6 + (lines - 1) * 1.25 * size] as [number, number, number, number];
-  });
-  const clear = (x: number, y: number, text: string, align: 'start' | 'middle' | 'end'): number => {
-    const w = text.length * 30 * k * 0.58, h = 36 * k, x0 = align === 'start' ? x : align === 'end' ? x - w : x - w / 2;
-    for (const dy of [0, -40, 40, -80, 80, -120, 120].map(v => v * k).filter(dy => y + dy >= 0.14 * scene.height)) {   // never into a film's header
-      const box: [number, number, number, number] = [x0, y + dy - h / 2, x0 + w, y + dy + h / 2];
-      if (!placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { placed.push(box); return y + dy; }
+  // Where a note may not go: every text the verb draws, where it is at each moment it shows. A note stays until the
+  // end, so it must keep clear of a text's box from the note's first second on, moving labels sampled along their way
+  // ('F₁' riding a piston, a planet's name on its orbit), the title included, and of the notes placed before it
+  // (2026-11-05: 31 published scenes had a note on a verb's own name, a moving label, a field's × or the title, as the
+  // spot was chosen from where texts start, and kept when nothing near was clear).
+  const taken = takenBoxes(scene), notes: Box[] = [];
+  const free = (box: Box, from: number) => box[0] >= 4 * k && box[2] <= scene.width - 4 * k
+    && !notes.some(b => overlaps(b, box)) && !taken.some(o => o.to >= from && overlaps(o.box, box));
+  /** The first clear spot for a note's text: each of its spots as asked, then moved further up or down from it (the
+   * nearer the better, the asked side first); none clear and the note is left out (a note is optional, the verb's own
+   * labels are not). */
+  const clear = (spots: Spot[], text: string, from: number): Spot | undefined => {
+    const w = [...text].length * 30 * k * 0.58, h = 36 * k, tries: [number, Spot][] = [];
+    spots.forEach((s, i) => { for (let d = 0; d <= 400; d += 20) for (const dy of d ? [-d, d] : [0]) tries.push([Math.abs(dy) + i * 90, {...s, y: s.y + dy * k}]); });
+    tries.sort((a, b) => a[0] - b[0]);
+    for (const [, s] of tries) {
+      if (s.y < 0.14 * scene.height || s.y > scene.height - 24 * k) continue;   // never into a film's header, nor off the bottom
+      const x0 = s.align === 'start' ? s.x : s.align === 'end' ? s.x - w : s.x - w / 2, box: Box = [x0, s.y - h / 2, x0 + w, s.y + h / 2];
+      if (free(box, from)) { notes.push(box); return s; }
     }
-    placed.push([x0, y - h / 2, x0 + w, y + h / 2]);
-    return y;
+    return undefined;
   };
   // A mark's text is words for the viewer. A point's id (focus_edge) on screen reads as code: it goes back to the
   // planner. The name of a point the verb already labels (P, F, C) is not drawn twice: only its dot, if asked for.
@@ -139,8 +142,11 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
         const upright = Math.abs(u[1]) > 0.7, side = n[1] > 0 ? -1 : 1;
         const top = at[1] < to[1] ? at : to, bottom = top === at ? to : at;
         const [x, y] = upright ? [Math.min(top[0], bottom[0]) - 20 * k, top[1] + (bottom[1] - top[1]) * 0.25] : [mid[0] + side * n[0] * 30 * k, mid[1] + side * n[1] * 30 * k];
-        props.push({id: `note${i}-label`, type: 'text', x: round(x, 2), y: round(clear(x, y, m.text, upright ? 'end' : 'middle'), 2), text: m.text, size: 30 * k, weight: 700,
-          align: upright ? 'end' : 'middle', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
+        const w = [...m.text].length * 30 * k * 0.58;
+        const spot = clear(upright ? [{x, y, align: 'end'}, {x: Math.max(top[0], bottom[0]) + 20 * k, y, align: 'start'}]
+          : [{x, y, align: 'middle'}, {x: mid[0] - side * n[0] * 30 * k, y: mid[1] - side * n[1] * 30 * k, align: 'middle'}, {x: Math.min(x, scene.width - 10 * k - w / 2), y, align: 'middle'}], m.text, show[0]);
+        if (spot) props.push({id: `note${i}-label`, type: 'text', x: round(spot.x, 2), y: round(spot.y, 2), text: m.text, size: 30 * k, weight: 700,
+          align: spot.align, show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
       }
       return;
     }
@@ -153,9 +159,10 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
     const spills = !!m.text && labelEnd !== undefined && !!labelSpill && x < labelEnd && x + 14 * k + m.text.length * 30 * k * 0.58 > labelEnd;
     const beside = (typeof m.at === 'string' ? labelAt?.[m.at] : undefined) ?? (spills ? labelSpill : undefined);
     if (m.text && beside) {
-      const lx = Math.min(beside[0], scene.width - 10 * k - m.text.length * 30 * k * 0.58);
-      props.push({id: `note${i}-label`, type: 'text', x: round(lx, 2), y: round(clear(lx, beside[1], m.text, 'start'), 2), text: m.text, size: 30 * k, weight: 700,
-        align: 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
+      const w = [...m.text].length * 30 * k * 0.58, lx = Math.min(beside[0], scene.width - 10 * k - w);
+      const spot = clear([{x: lx, y: beside[1], align: 'start'}, {x: Math.max(x - 14 * k, 10 * k + w), y: y - 16 * k, align: 'end'}], m.text, show[0]);
+      if (spot) props.push({id: `note${i}-label`, type: 'text', x: round(spot.x, 2), y: round(spot.y, 2), text: m.text, size: 30 * k, weight: 700,
+        align: spot.align, show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     } else if (m.text) {
       // near the right edge the label reads leftwards; so does one that would run out of a drawing into its panel
       const box = planes.length === 1 ? (planes[0] as Plane).box : undefined;
@@ -167,11 +174,48 @@ export function addMarks(scene: Scene, marks: Mark[] | undefined, verb: string):
       const disc = scene.props.find(p => { const c = p as unknown as {type: string; x: number; y: number; r: number; plane?: string; style?: {fill?: string}};
         return c.type === 'circle' && !c.plane && c.r >= 12 * k && c.style?.fill && Math.hypot(x - c.x, y - c.y) < c.r + 14 * k; }) as unknown as {x: number; r: number} | undefined;
       const start = disc ? (right ? disc.x - disc.r - 12 * k : disc.x + disc.r + 12 * k) : right ? x - 14 * k : x + 14 * k;
-      const lx = right ? Math.max(start, 10 * k + m.text.length * 30 * k * 0.58) : Math.min(start, scene.width - 10 * k - m.text.length * 30 * k * 0.58);
-      props.push({id: `note${i}-label`, type: 'text', x: lx, y: round(Math.min(scene.height - 24 * k, Math.max(0.14 * scene.height, clear(lx, Math.max(0.14 * scene.height, y - 16 * k), m.text, right ? 'end' : 'start'))), 2), text: m.text, size: 30 * k, weight: 700,
-        align: right ? 'end' : 'start', show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
+      const w = [...m.text].length * 30 * k * 0.58;
+      const lx = right ? Math.max(start, 10 * k + w) : Math.min(start, scene.width - 10 * k - w);
+      // the other side of the point, should the asked side be crowded
+      const other = disc ? (right ? disc.x + disc.r + 12 * k : disc.x - disc.r - 12 * k) : right ? x + 14 * k : x - 14 * k;
+      const ox = right ? Math.min(other, scene.width - 10 * k - w) : Math.max(other, 10 * k + w);
+      const y0 = Math.min(scene.height - 24 * k, Math.max(0.14 * scene.height, y - 16 * k));
+      const spot = clear([{x: lx, y: y0, align: right ? 'end' : 'start'}, {x: ox, y: y0, align: right ? 'start' : 'end'}], m.text, show[0]);
+      if (spot) props.push({id: `note${i}-label`, type: 'text', x: round(spot.x, 2), y: round(spot.y, 2), text: m.text, size: 30 * k, weight: 700,
+        align: spot.align, show, fade: 0.3, style: {fill, stroke: 'paper', width: 9 * k}, layer: 8});
     }
   });
   if (errors.length) return {errors};
   return {scene: {...scene, props: [...scene.props, ...props]}, errors: []};
+}
+
+type Box = [number, number, number, number];
+type Spot = {x: number; y: number; align: 'start' | 'middle' | 'end'};
+const overlaps = (a: Box, b: Box) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+
+/** Every text the scene draws (readouts as their words), as boxes with the seconds each is shown there: sampled through
+ * the scene, a box kept while a text stays put and a new one each time it moves. The box is check()'s own (glyphs 0.55
+ * of the size, wrapped lines included), padded a little. */
+function takenBoxes(scene: Scene): {box: Box; from: number; to: number}[] {
+  const texts = scene.props.filter(p => (p.type === 'text' || p.type === 'readout') && !/^note\d/.test(p.id));
+  if (!texts.length) return [];
+  const needsActors = texts.some(p => p.anchor || p.type === 'readout') && scene.actors.length > 0;
+  const dt = Math.max(1 / (scene.fps || 30), scene.duration / 240), pad = 3 * scene.height / 1080;
+  const out: {box: Box; from: number; to: number}[] = [], last = new Map<string, {box: Box; from: number; to: number}>();
+  const none = new Map<string, ActorFrame>();
+  for (let t = 0; t <= scene.duration + 1e-9; t += dt) {
+    const actors = needsActors ? actorsAt(scene, t) : none;
+    for (const p of texts) {
+      const f = propFrame(p, t, actors, scene) as unknown as {opacity: number; x: number; y: number; text: string; size?: number; align?: string; width?: number};
+      if (f.opacity <= 0.05 || !String(f.text).trim()) { last.delete(p.id); continue; }
+      const size = f.size ?? 32, lines = f.width ? wrapText(String(f.text), size, f.width) : [String(f.text)];
+      const w = Math.max(...lines.map(l => textWidth(l, size))), x0 = f.align === 'middle' ? f.x - w / 2 : f.align === 'end' ? f.x - w : f.x;
+      const box: Box = [x0 - pad, f.y - size / 2 - pad, x0 + w + pad, f.y + size / 2 + (lines.length - 1) * size * 1.25 + pad];
+      const prev = last.get(p.id);
+      if (prev && prev.box.every((v, j) => Math.abs(v - box[j]) < 0.5)) { prev.to = t + dt; continue; }
+      const o = {box, from: t, to: t + dt};
+      out.push(o); last.set(p.id, o);
+    }
+  }
+  return out;
 }

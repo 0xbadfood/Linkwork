@@ -9,6 +9,7 @@ import type {Prop, Scene} from '../scene.ts';
 import {wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
+import {boxOf, crosses, meets} from './dodge.ts';
 
 /** A vector by components [x, y], or by magnitude and direction (degrees anticlockwise from +x). */
 export type V = [number, number] | {magnitude: number; angle: number};
@@ -120,22 +121,36 @@ export function vectorAdd(s: VectorSpec): Scene {
   const perUnit = (box[2] - box[0]) / span;              // pixels per unit, the same both ways
   const off = 26 * k / perUnit;                           // a label's distance from its arrow, in units
 
+  const shafts: [[number, number], [number, number]][] = [];   // every solid arrow (not the dashed ghosts), in screen pixels, for labels to keep off
   const arrow = (id: string, p: [number, number], q: [number, number], stroke: string, from: number, extra: Partial<Prop> = {}): Prop =>
-    ({id, type: 'arrow', plane: 'p', x1: p[0], y1: p[1], x2: q[0], y2: q[1], draw: 0, keys: {draw: [[from, 0], [from + 1.1, 1, 'inOut']]},
+    ((extra.style?.dash ? 0 : shafts.push([toScene(plane, p), toScene(plane, q)])), {id, type: 'arrow', plane: 'p', x1: p[0], y1: p[1], x2: q[0], y2: q[1], draw: 0, keys: {draw: [[from, 0], [from + 1.1, 1, 'inOut']]},
       style: {stroke, width: 6 * k}, head: 22 * k, show: [from, 1e9], fade: 0.01, ...extra} as Prop);
   const ghost = (id: string, p: [number, number], q: [number, number], stroke: string, from: number) =>
     arrow(id, p, q, stroke, from, {style: {stroke, width: 3 * k, dash: [8 * k, 8 * k], opacity: 0.65}, head: 16 * k});
   const dashed = (id: string, p: [number, number], q: [number, number], from: number): Prop =>
     ({id, type: 'line', plane: 'p', x1: p[0], y1: p[1], x2: q[0], y2: q[1], style: {stroke: 'muted', width: 2.5 * k, dash: [6 * k, 6 * k]}, show: [from, 1e9], fade: 0.3} as Prop);
   // a label beside the middle of p→q, on the side `side` (+1 left of the direction of travel)
+  // Labels stay to the end, so each one placed later must keep off the earlier ones: two arrows from one tail in
+  // nearly one direction put "vb" and "vb + vc" at one midpoint (2026-11-05, keph1-03 C6). A label slides along its
+  // arrow on its own side first, then tries the other side.
+  const placed: Prop[] = [];
   const label = (id: string, p: [number, number], q: [number, number], t: string, fill: string, from: number, side = 1) => {
-    const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1, nx = -side * dy / l, ny = side * dx / l;
-    // clear of the arrow: half the label's width across a steep arrow, half its height across a flat one
-    const half = 0.3 * 34 * k * t.length / perUnit, tall = 0.5 * 34 * k / perUnit;
-    const d = off + Math.abs(nx) * half + Math.abs(ny) * tall;
-    const m: [number, number] = [(p[0] + q[0]) / 2 + nx * d, (p[1] + q[1]) / 2 + ny * d];
-    const [sx, sy] = toScene(plane, m);
-    return text(id, sx, sy + 12 * k, t, 34 * k, {weight: 700, align: 'middle', style: {fill}, show: [from + 0.7, 1e9]});
+    const at = (along: number, sd: number) => {
+      const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1, nx = -sd * dy / l, ny = sd * dx / l;
+      // clear of the arrow: half the label's width across a steep arrow, half its height across a flat one
+      const half = 0.3 * 34 * k * t.length / perUnit, tall = 0.5 * 34 * k / perUnit;
+      const d = off + Math.abs(nx) * half + Math.abs(ny) * tall;
+      const m: [number, number] = [p[0] + along * dx + nx * d, p[1] + along * dy + ny * d];
+      const [sx, sy] = toScene(plane, m);
+      return text(id, sx, sy + 12 * k, t, 34 * k, {weight: 700, align: 'middle', style: {fill}, show: [from + 0.7, 1e9]});
+    };
+    const tries = [[0.5, side], [0.7, side], [0.3, side], [0.5, -side], [0.7, -side], [0.3, -side], [0.85, side], [0.85, -side]] as const;
+    const free = (c: Prop) => !placed.some(o => meets(boxOf(o as never, 4 * k), boxOf(c as never, 4 * k)));
+    const clear = (c: Prop) => { const b = boxOf(c as never, 2 * k); return !shafts.some(([u, v]) => crosses(b, u, v)); };
+    const all = tries.map(([g, sd]) => at(g, sd));
+    const out = all.find(c => free(c) && clear(c)) ?? all.find(free) ?? at(0.5, side);
+    placed.push(out);
+    return out;
   };
   const line = (id: string, t: string, from: number, extra: Partial<Prop> = {}) => {
     props.push(ptext(id, px, row, t, 32 * k, {show: [from, 1e9], ...extra}));

@@ -678,7 +678,10 @@ export function opticalInstrument(s: InstrumentSpec): Scene {
     });
     if (compound) {
       const hi1 = h * c!.mo; objectArrow(c!.vo, hi1, 'cool', false, [2.6, 1e9]);
-      label(X(c!.vo), cy - Math.sign(hi1) * 36 * k + (hi1 < 0 ? 0 : 0), 'first image (real)', 'cool', 22, {show: [2.6, 1e9]});
+      // named across the axis from the arrow; an inverted image formed by the eyepiece is named below its tip and the
+      // eye's name, which sits under the axis there (fo 1, fe 2, L 20: leph2-01 C8, 2026-11-05)
+      const nearEye = hi1 < 0 && Math.abs(X(c!.vo) - X(L) - 34 * k) < (0.55 * 22 * k * ('first image (real)'.length + 3)) / 2 + 12 * k;
+      label(X(c!.vo), nearEye ? Math.max(Y(hi1) + 30 * k, cy + 76 * k) : cy - Math.sign(hi1) * 36 * k, 'first image (real)', 'cool', 22, {show: [2.6, 1e9]});
       anchors.image1 = P([c!.vo, hi1]); anchors.eyepiece = P([L, 0]);
     }
     if (Number.isFinite(vFinal)) {

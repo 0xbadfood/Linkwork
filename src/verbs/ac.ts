@@ -175,7 +175,10 @@ export function ac(s: AcSpec): Scene {
     if (XC > 0) { arrow([x2, cy], [x2, cy + XC * u], 'bad', 6, {show: [tC, 1e9]}); label(x2 - 38 * k, cy + XC * u + 12 * k, 'VC', 'bad', 28, {show: [tC, 1e9]}); }
     const net = XL - XC, tip: P2 = [o[0] + R * u, cy - net * u];
     if (!res) { arrow(o, [o[0], cy - net * u], 'accent', 7, {show: [tN, 1e9]}); label(o[0] + 84 * k, cy - net * u * .55, 'VL − VC', 'accent', 24, {show: [tN, tV]}); } else label(x2 + 90 * k, cy - XL * u * .6, 'VL and VC cancel', 'accent', 24, {show: [tN, 1e9]});
-    arrow(o, tip, 'accent', 8, {show: [tV, 1e9]}); label(tip[0] + 26 * k, tip[1] + (net >= 0 ? -10 : 30) * k, 'V', 'accent', 32, {show: [tV, 1e9]});
+    // V nearly along I (at or near resonance): its name goes below the axis, as I's sits just above it; both above
+    // drew "V" on "I" (leph1-07 C6, 2026-11-05).
+    const flat = Math.abs(net) * u < 40 * k;
+    arrow(o, tip, 'accent', 8, {show: [tV, 1e9]}); label(tip[0] + 26 * k, tip[1] + (net >= 0 && !flat ? -10 : 30) * k, 'V', 'accent', 32, {show: [tV, 1e9]});
     if (!res) { line([o[0], cy - net * u], tip, 'muted', 2, {show: [tV, 1e9]}, true); line([o[0] + R * u, cy], tip, 'muted', 2, {show: [tV, 1e9]}, true); label(o[0] + R * u * .5 + 34 * k, cy - net * u * .16 + 8 * k, 'φ', 'muted', 28, {show: [tV, 1e9]}); }
     anchors.origin = o; anchors.VR = [o[0] + R * u, cy]; anchors.V = tip; anchors.VL = [x2, cy - XL * u]; anchors.VC = [x2, cy + XC * u];
     const tx = bx + bw * .66, ty = cy + bh * .12, tu = bw * .28 / Math.max(R, Math.abs(net), .001 + st.Z * .8), rW = R * tu, nH = Math.abs(net) * tu;

@@ -149,11 +149,14 @@ export function moments(s: MomentsSpec): Scene {
   if (s.lever) return leverScene(s, s.lever);
   if (s.couple) {
     // a free rod turning under a couple: the forces ride at its ends, square to it
-    const {magnitude: F, d} = s.couple, half = 0.36 * bw, n = 60, t0 = 1.6, t1 = 6.5, turn = 120;
+    // the turning rod and its forces sweep a circle: it must fit the box, or in a half-width part (box wide and short)
+    // the ends swing up into the title and down into the panel's sentences (2026-11-05, keph1-06 C8: "F" on them)
+    const fits = Math.min(1, (Math.min(bw, bh) / 2 - 20 * k) / Math.hypot(0.36 * bw, 0.24 * bh));
+    const {magnitude: F, d} = s.couple, half = 0.36 * bw * fits, n = 60, t0 = 1.6, t1 = 6.5, turn = 120;
     const ang = (i: number) => turn * (i / n) ** 2 * DEG, at = (i: number) => t0 + (t1 - t0) * i / n;
     const key = (fn: (a: number) => number): Key[] => [[0, fn(0)], ...Array.from({length: n + 1}, (_, i) => [at(i), fn(ang(i)), 'linear'] as Key)];
     const end = (a: number, side: number) => [cx + side * half * Math.cos(a), cy - side * half * Math.sin(a)];
-    const len = 0.24 * bh;
+    const len = 0.24 * bh * fits;
     props.push({id: 'rod', type: 'line', x1: 0, y1: 0, x2: 0, y2: 0, style: {stroke: 'ink', width: 16 * k}, layer: 1,
       keys: {x1: key(a => end(a, -1)[0]), y1: key(a => end(a, -1)[1]), x2: key(a => end(a, 1)[0]), y2: key(a => end(a, 1)[1])}} as Prop,
       {id: 'mid', type: 'circle', x: cx, y: cy, r: 7 * k, style: {fill: 'accent'}, layer: 2} as Prop);

@@ -14,12 +14,13 @@
 // height (measured from the drawing) are optional. Velocity arrows follow a mover's computed velocity: v and its
 // components vx and vy change length as it flies, with snapshots left behind every few seconds if asked (the book's
 // Fig. 3.16: vx stays the same, vy shrinks to zero at the top and grows downwards; user, 2026-10-26).
-import type {Key} from '../keys.ts';
+import {valueAt, type Key} from '../keys.ts';
 import {OBJECTS, type Role} from '../objects.ts';
 import {toScene, type Plane} from '../plane.ts';
 import type {Actor, Prop, Scene} from '../scene.ts';
 import {round, type Vec} from '../vec.ts';
 import {n2, walking} from './calculus.ts';
+import {fadeWhilePassing, passKeys, boxOf, meets, type Mover} from './dodge.ts';
 
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'};
 export type StageItem = {id: string; object: string; x: number; y?: number; on?: string; size?: number; facing?: 1 | -1;
@@ -383,6 +384,7 @@ export function stage(s: StageSpec): Scene {
   // Names the stage writes: 26 px, kept inside the frame, above the item (a marker's below its stone). Of two names on
   // the ground the second goes below the ground line, so they don't run together when the items meet.
   let tagged = 0;
+  const flip = new Map<string, number>();   // a standing name's place on its item's other side
   for (const item of s.items) {
     const size = sizeOf(item) * unit;
     if (!item.label || ownsLabel(item, size, k)) continue;
@@ -395,6 +397,20 @@ export function stage(s: StageSpec): Scene {
     const dy = below ? 36 * k : arrowed ? -Math.max(top, 0.5 * size) - 60 * k : -top - 14 * k;
     props.push({id: `name-${item.id}`, type: 'text', x: x + dx, y: y + dy, text: item.label, size: font, align: 'middle', weight: 700, layer: 4,
       ...(path.length > 1 ? {anchor: {actor: `d-${item.id}`, joint: 'p', offset: [dx, dy] as Vec}} : {})});
+    if (path.every(q => q.x === path[0].x && q.y === path[0].y)) flip.set(`name-${item.id}`, (below ? -top - 14 * k : 36 * k) - dy);
+  }
+  // A mover's name rides with it and passes over the names of items standing in its way (a neutron reaching a target
+  // at rest, 2026-11-05 keph1-05 C12): a standing name goes to its item's other side, or fades while the mover passes.
+  const riders: Mover[] = props.filter(p => p.type === 'text' && p.id.startsWith('name-') && p.anchor && !flip.has(p.id)).map(p => {
+    const q = p as Prop & {type: 'text'}, off = q.anchor!.offset ?? [0, 0];
+    return {text: q.text, size: q.size, align: q.align, track: paths.get(q.id.slice(5))!.map(r => { const [x, y] = P(r.x, r.y); return {t: r.t, at: [x + off[0], y + off[1]] as [number, number]}; })};
+  });
+  for (const p of props) {
+    if (p.type !== 'text' || !flip.has(p.id) || !passKeys(p, riders)) continue;
+    const shift = flip.get(p.id)!, other = {...p, y: p.y + shift};
+    if (passKeys(other, riders)) { fadeWhilePassing([p], [p.id], riders); continue; }
+    p.y = other.y;
+    if (p.anchor?.offset) p.anchor = {...p.anchor, offset: [p.anchor.offset[0], p.anchor.offset[1] + shift]};
   }
   for (const item of s.items) {
     const path = paths.get(item.id)!, size = sizeOf(item) * unit;
@@ -542,6 +558,19 @@ export function stage(s: StageSpec): Scene {
       const angle = (launch.angle ?? (from && has(from, 'launcher') ? from.a ?? 40 : has(on, 'support') ? 0 : 45)) * DEG;
       facts.push(`${vel.item}'s velocity at launch: horizontal part vₓ = ${fmt(launch.speed * Math.cos(angle))} m/s (it stays the same), vertical part vᵧ = ${fmt(launch.speed * Math.sin(angle))} m/s (zero at the top)`);
     }
+  }
+  // Two movers' arrow names ride with their tips, and the tips of two movers heading for each other pass: while two
+  // names meet, the second one's fades (2026-11-05, keph1-05 C12: carts A and B, "v" on "v" as they closed).
+  const tags = props.filter(p => p.type === 'text' && /^vel\d+-v[xy]?-label$/.test(p.id)) as (Prop & {type: 'text'})[];
+  const posAt = (p: Prop & {type: 'text'}, t: number) => ({...p, x: valueAt(p.keys!.x, t), y: valueAt(p.keys!.y, t)});
+  for (let j = 1; j < tags.length; j++) {
+    const b = tags[j], own = b.id.split('-')[0], [t0, t1] = b.show!, grid: number[] = [];
+    for (let t = t0; t <= t1; t += DT) grid.push(t);
+    const hit = grid.map(t => tags.slice(0, j).some(a => a.id.split('-')[0] !== own && t >= a.show![0] && t <= a.show![1]
+      && valueAt(a.keys!.opacity, t) > 0.3 && meets(boxOf(posAt(a, t), 4 * k), boxOf(posAt(b, t), 4 * k))));
+    if (!hit.some(Boolean)) continue;
+    const near = (i: number) => hit.slice(Math.max(0, i - 5), i + 6).some(Boolean);   // hidden a sixth of a second either side
+    b.keys!.opacity = grid.map((t, i) => [t, near(i) ? 0 : valueAt(b.keys!.opacity, t), 'linear'] as Key);
   }
   for (const [n, r] of (s.readouts ?? []).entries()) {
     const at = ref(r.item) ?? {plane: 'w', at: [paths.get(r.item)![0].x, paths.get(r.item)![0].y] as Vec};

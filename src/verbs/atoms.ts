@@ -17,6 +17,7 @@
 import {kit} from './potential.ts';
 import {sci} from './electric.ts';
 import {wavelengthColour} from '../physics/light.ts';
+import {textWidth} from '../svg.ts';
 import {H, E, C, ME} from './dual-nature.ts';
 import type {Prop, Scene} from '../scene.ts';
 
@@ -429,13 +430,21 @@ export function bohr(s: BohrSpec): Scene {
     const sy0 = by + bh * .3, sy1 = by + bh * .62;
     props.push({id: 'strip', type: 'rect', x: x0, y: sy0, w: x1 - x0, h: sy1 - sy0, style: {fill: 'paper', stroke: 'muted', width: 2 * k}, layer: 1} as Prop);
     const greek = ['α', 'β', 'γ', 'δ'];
+    // A line's name and value are written only where they clear the last one written: towards the limit the lines
+    // crowd, and in a narrow frame Lyman's 97.24 sat on 94.96 (leph2-04 C5, 2026-11-05).
+    const room: Record<string, number> = {};
+    const clears = (row: string, x: number, t: string, size: number) => {
+      const half = textWidth(t, size * k) / 2 + 8 * k;
+      if (room[row] !== undefined && x + half > room[row]) return false;
+      room[row] = x - half; return true;
+    };
     dur = 6.5;
     for (let ni = nf + 1; ni <= nf + 14; ni++) {
       const lam = lineNm(ni, nf), x = X(lam), vis = lam >= 380 && lam <= 750, col = vis ? wavelengthColour(lam) : 'muted', j = ni - nf - 1, t0 = .6 + Math.min(j, 8) * .35;
       props.push({id: `line${ni}`, type: 'line', x1: x, y1: sy0, x2: x, y2: sy1, style: {stroke: col, width: (j < 4 ? 5 : 2.5) * k}, layer: 2, show: [t0, 1e9]} as Prop);
       if (j < 4) {
-        label(x, sy0 - 16 * k, `H${greek[j]}`, col, 22, halo(k, col, {show: [t0, 1e9]}));
-        if (num) label(x, sy1 + 30 * k, `${sig(lam, 4)}`, 'muted', 18, {show: [t0, 1e9]});
+        if (clears('name', x, `H${greek[j]}`, 22)) label(x, sy0 - 16 * k, `H${greek[j]}`, col, 22, halo(k, col, {show: [t0, 1e9]}));
+        if (num && clears('value', x, `${sig(lam, 4)}`, 18)) label(x, sy1 + 30 * k, `${sig(lam, 4)}`, 'muted', 18, {show: [t0, 1e9]});
         anchors[`line${j + 1}`] = [x, sy0];
       }
     }

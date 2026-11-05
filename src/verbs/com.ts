@@ -19,6 +19,7 @@ import {wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
 import {frame} from './vectors.ts';
+import {boxOf, meets} from './dodge.ts';
 
 type P2 = [number, number];
 export const COM_SHAPES = ['rod', 'rectangle', 'disc', 'ring', 'triangle', 'polygon'] as const;
@@ -238,7 +239,7 @@ export function centreOfMass(s: ComSpec): Scene {
   const landCM = 2 * e.v0 * Math.sin(e.angle * DEG) / g, path = Array.from({length: 41}, (_, i) => fl.at(landCM * i / 40).cm);
   const win = fit([...pts.flatMap(p => [p.cm, p.p1, p.p2]), ...path], box[2] - box[0], box[3] - box[1], true);
   const plane: Plane = {id: 'p', x: win.x, y: win.y, box};
-  const lead = 1, Ts = Math.min(7, Math.max(3.5, fl.T)), at = (i: number) => lead + Ts * i / n, tb = lead + Ts * fl.tb / fl.T;
+  const lead = 1, Ts = Math.min(7, Math.max(3.5, fl.T)), at = (i: number) => lead + Ts * i / n, tb = lead + Ts * fl.tb / fl.T, end0 = at(n);
   props.push({id: 'ground', type: 'line', plane: 'p', x1: win.x[0], y1: 0, x2: win.x[1], y2: 0, style: {stroke: 'muted', width: 4 * k}} as Prop,
     {id: 'path', type: 'polyline', plane: 'p', points: path, style: {stroke: 'accent', width: 3 * k, dash: [10 * k, 9 * k], opacity: 0.6}, show: [0.3, 1e9], layer: 1} as Prop);
   const mover = (id: string, get: (q: typeof pts[0]) => P2) => {
@@ -248,15 +249,38 @@ export function centreOfMass(s: ComSpec): Scene {
   mover('p1', q => q.p1); mover('p2', q => q.p2); mover('cm', q => q.cm);
   const R1 = (10 + 12 * Math.sqrt(m1 / Math.max(m1, m2))) * k, R2 = (10 + 12 * Math.sqrt(m2 / Math.max(m1, m2))) * k, Rw = 22 * k;
   props.push({id: 'whole', type: 'circle', x: 0, y: 0, r: Rw, style: {fill: 'cool', stroke: 'ink', width: 3 * k}, show: [0, tb], layer: 4, anchor: {actor: 'd-cm', joint: 'p'}} as Prop);
+  // Three names leave one point at the break, and the heavier piece flies close to the CM: of the places beside each
+  // (a piece's name above or below it, the CM's at a corner), take those whose names meet least over the flight, and
+  // show each piece's name once it has come clear (2026-11-05, keph1-06 C3: m₁ on m₂ at the break, m₂ on CM after).
+  const names = {p1: s.illustrative ? 'm₁' : `${f(m1)} kg`, p2: s.illustrative ? 'm₂' : `${f(m2)} kg`};
+  const after = pts.map((q, i) => ({t: at(i), q})).filter(x => x.t >= tb);
+  const scr = (q: P2) => toScene(plane, q);
+  type Spot = {o: [number, number]; align: 'start' | 'middle' | 'end'};
+  const pieceAt = (r: number): Spot[] => [{o: [0, -r - 12 * k], align: 'middle'}, {o: [r + 8 * k, -r - 4 * k], align: 'start'}, {o: [-r - 8 * k, -r - 4 * k], align: 'end'}];
+  const cmAt: Spot[] = [{o: [20 * k, 34 * k], align: 'start'}, {o: [-20 * k, 34 * k], align: 'end'}, {o: [20 * k, -22 * k], align: 'start'}, {o: [-20 * k, -22 * k], align: 'end'}];
+  const boxAt = (c: P2, o: [number, number], t: string, size: number, align: 'start' | 'middle' | 'end') => boxOf({x: c[0] + o[0], y: c[1] + o[1], text: t, size, align}, 4 * k);
+  const clashAt = (o1: Spot, o2: Spot, oc: Spot, x: typeof after[0]) => {
+    const b1 = boxAt(scr(x.q.p1), o1.o, names.p1, 26 * k, o1.align), b2 = boxAt(scr(x.q.p2), o2.o, names.p2, 26 * k, o2.align), bc = boxAt(scr(x.q.cm), oc.o, 'CM', 28 * k, oc.align);
+    return [meets(b1, b2) || meets(b1, bc), meets(b2, bc) || meets(b1, b2)];
+  };
+  let best = {o1: pieceAt(R1)[0], o2: pieceAt(R2)[0], oc: cmAt[0], score: Infinity, clear: [tb, tb]};
+  for (const o1 of pieceAt(R1)) for (const o2 of pieceAt(R2)) for (const oc of cmAt) {
+    const hits = after.map(x => clashAt(o1, o2, oc, x));
+    // a name may wait until it is clear; what counts is a clash after it shows
+    const clear = [0, 1].map(j => { const i = hits.findIndex(h => !h[j]); return i < 0 ? Infinity : after[i].t; });
+    const score = hits.filter((h, i) => (h[0] && after[i].t >= clear[0]) || (h[1] && after[i].t >= clear[1])).length * 100 + clear[0] + clear[1];
+    if (score < best.score) best = {o1, o2, oc, score, clear};
+  }
+  const offsets = {p1: best.o1, p2: best.o2};
   for (const [id, r, fill] of [['p1', R1, 'good'], ['p2', R2, 'bad']] as const) {
     props.push({id, type: 'circle', x: 0, y: 0, r, style: {fill, stroke: 'ink', width: 3 * k}, show: [tb, 1e9], layer: 4, anchor: {actor: `d-${id}`, joint: 'p'}} as Prop,
       {id: `trail-${id}`, type: 'trail', of: {actor: `d-${id}`, joint: 'p'}, t0: tb, step: 0.05, style: {stroke: fill, width: 3 * k}, layer: 2} as Prop,
-      text(`l${id}`, 0, 0, s.illustrative ? (id === 'p1' ? 'm₁' : 'm₂') : `${f(id === 'p1' ? m1 : m2)} kg`, 26 * k, {weight: 700, align: 'middle', style: {fill}, show: [tb, 1e9], layer: 4,
-        anchor: {actor: `d-${id}`, joint: 'p', offset: [0, -r - 12 * k]}}));
+      text(`l${id}`, 0, 0, names[id], 26 * k, {weight: 700, align: offsets[id].align, style: {fill}, show: [Math.min(best.clear[id === 'p1' ? 0 : 1], end0), 1e9], layer: 4,
+        anchor: {actor: `d-${id}`, joint: 'p', offset: offsets[id].o}}));
   }
   props.push({id: 'boom', type: 'circle', plane: 'p', x: fl.at(fl.tb).cm[0], y: fl.at(fl.tb).cm[1], r: 40 * k, style: {stroke: 'accent', width: 4 * k}, show: [tb, tb + 0.5], fade: 0.25, layer: 3} as Prop);
   props.push({id: 'cm', type: 'circle', x: 0, y: 0, r: 13 * k, style: {fill: 'paper', stroke: 'accent', width: 4 * k}, show: [tb, 1e9], layer: 5, anchor: {actor: 'd-cm', joint: 'p'}} as Prop,
-    text('lcm', 0, 0, 'CM', 28 * k, {weight: 700, style: {fill: 'accent'}, show: [tb, 1e9], layer: 5, anchor: {actor: 'd-cm', joint: 'p', offset: [20 * k, 34 * k]}}));
+    text('lcm', 0, 0, 'CM', 28 * k, {weight: 700, align: best.oc.align, style: {fill: 'accent'}, show: [tb, 1e9], layer: 5, anchor: {actor: 'd-cm', joint: 'p', offset: best.oc.o}}));
   end = at(n);
   line('l1', s.illustrative ? 'A projectile breaks into two pieces in flight' : `A ${f(m1 + m2)} kg projectile, ${f(e.v0)} m/s at ${f(e.angle)}°, breaks into ${f(m1)} kg and ${f(m2)} kg`, 0.4);
   line('l2', 'The explosion\'s forces are internal: they cancel in pairs', tb + 0.3, {style: {fill: 'muted'}});

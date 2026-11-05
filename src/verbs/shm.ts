@@ -14,6 +14,7 @@ import {wrapText} from '../svg.ts';
 import {round} from '../vec.ts';
 import {n2, panel, scene, text} from './calculus.ts';
 import {frame} from './vectors.ts';
+import {fadeWhilePassing} from './dodge.ts';
 
 type P2 = [number, number];
 export const SHM_SHOWS = ['spring', 'circle', 'graphs', 'energy'] as const;
@@ -151,6 +152,10 @@ export function shm(s: ShmSpec): Scene {
     dot('P', key(Px), key(Py), 'cool', 13); dot('Pp', key(Px), cy, 'accent', 14);
     props.push(text('lP', 0, 0, 'P', 30 * k, {weight: 700, align: 'middle', style: {fill: 'cool'}, keys: {x: key(t => Px(t) + 34 * k * Math.cos(th(t))), y: key(t => Py(t) - 34 * k * Math.sin(th(t)) + 10 * k)}} as never),
       text('lPp', 0, cy + 46 * k, 'P′', 30 * k, {weight: 700, align: 'middle', style: {fill: 'accent'}, keys: {x: key(Px)}} as never));
+    // P′ runs along the diameter through O and out towards x, P circles past x: the fixed names fade as they pass
+    const track = (f: (t: number) => [number, number]) => [{t: 0, at: f(0)}, ...Array.from({length: 400 * cycles + 1}, (_, i) => { const tt = span * i / (400 * cycles); return {t: lead + tt * rate, at: f(tt)}; })];
+    fadeWhilePassing(props, ['lo', 'lx'], [{text: 'P′', size: 30 * k, align: 'middle', track: track(t => [Px(t), cy + 46 * k])},
+      {text: 'P', size: 30 * k, align: 'middle', track: track(t => [Px(t) + 34 * k * Math.cos(th(t)), Py(t) - 34 * k * Math.sin(th(t)) + 10 * k])}]);
     if (s.vectors && s.vectors !== 'none') {
       const vel = s.vectors === 'velocity', L = 0.75 * R;
       const dx = (t: number) => (vel ? -Math.sin(th(t)) * sg : -Math.cos(th(t))) * L, dy = (t: number) => (vel ? Math.cos(th(t)) * sg : -Math.sin(th(t))) * L;

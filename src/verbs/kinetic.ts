@@ -10,6 +10,7 @@
 import type {Prop, Scene} from '../scene.ts';
 import {kit} from './fluids.ts';
 import {num} from './thermal.ts';
+import {textWidth} from '../svg.ts';
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const R_GAS = 8.31, KB = 1.38e-23, NA = 6.02e23;
@@ -197,10 +198,13 @@ export function kineticGas(s: KineticSpec): Scene {
       if (j < gy - 1) seg(`vb${i}${j}`, x, y, x, y + dy, {stroke: 'muted', width: 2 * k});
       c.props.push({id: `at${i}${j}`, type: 'circle', x, y, r: 13 * k, style: {fill: 'cool'}, layer: 5, keys: {x: keys, y: keysY}} as unknown as Prop);
     }
-    const h = bars(c, list.map(n => [n, SOLIDS[n.toLowerCase()], 'accent'] as [string, number, string]), top, x0, x1, base, ceil, v => `${num(v)}`);
+    // the 3R line runs on past the bars and is named over that free end: named above the last bar, it sat on that
+    // bar's value, which is close to 3R by the very point of the picture (keph2-05 C9, 2026-11-05)
+    const words3R = ill ? '3R' : `3R = ${num(3 * R_GAS)}`, room = textWidth(words3R, 26 * k) + 16 * k;
+    const h = bars(c, list.map(n => [n, SOLIDS[n.toLowerCase()], 'accent'] as [string, number, string]), top, x0, x1 - room, base, ceil, v => `${num(v)}`);
     const yR = base - h(3 * R_GAS);
     seg('three', x0, yR, x1, yR, {stroke: 'good', width: 3 * k, dash: [10 * k, 8 * k]} as never);
-    label('l3r', x1, yR - 12 * k, ill ? '3R' : `3R = ${num(3 * R_GAS)}`, {align: 'end', style: {fill: 'good'}});
+    label('l3r', x1, yR - 12 * k, words3R, {align: 'end', style: {fill: 'good'}});
     Object.assign(anchors, {lattice: [lx + 2 * dx, ly + dy], line3R: [x1 - 40 * k, yR]});
     line('l1', 'Each atom vibrates in 3 directions: 3k_BT of energy', 0.3, {weight: 700});
     line('l2', 'U = 3RT per mole, so C = 3R, for any solid', 1.4, {style: {fill: 'cool'}});

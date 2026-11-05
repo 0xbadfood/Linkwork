@@ -333,7 +333,8 @@ export function nucleus(s: NucleusSpec): Scene {
       label(X(xmax), Y0 - 22 * k, 'separation r (fm)', 'muted', 22, {align: 'end'});
       label(X0 + 12 * k, Y(ymax) - 10 * k, 'potential energy', 'muted', 22, {align: 'start'});
       if (num) for (const r of [1, 2, 3]) label(X(r), Y0 + 30 * k, String(r), 'muted', 20);
-      label(X(xmax), Y(ymin) + 34 * k, 'shape only: the book gives no depth', 'faint', 20, {align: 'end'});
+      // A row under r₀'s name: on its row, a narrow frame drew the caption on "r₀" (leph2-05 C6, 2026-11-05).
+      label(X(xmax), Y(ymin) + 70 * k, 'shape only: the book gives no depth', 'faint', 20, {align: 'end'});
       anchors.r0 = [X(r0), Y(-1)]; anchors.well = [X(r0), Y(-1)];
       facts.push('the potential energy of two nucleons is least at r₀ ≈ 0.8 fm: attractive beyond, repulsive closer', 'it falls to zero within a few fm: the nuclear force is short-ranged', 'n–n, n–p and p–p feel about the same nuclear force: it does not depend on charge');
       story = 'Closer than r₀ the nucleons push apart; beyond it they pull together, and a few fm out the pull is gone';

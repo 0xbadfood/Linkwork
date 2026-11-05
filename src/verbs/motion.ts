@@ -20,6 +20,7 @@ import {dfOf, exprErrors, fOf, inTime} from '../expr.ts';
 import {round} from '../vec.ts';
 import {n2, walking} from './calculus.ts';
 import {niceStep} from './graph.ts';
+import {boxOf, meets} from './dodge.ts';
 
 const MOVERS = ['dot', 'figure', 'car', 'bus', 'train', 'bicycle', 'ball', 'block', 'ruler'] as const;
 const SCALED = ['car', 'bus', 'train', 'bicycle', 'ball', 'block', 'figure', 'ruler'] as const;
@@ -288,12 +289,18 @@ export function motionOnLine(s: MotionSpec): Scene {
   const intervals: {t0: number; t1: number; distance: number}[] = [];
   if (s.every) {
     const t0 = moves[0].t, n = Math.floor((T - t0) / s.every + 1e-9);
+    // a mover that turns back passes its earlier marks again (thrown up: 1 s and 3 s at one height), so a stamp that
+    // would sit on an earlier one joins it instead: "1 s" becomes "1 s, 3 s" (2026-11-05, keph1-02 C6)
+    const stamps: (Prop & {type: 'text'})[] = [];
     for (let i = 0; i <= n; i++) {
       const t = round(t0 + i * s.every, 6), x = where(t), [mx, my] = X(x);
       props.push(up ? {id: `every${i}`, type: 'line', x1: mx - 22 * k, y1: my, x2: mx + 22 * k, y2: my, style: {stroke: 'cool', width: 4 * k}, show: [t, 1e9], layer: 2}
-        : {id: `every${i}`, type: 'line', x1: mx, y1: yAxis - 26 * k, x2: mx, y2: yAxis + 26 * k, style: {stroke: 'cool', width: 4 * k}, show: [t, 1e9], layer: 2},
-      up ? {id: `every${i}-t`, type: 'text', x: xAxis - 90 * k, y: my + 9 * k, text: `${fmt(t)} s`, size: 22 * k, align: 'end', style: {fill: 'cool'}, show: [t, 1e9]}
-        : {id: `every${i}-t`, type: 'text', x: mx, y: yAxis - 40 * k, text: `${fmt(t)} s`, size: 22 * k, align: 'middle', style: {fill: 'cool'}, show: [t, 1e9]});
+        : {id: `every${i}`, type: 'line', x1: mx, y1: yAxis - 26 * k, x2: mx, y2: yAxis + 26 * k, style: {stroke: 'cool', width: 4 * k}, show: [t, 1e9], layer: 2});
+      let stamp: Prop & {type: 'text'} = up ? {id: `every${i}-t`, type: 'text', x: xAxis - 90 * k, y: my + 9 * k, text: `${fmt(t)} s`, size: 22 * k, align: 'end', style: {fill: 'cool'}, show: [t, 1e9]}
+        : {id: `every${i}-t`, type: 'text', x: mx, y: yAxis - 40 * k, text: `${fmt(t)} s`, size: 22 * k, align: 'middle', style: {fill: 'cool'}, show: [t, 1e9]};
+      const under = stamps.find(q => q.show![1] > t && meets(boxOf(q, 2 * k), boxOf(stamp, 2 * k)));
+      if (under) { under.show = [under.show![0], t]; stamp = {...under, id: stamp.id, text: `${under.text.replace(/ s$/, '')}, ${stamp.text}`, show: [t, 1e9]}; }
+      stamps.push(stamp); props.push(stamp);
       if (i) intervals.push({t0: round(t - s.every, 6), t1: t, distance: round(Math.abs(x - where(t - s.every)), 6)});
     }
     for (const [i, g] of intervals.slice(0, 8).entries()) {

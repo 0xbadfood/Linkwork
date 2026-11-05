@@ -7,6 +7,7 @@
 import type {Prop, Scene} from '../scene.ts';
 import {kit} from './fluids.ts';
 import {axes, curve, num as num3} from './thermal.ts';
+import {textWidth} from '../svg.ts';
 
 type P2 = [number, number];
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -209,11 +210,23 @@ export function gasProcess(s: GasProcessSpec): Scene {
   props.push({id: 'state', type: 'circle', x: a[0], y: a[1], r: 11 * k, style: {fill: 'accent', stroke: 'ink', width: 2 * k}, layer: 6, keys: {x: stepKeys(q => q[0]), y: stepKeys(q => q[1])}} as unknown as Prop);
   dot('start', a[0], a[1], 'ink', {show: [0, 1e9]});
   label('l1pt', a[0] + (expands ? 14 : -14) * k, a[1] - 14 * k, '1', {align: expands ? 'start' : 'end'}); label('l2pt', b[0] + 14 * k, b[1] - 14 * k, '2', {show: [done, 1e9]});
-  // the axis's numbers
-  for (const [id, V] of [['v1', p.V1], ...(p.V2 !== p.V1 ? [['v2', p.V2]] : [])] as [string, number][]) {
-    const q = at(V / Vmax, 0); seg(`t${id}`, q[0], q[1], q[0], q[1] + 10 * k, {stroke: 'ink', width: 3 * k});
-    label(`lt${id}`, q[0], q[1] + 36 * k, ill ? (id === 'v1' ? 'V₁' : 'V₂') : `${num(V)} m³`, {align: 'middle', style: {fill: 'muted'}});
+  // the axis's numbers, each centred under its tick; two ticks too close for that are named outwards from each other,
+  // and the axis's name 'V' moves past the axis's end when a number reaches it (V₂ = 0.026 beside V₁ = 0.025, or V₂
+  // at the window's edge: keph2-04 C6, C8, C11, 2026-11-05)
+  const ticks = ([['v1', p.V1], ...(p.V2 !== p.V1 ? [['v2', p.V2]] : [])] as [string, number][]).map(([id, V]) =>
+    ({id, q: at(V / Vmax, 0), words: ill ? (id === 'v1' ? 'V₁' : 'V₂') : `${num(V)} m³`}));
+  const wide = (t: (typeof ticks)[number]) => textWidth(t.words, 26 * k) + 10 * k;
+  const crowded = ticks.length === 2 && Math.abs(ticks[0].q[0] - ticks[1].q[0]) < (wide(ticks[0]) + wide(ticks[1])) / 2;
+  let reach = -Infinity;
+  for (const t of ticks) {
+    const left = crowded && t.q[0] <= Math.min(...ticks.map(o => o.q[0])) && !(t === ticks[1] && ticks[0].q[0] === t.q[0]);
+    const align = crowded ? (left ? 'end' : 'start') : 'middle', x = t.q[0] + (crowded ? (left ? -4 : 4) * k : 0);
+    seg(`t${t.id}`, t.q[0], t.q[1], t.q[0], t.q[1] + 10 * k, {stroke: 'ink', width: 3 * k});
+    label(`lt${t.id}`, x, t.q[1] + 36 * k, t.words, {align, style: {fill: 'muted'}});
+    reach = Math.max(reach, align === 'middle' ? x + wide(t) / 2 : align === 'start' ? x + wide(t) : x);
   }
+  const name = props.find(q => q.id === 'axxn') as {x: number; y: number; align?: string} | undefined;
+  if (name && reach > x1 - textWidth('V', 26 * k) - 8 * k) Object.assign(name, {x: x1 + 14 * k, y: y1 + 9 * k, align: 'start'});
   // the piston's height follows V, on the graph's own V scale
   const cx0 = bx0 + 0.78 * bw, cx1 = bx0 + 0.96 * bw, frac = (i: number) => p.line[i][0] / Vmax;
   const hot = s.kind === 'isochoric' || s.kind === 'isobaric';
