@@ -161,8 +161,9 @@ export function orbit(s: OrbitSpec): Scene {
       track: ts.map((t, i) => { const q = toScene(plane, at(t)); return {t: screen[i], at: [q[0], q[1] - 16 * k - 12 * k] as [number, number]}; })}]);
     line('l1', `Law of orbits: an ellipse, with the ${s.star ?? 'Sun'} at one focus`, 0.3);
     if (show.has('areas')) {
-      line('l2', 'Law of areas: the line to the planet sweeps equal areas in equal times', lead + span * 0.1, {weight: 700});
-      line('l3', 'Near the Sun it moves faster, far away slower: the same area each time', lead + span * 0.6, {style: {fill: 'muted'}});
+      // 2026-11-05: an Earth satellite's film said "Near the Sun": the words name the scene's own bodies
+      line('l2', `Law of areas: the line to the ${s.body ?? 'planet'} sweeps equal areas in equal times`, lead + span * 0.1, {weight: 700});
+      line('l3', `Near the ${s.star ?? 'Sun'} it moves faster, far away slower: the same area each time`, lead + span * 0.6, {style: {fill: 'muted'}});
     }
     if (show.has('speeds')) line('l4', s.illustrative ? 'Fastest at perihelion, slowest at aphelion' : `vP / vA = (1 + e) / (1 − e) = ${f(vp / va)}`, lead + span / 2, {style: {fill: 'cool'}});
     facts.push(`semi-major axis a = ${f(a)} AU, eccentricity e = ${f(e)}`, `perihelion ${f(a * (1 - e))} AU, aphelion ${f(a * (1 + e))} AU from the ${s.star ?? 'Sun'}`,
