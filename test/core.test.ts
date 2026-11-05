@@ -1361,7 +1361,7 @@ test('every card\'s example and shortest stay in the frame: full width, half wid
   // own renders looked fine because nothing ran the frame check on them
   // Verbs still without a half-width layout (found 2026-10-30): the list only shrinks; a verb that passes leaves it.
   const NARROW_BACKLOG = ['energy_ladder', 'sliding_ladder', 'pendulum', 'compass_arc', 'slider_crank', 'domain_range', 'work',
-    'energy', 'motion_on_line', 'path_length', 'stage', 'magnetic_force', 'domestic_circuit', 'energy_use'];
+    'energy', 'motion_on_line', 'path_length', 'stage', 'magnetic_force', 'energy_use'];
   const {CARDS} = await import('../src/verbs/cards.ts');
   const bad: string[] = [], narrowOk = new Set(NARROW_BACKLOG);
   for (const [name, card] of Object.entries(CARDS))

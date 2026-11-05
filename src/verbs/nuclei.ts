@@ -200,7 +200,9 @@ export function nucleus(s: NucleusSpec): Scene {
 
   if (s.show === 'make') {
     const list = (s.nuclides ?? ['H-1', 'H-2', 'H-3']).map(x => ({name: x, ...nuclide(x)!})), m = list.length;
-    const slot = bw / m, rb = Math.min(slot * .42, bh * .3) / Math.max(...list.map(x => reach(x.A)));
+    // the nuclei leave room under them for the symbol and Z, N, A above the legend (2026-11-05: a half-width part's
+    // 'Z = 1, N = 0, A = 1' sat on the legend)
+    const slot = bw / m, rb = Math.max(20 * k, Math.min(slot * .42, bh * .3, bh * .53 - 140 * k)) / Math.max(...list.map(x => reach(x.A)));
     const base = by + bh * .42 + Math.max(...list.map(x => reach(x.A))) * rb + 64 * k;   // one baseline for every name
     list.forEach((x, i) => {
       const xc = bx + slot * (i + .5), yc = by + bh * .42, t = .4 + i * .6;
@@ -380,7 +382,8 @@ export function nucleus(s: NucleusSpec): Scene {
   if (s.show === 'rays') {
     // the source in a lead block at the bottom; the beams go up through the field. Bends from their true q/pv (electric)
     // or radius p/q (magnetic), α at 5 MeV, β at 1 MeV: β is scaled to fit, α to the same scale
-    const mag = s.field === 'magnetic', x0 = cx, y0 = by + bh * .9, top = by + bh * .06, h = y0 - top;
+    // the block and its name stay inside the box (a half-width part's sentences start just below it)
+    const mag = s.field === 'magnetic', x0 = cx, y0 = Math.min(by + bh * .9, by + bh - 100 * k), top = by + bh * .06, h = y0 - top;
     props.push({id: 'lead', type: 'rect', x: x0 - 50 * k, y: y0 - 10 * k, w: 100 * k, h: 70 * k, style: {fill: 'muted'}, layer: 2} as Prop);
     label(x0, y0 + 90 * k, 'source in lead', 'muted', 22);
     dur = 6;

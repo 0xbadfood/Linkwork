@@ -152,10 +152,7 @@ export function verticalCircle(s: VerticalCircleSpec): Scene {
   const nameAt: Record<string, Vec> = {A: [-0.2 * L, -L - 0.12 * L], B: [L + 0.2 * L, -0.12 * L], C: [0.2 * L, L + 0.13 * L]};
   for (const p of POINTS) {
     anchors[p] = toScene(plane, place[p]);
-    if (!named.has(p)) continue;
-    props.push({id: `pt${p}`, type: 'circle', plane: 'p', x: place[p][0], y: place[p][1], r: 6 * k, style: {fill: 'muted'}} as Prop);
-    const [x, y] = toScene(plane, nameAt[p]);
-    props.push(text(`l${p}`, x, y, p, 32 * k, {weight: 700, align: 'middle'}));
+    if (named.has(p)) props.push({id: `pt${p}`, type: 'circle', plane: 'p', x: place[p][0], y: place[p][1], r: 6 * k, style: {fill: 'muted'}} as Prop);
   }
 
   // the string: 12 short pieces, straight while taut, bowed once slack (its length kept), wavy at C in the top show
@@ -208,6 +205,7 @@ export function verticalCircle(s: VerticalCircleSpec): Scene {
   // a name beyond the arrow's tip, or (side) beside its middle, clear of what lies at its tip (T points at O); a name
   // that would sit on the string moves beside the arrow, on the side away from the string (2026-11-05, keph1-05 C8:
   // mg at C pointed down the slack string and its name lay on the string's wave)
+  const tips: Record<string, (q: Sample) => Vec> = {}, placed: {p: Vec; hw: number}[] = [];
   const arrow = (id: string, from: (q: Sample) => Vec, to: (q: Sample) => Vec, stroke: string, label: string, on: number, off = 1e9, width = 5, side = false,
     seen?: (q: Sample) => number) => {
     const fadeKeys = seen ? {opacity: keyed(seen)} : {};
@@ -215,12 +213,18 @@ export function verticalCircle(s: VerticalCircleSpec): Scene {
       const sg = how === 'right' ? -1 : 1, aside = sg * Math.max(nameGap, (textWidth(label, 30 * k) / 2 + 24 * k) * pxl);
       return how === 'tip' ? [b[0] + u[0] * nameGap, b[1] + u[1] * nameGap] : [(a[0] + b[0]) / 2 + u[1] * aside, (a[1] + b[1]) / 2 - u[0] * aside]; };
     const tries: ('tip' | 'left' | 'right')[] = side ? ['left', 'right'] : ['tip', 'left', 'right'];
-    const room = tries.map(h => clearance(spot(last, h), label));
+    // clear of the string and of the names already placed (2026-11-05: at C in a half-width top show, T and mg both
+    // point down and T's name sat on mg's)
+    const others = (p: Vec) => Math.min(Infinity, ...placed.map(o => Math.max(Math.abs(o.p[0] - p[0]) - (o.hw + textWidth(label, 30 * k) / 2 * pxl),
+      Math.abs(o.p[1] - p[1]) - 32 * k * pxl)));
+    const room = tries.map(h => Math.min(clearance(spot(last, h), label), others(spot(last, h))));
     const pick = tries[room.findIndex(r => r >= 6 * k * pxl)] ?? tries[room.indexOf(Math.max(...room))];
     const q0 = samples[0], tip = (q: Sample): Vec => spot(q, pick);
     props.push({id, type: 'arrow', plane: 'p', x1: from(q0)[0], y1: from(q0)[1], x2: to(q0)[0], y2: to(q0)[1], head: 16 * k, layer: 2,
       keys: {x1: keyed(q => from(q)[0]), y1: keyed(q => from(q)[1]), x2: keyed(q => to(q)[0]), y2: keyed(q => to(q)[1]), ...fadeKeys},
       style: {stroke, width: width * k}, show: [on, off], fade: 0.25} as Prop);
+    tips[id] = tip;
+    placed.push({p: tip(last), hw: textWidth(label, 30 * k) / 2 * pxl});
     props.push({id: `l${id}`, type: 'text', plane: 'p', x: tip(q0)[0], y: tip(q0)[1], text: label, size: 30 * k, weight: 700, align: 'middle', layer: 4,
       keys: {x: keyed(q => tip(q)[0]), y: keyed(q => tip(q)[1]), ...fadeKeys}, style: {fill: stroke, stroke: 'paper', width: 7 * k}, show: [on, off], fade: 0.25} as Prop);
   };
@@ -243,6 +247,14 @@ export function verticalCircle(s: VerticalCircleSpec): Scene {
   if (wantW) {
     arrow('mg', q => edge(q, [0, -1]), q => plus(edge(q, [0, -1]), [0, -1], g * fs), 'bad', 'mg', forcesOn);
     legend.push(['mg: the weight, straight down', 'bad']);
+  }
+  // the names of A, B and C; v's name sweeps round with the bob and passes over each, so a name steps back (fades)
+  // while v's name is near it (2026-11-05: "v" was drawn on "B" and "C" as the bob went by)
+  for (const p of POINTS) {
+    if (!named.has(p)) continue;
+    const [x, y] = toScene(plane, nameAt[p]), tv = tips.v;
+    const near = tv ? keyed(q => { const [a, b] = toScene(plane, tv(q)); return Math.min(1, Math.max(0, (Math.hypot(a - x, b - y) - 45 * k) / (40 * k))); }) : undefined;
+    props.push(text(`l${p}`, x, y, p, 32 * k, {weight: 700, align: 'middle', ...(near && near.some(kk => kk[1] < 1) ? {keys: {opacity: near}} : {})}));
   }
   // a half-width part has its panel under the drawing, short of room: the arrows' own names say enough there
   // (the top show says it in a sentence: the bob moving horizontally)

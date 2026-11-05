@@ -35,7 +35,16 @@ function layout(s: Window & Common) {
   // Panel rows are placed by fraction of the height, moved down when the title wraps onto more lines.
   const shift = s.title ? (wrapText(s.title, 44 * k, W - px - 40 * k).length - 1) * 1.25 * 44 * k : 0;
   const py = (f: number) => f * H + shift;
-  return {W, H, k, plane, axes, px, title, py};
+  /** How much lower the rows below a panel line go when it wraps onto more lines (rows are fixed fractions, so a
+   * wrapped line at half width ran into the next one; 2026-11-05). */
+  const more = (t: string, size: number) => (wrapText(t, size, W - px - 40 * k).length - 1) * 1.25 * size;
+  /** Rows by fraction, each pushed down by the extra lines of every row above it that wraps ([fraction, text, size]). */
+  const flow = (rows: [number, string, number][]) => (f: number) => {
+    const extra = new Map<number, number>();
+    for (const [r, t, size] of rows) if (r < f) extra.set(r, Math.max(extra.get(r) ?? 0, more(t, size * k)));
+    return py(f) + [...extra.values()].reduce((a, b) => a + b, 0);
+  };
+  return {W, H, k, plane, axes, px, title, py, more, flow};
 }
 export const text = (id: string, x: number, y: number, t: string, size: number, extra: Partial<Prop> = {}): Prop =>
   ({id, type: 'text', x, y, text: t, size, ...extra} as Prop);
@@ -82,9 +91,12 @@ export function domainErrors(s: DomainSpec): string[] {
 }
 
 export function domainRange(s: DomainSpec): Scene {
-  const {W, H, k, plane, axes, px, title, py} = layout(s);
+  const {W, H, k, plane, axes, px, title, flow} = layout(s);
   const ptext = panel(W, k);
   const f = fOf(s.expr), [a, b] = plane.x, [c, d] = plane.y, span = b - a;
+  const NOTES = ['Walk along x: only where f(x) exists.', 'The values f(x) takes fill the y-axis.'];
+  const domLine = `Domain: ${parseClaim(s.domain, 'x').text}`, ranLine = `Range: ${parseClaim(s.range, 'y').text}`;
+  const py = flow([[0.24, `f(x) = ${pretty(s.expr)}`, 40], [0.52, NOTES[0], 30], [0.57, NOTES[1], 30], [0.7, domLine, 40], [0.78, ranLine, 40]]);
   const {parts, gaps} = gapsOf(s);
   const axisY = toScene(plane, [0, Math.min(Math.max(0, c), d)])[1], axisX = toScene(plane, [Math.min(Math.max(0, a), b), 0])[0];
   const wallH = 0.1 * (d - c), margin = 0.035 * span;
@@ -138,10 +150,10 @@ export function domainRange(s: DomainSpec): Scene {
     ptext('f', px, py(0.24), `f(x) = ${pretty(s.expr)}`, 40 * k, {weight: 700}),
     {id: 'ro-x', type: 'readout', width: W - px - 40 * k, x: px, y: py(0.34), size: 34 * k, text: 'x = {x}', measures: {x: {kind: 'coord', of: {actor: 'dot', joint: 'p'}, plane: 'p', axis: 'x'}}, style: {fill: 'accent'}, show: [3, t]},
     {id: 'ro-y', type: 'readout', width: W - px - 40 * k, x: px, y: py(0.40), size: 34 * k, text: 'f(x) = {y}', measures: {y: {kind: 'expr', expr: s.expr, at: {actor: 'dot', joint: 'p'}, plane: 'p'}}, style: {fill: 'cool'}, show: [3, t]},
-    ptext('dom-note', px, py(0.52), 'Walk along x: only where f(x) exists.', 30 * k, {style: {fill: 'muted'}, show: [3, 1e9]}),
-    ptext('ran-note', px, py(0.57), "The values f(x) takes fill the y-axis.", 30 * k, {style: {fill: 'muted'}, show: [3.6, 1e9]}),
-    ptext('dom', px, py(0.7), `Domain: ${parseClaim(s.domain, 'x').text}`, 40 * k, {weight: 700, style: {fill: 'accent'}, show: [t + 0.2, 1e9]}),
-    ptext('ran', px, py(0.78), `Range: ${parseClaim(s.range, 'y').text}`, 40 * k, {weight: 700, style: {fill: 'cool'}, show: [t + 0.9, 1e9]}),
+    ptext('dom-note', px, py(0.52), NOTES[0], 30 * k, {style: {fill: 'muted'}, show: [3, 1e9]}),
+    ptext('ran-note', px, py(0.57), NOTES[1], 30 * k, {style: {fill: 'muted'}, show: [3.6, 1e9]}),
+    ptext('dom', px, py(0.7), domLine, 40 * k, {weight: 700, style: {fill: 'accent'}, show: [t + 0.2, 1e9]}),
+    ptext('ran', px, py(0.78), ranLine, 40 * k, {weight: 700, style: {fill: 'cool'}, show: [t + 0.9, 1e9]}),
   );
   if (s.x && (s.x[0] > -Infinity)) props.push(ptext('window', px, py(0.87), `(drawn for ${n2(a, 1)} ≤ x ≤ ${n2(b, 1)})`, 24 * k, {style: {fill: 'muted'}, show: [t + 0.9, 1e9]}));
   return scene(s, W, H, t + 3, plane, props, [dot, walker], {verb: 'domain_range', pieces: parts.map(p => [round(p.lo, 4), round(p.hi, 4)])});
@@ -260,7 +272,7 @@ export function secantErrors(s: SecantSpec): string[] {
 
 export function secantToTangent(s: SecantSpec): Scene {
   s = {...s, expr: inTime(s.expr)};
-  const {W, H, k, plane, px, title, py} = layout(s);
+  const {W, H, k, plane, px, title, flow} = layout(s);
   const w = SECANT_WORDS[s.quantity ?? 'maths'], phys = !!s.quantity;
   const axes: Prop = {id: 'axes', type: 'axes', plane: 'p', step: s.step ?? [1, 1], size: 24 * k, ...(phys ? {names: [`${w.t} (${w.tu.trim()})`, `${w.y} (${w.yu.trim()})`] as [string, string]} : {})};
   const ptext = panel(W, k);
@@ -289,15 +301,19 @@ export function secantToTangent(s: SecantSpec): Scene {
   const P2: Vec = toScene(plane, [a0 + 1, f(a0) + slope]);
   const name = (src: string) => (phys ? asTime(src) : src);
   const at = n2(a0);
+  const fLine = `${phys ? w.y : 'f(x)'} = ${name(pretty(s.expr))}`;
+  const pqLine = c ? `P and Q close in on ${w.t} = ${at}${w.tu} from both sides, ${w.dt} apart.`
+    : phys ? `P is fixed at t = ${at} s. Q, ${w.dt} later, slides in.` : `P is fixed at x = ${at}. Q = P + h slides in.`;
+  // rows below a wrapped line move down with it
+  const py = flow([[0.24, fLine, 40], [0.33, pqLine, 30]]);
   const props: Prop[] = [axes, {id: 'curve', type: 'curve', plane: 'p', expr: s.expr, draw: 0, keys: {draw: [[0.3, 0], [2, 1, 'inOut']]}, style: {stroke: 'ink', width: 5 * k}}, ...title,
     {id: 'secant', type: 'through', plane: 'p', a: {actor: 'P', joint: 'p'}, b: {actor: 'Q', joint: 'p'}, style: {stroke: 'cool', width: 4 * k}, show: [2.2, t1 + 0.6], layer: 2},
     ...(c ? [text('O', 0, 0, `${phys ? 't' : 'x'} = ${n2(a0)}`, 26 * k, {anchor: {actor: 'O', joint: 'p', offset: [44 * k, 30 * k]}, weight: 700, style: {fill: 'accent'}, layer: 5})] : []),
     {id: 'tangent', type: 'through', plane: 'p', a: {plane: 'p', at: [a0, f(a0)]}, b: P2, style: {stroke: 'accent', width: 5 * k}, show: [t1 + 0.4, 1e9], layer: 2},
     text('P', 0, 0, 'P', 30 * k, {anchor: {actor: 'P', joint: 'p', offset: [-26 * k, -26 * k]}, weight: 700, style: {fill: c ? 'cool' : 'accent'}, layer: 5}),
     text('Q', 0, 0, 'Q', 30 * k, {anchor: {actor: 'Q', joint: 'p', offset: [18 * k, -26 * k]}, weight: 700, style: {fill: 'cool'}, layer: 5}),
-    ptext('f', px, py(0.24), `${phys ? w.y : 'f(x)'} = ${name(pretty(s.expr))}`, 40 * k, {weight: 700}),
-    ptext('pq', px, py(0.33), c ? `P and Q close in on ${w.t} = ${at}${w.tu} from both sides, ${w.dt} apart.`
-      : phys ? `P is fixed at t = ${at} s. Q, ${w.dt} later, slides in.` : `P is fixed at x = ${at}. Q = P + h slides in.`, 30 * k, {style: {fill: 'muted'}}),
+    ptext('f', px, py(0.24), fLine, 40 * k, {weight: 700}),
+    ptext('pq', px, py(0.33), pqLine, 30 * k, {style: {fill: 'muted'}}),
   ];
   let after = 0.6;
   if (steps.length) {
@@ -339,12 +355,17 @@ export function areaErrors(s: AreaSpec): string[] {
   return e;
 }
 
+const NEG = 'Area below the x-axis counts as negative.';
 export function areaUnder(s: AreaSpec): Scene {
-  const {W, H, k, plane, axes, px, title, py} = layout(s);
+  const {W, H, k, plane, axes, px, title, flow} = layout(s);
   const ptext = panel(W, k);
   const f = fOf(s.expr), a0 = s.from, b0 = s.to, T = 4, t0 = 2.4, t1 = t0 + T;
   const exact = integrate(f, a0, b0);
   const negative = Array.from({length: 101}, (_, i) => f(a0 + (b0 - a0) * i / 100)).some(y => y < 0);
+  const sumLine = (n: number) => { const sum = riemann(f, a0, b0, n, s.rule ?? 'mid'); return `${n} rectangles: ${n2(sum, 4)}  (off by ${n2(Math.abs(sum - exact), 4)})`; };
+  // rows below a wrapped line move down with it (the readout's widest value is about its template's length)
+  const py = flow([[0.24, `f(x) = ${pretty(s.expr)}`, 40], [0.34, 'area up to x = −0.00:  −0.000', 36],
+    [0.43, `area from ${n2(a0)} to ${n2(b0)} = ${n2(exact, 4)}`, 34], ...(negative ? [[0.5, NEG, 28] as [number, string, number]] : []), ...(s.riemann ?? []).map(n => [0.6, sumLine(n), 32] as [number, string, number])]);
   const sweep: Actor = {id: 'sweep', rig: 'dot', at: toScene(plane, [a0, f(a0)]), scale: k, layer: 4,
     drivers: [{t0: 0, t1: 1e9, driver: 'curve', plane: 'p', expr: s.expr, x: [[0, a0], [t0, a0], [t1, b0, 'inOut']]}]};
   const props: Prop[] = [axes,
@@ -358,7 +379,7 @@ export function areaUnder(s: AreaSpec): Scene {
         A: {kind: 'integral', expr: s.expr, from: a0, to: {actor: 'sweep', joint: 'p'}, plane: 'p'}}, style: {fill: 'accent'}},
     ptext('exact', px, py(0.43), `area from ${n2(a0)} to ${n2(b0)} = ${n2(exact, 4)}`, 34 * k, {weight: 700, show: [t1 + 0.2, 1e9]}),
   ];
-  if (negative) props.push(ptext('neg', px, py(0.5), 'Area below the x-axis counts as negative.', 28 * k, {style: {fill: 'muted'}, show: [t1 + 0.4, 1e9]}));
+  if (negative) props.push(ptext('neg', px, py(0.5), NEG, 28 * k, {style: {fill: 'muted'}, show: [t1 + 0.4, 1e9]}));
   let t = t1 + 1.2;
   const sums: {n: number; sum: number}[] = [];
   (s.riemann ?? []).forEach((n, i) => {
@@ -367,7 +388,7 @@ export function areaUnder(s: AreaSpec): Scene {
     const until = i < (s.riemann!.length - 1) ? t + 1.8 : 1e9;
     props.push({id: `rects${i}`, type: 'riemann', plane: 'p', expr: s.expr, from: a0, to: b0, n, rule: s.rule ?? 'mid', alternate: 'good',
       style: {fill: 'cool', stroke: 'cool', width: 2, opacity: 0.55}, show: [t, until], fade: 0.2, layer: 1},
-    ptext(`sum${i}`, px, py(0.6), `${n} rectangles: ${n2(sum, 4)}  (off by ${n2(Math.abs(sum - exact), 4)})`, 32 * k, {style: {fill: 'cool'}, show: [t, until], fade: 0.2}));
+    ptext(`sum${i}`, px, py(0.6), sumLine(n), 32 * k, {style: {fill: 'cool'}, show: [t, until], fade: 0.2}));
     t += 1.8;
   });
   if (s.riemann?.length) props.push(ptext('more', px, py(0.67), 'More rectangles, closer to the exact area.', 28 * k, {style: {fill: 'muted'}, show: [t - 1.8 + 0.5, 1e9]}));

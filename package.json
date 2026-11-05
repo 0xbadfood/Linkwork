@@ -7,6 +7,6 @@
   "exports": {".": "./src/index.ts"},
   "bin": {"linkwork": "./src/cli.ts"},
   "engines": {"node": ">=23.6"},
-  "scripts": {"test": "node --test test/core.test.ts test/maths.test.ts test/plays.test.ts test/batch2-electrostatics.test.ts test/batch2-magnetism.test.ts test/batch2-optics.test.ts test/batch2-fixes.test.ts test/batch3-mechanics.test.ts test/batch3-forces.test.ts test/batch3-matter.test.ts test/batch3-ladder.test.ts test/batch3-bonds.test.ts", "typecheck": "tsc --noEmit"},
+  "scripts": {"test": "node --test test/core.test.ts test/maths.test.ts test/plays.test.ts test/batch2-electrostatics.test.ts test/batch2-magnetism.test.ts test/batch2-optics.test.ts test/batch2-fixes.test.ts test/batch3-mechanics.test.ts test/batch3-forces.test.ts test/batch3-matter.test.ts test/batch3-ladder.test.ts test/batch3-bonds.test.ts test/batch4-sound.test.ts test/batch4-machines.test.ts test/batch4-em.test.ts test/text-overlap.test.ts", "typecheck": "tsc --noEmit"},
   "devDependencies": {"typescript": "5.9.2", "@types/node": "24.3.0"}
 }

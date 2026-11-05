@@ -145,7 +145,8 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
     label((mx0 + mx1) / 2, by + bh - 14 * k, name, 'muted', 24);
     for (let j = 0; j < 6; j++) props.push({id: `free${j}`, type: 'circle', x: mx0 + (j + .5) * (mx1 - mx0) / 7, y: y0 + 22 * k + (j % 2) * 18 * k, r: 7 * k, style: {fill: 'cool'}, layer: 2} as Prop);
     line([mx0, Y(phi)], [bx + bw, Y(phi)], 'muted', 2.5, {}, true);
-    label(bx + bw, Y(phi) + 30 * k, 'free, at rest outside the metal', 'muted', 22, {align: 'end'});
+    // below the line, unless an electron that falls short says so there: then above it (2026-11-05, half width)
+    label(bx + bw, Y(phi) + (emits ? 30 : -16) * k, 'free, at rest outside the metal', 'muted', 22, {align: 'end'});
     // φ₀ bracket on the left of the metal
     arrow([mx0 - 26 * k, y0], [mx0 - 26 * k, Y(phi)], 'cool', 3); arrow([mx0 - 26 * k, Y(phi)], [mx0 - 26 * k, y0], 'cool', 3);
     label(mx0 - 40 * k, (y0 + Y(phi)) / 2 + 9 * k, num ? `φ₀ = ${sig(phi)} eV` : 'φ₀', 'cool', 26, halo(k, 'cool', {align: 'end'}));
@@ -247,7 +248,9 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
   if (s.show === 'curves') {
     const byF = s.vary === 'frequency', fs = byF ? (s.frequencies ?? [nu, nu + 1.5, nu + 3]).slice().sort((a, b) => a - b) : [nu, nu, nu];
     const V0s = fs.map(f => kmax(f, phi)), sats = byF ? [1, 1, 1] : [1 / 3, 2 / 3, 1];
-    const vMin = -Math.max(...V0s) * 1.35, vMax = 3, g0 = bx + bw * .05, g1 = bx + bw * .95, gy0 = by + bh * .86, gy1 = by + bh * .1;
+    // the stopping potentials are named below the axis, stacked for three frequencies: room for them inside the box, so
+    // a half-width part's sentences below it stay clear (2026-11-05)
+    const vMin = -Math.max(...V0s) * 1.35, vMax = 3, g0 = bx + bw * .05, g1 = bx + bw * .95, gy0 = Math.min(by + bh * .86, by + bh - (byF ? 132 : 76) * k), gy1 = by + bh * .1;
     const GX = (v: number) => g0 + (v - vMin) / (vMax - vMin) * (g1 - g0), GY = (f: number) => gy0 - f * (gy0 - gy1) * .85;
     line([g0, gy0], [g1, gy0], 'ink', 2.5); arrow([GX(0), gy0 + 10 * k], [GX(0), gy1 - 10 * k], 'ink', 2.5);
     label(GX(0) + 12 * k, gy1, 'photocurrent', 'muted', 22, {align: 'start'});
@@ -258,7 +261,8 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
       const t0 = .8 + j * 1.6, pts = Array.from({length: 121}, (_, i) => { const v = vMin + (vMax - vMin) * i / 120; return [GX(v), GY(sats[j] * photocurrent(v, V0s[j]))] as P2; });
       poly(pts, tones[j], 4, on(t0, t0 + 1.3));
       const nm = byF ? `ν${'₁₂₃'[j]}` : `I${'₁₂₃'[j]}`;
-      label(g1 - 10 * k, GY(sats[j]) - 14 * k, nm, tones[j], 26, halo(k, tones[j], {align: 'end', show: [t0 + 1, 1e9]}));
+      // three frequencies share one saturation current, so their names sit side by side above it, not on one another
+      label(g1 - 10 * k - (byF ? (2 - j) * 48 * k : 0), GY(sats[j]) - 14 * k, nm, tones[j], 26, halo(k, tones[j], {align: 'end', show: [t0 + 1, 1e9]}));
       if (byF || j === 0) {
         label(GX(-V0s[j]), gy0 + (byF ? 64 + 28 * j : 64) * k, num ? `−${sig(V0s[j])} V` : `−V₀${byF ? '₁₂₃'[j] : ''}`, tones[byF ? j : 0], 22, {show: [t0 + 1, 1e9]});
         line([GX(-V0s[j]), gy0 - 8 * k], [GX(-V0s[j]), gy0 + 8 * k], tones[byF ? j : 0], 3);
@@ -266,7 +270,9 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
       anchors[`curve${j + 1}`] = [g1, GY(sats[j])];
       anchors[`stop${j + 1}`] = [GX(-V0s[j]), gy0];
     });
-    label(GX(vMax * .55), GY(1) - (byF ? 40 : 60) * k, 'saturation current', 'muted', 22);
+    // above the plateau, or under it when the graph is short and above it is the axis name (half width)
+    const sat = GY(1) - (byF ? 40 : 60) * k;
+    label(GX(vMax * .55), sat < gy1 + 28 * k ? GY(1) + 34 * k : sat, 'saturation current', 'muted', 22);
     dur = 6.6;
     story = byF ? `Three frequencies at one intensity: one saturation current, but the higher the frequency, the larger the stopping potential`
       : `Three intensities at one frequency: the saturation current grows with intensity, the stopping potential stays the same`;
@@ -280,7 +286,8 @@ export function photoelectric(s: PhotoelectricSpec): Scene {
   if (s.show === 'stopping') {
     const ms = s.metals ?? ['caesium', 'sodium'], nus0 = ms.map(m => thresholdNu(WORK_FUNCTIONS[m]));
     const xMax = Math.max(nu, ...nus0) * 1.35, yMax = Math.max(kmax(xMax, WORK_FUNCTIONS[ms[0]]), 1) * 1.1;
-    const g0 = bx + bw * .08, g1 = bx + bw * .95, gy0 = by + bh * .86, gy1 = by + bh * .08;
+    // the thresholds are named below the axis, one row per metal: inside the box (a half-width part's text is below it)
+    const g0 = bx + bw * .08, g1 = bx + bw * .95, gy0 = Math.min(by + bh * .86, by + bh - (72 + 26 * (ms.length - 1)) * k), gy1 = by + bh * .08;
     const GX = (f: number) => g0 + f / xMax * (g1 - g0), GY = (v: number) => gy0 - v / yMax * (gy0 - gy1);
     arrow([g0, gy0], [g1 + 10 * k, gy0], 'ink', 2.5); arrow([g0, gy0], [g0, gy1 - 10 * k], 'ink', 2.5);
     label(g1, gy0 + 30 * k, num ? 'frequency ν (10¹⁴ Hz)' : 'frequency ν', 'muted', 22, {align: 'end'});

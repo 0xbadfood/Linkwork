@@ -199,6 +199,8 @@ export function kirchhoff(s: KirchhoffSpec): Scene {
   // the other side, then further out, then slid along the wire (2026-11-04: Example 3.6's I2 sat on the 10 V cell's
   // label where four branches meet at A).
   const taken: [number, number, number, number][] = s.nodes.map(nd => [pos[nd.id][0] - 14 * k, pos[nd.id][1] - 14 * k, pos[nd.id][0] + 14 * k, pos[nd.id][1] + 14 * k]);
+  const words: [number, number, number, number][] = [];   // the labels alone: the fallback may cross a wire or a symbol's room, never a label
+  const onLabel = (b: [number, number, number, number]) => words.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
   const hits = (b: [number, number, number, number]) => taken.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])
     || paths.some(pts => pts.slice(1).some((q, i) => { for (let f = 0; f <= 1; f += 0.02) { const x = pts[i][0] + (q[0] - pts[i][0]) * f, y = pts[i][1] + (q[1] - pts[i][1]) * f; if (x > b[0] && x < b[2] && y > b[1] && y < b[3]) return true; } return false; }));
   const place = (t: string, size: number, at: Vec, u: Vec, side: Vec, gap: number): Vec => {
@@ -210,10 +212,25 @@ export function kirchhoff(s: KirchhoffSpec): Scene {
       const c: Vec = [at[0] + dx, at[1] + dy], b: [number, number, number, number] = [c[0] - w, c[1] - h, c[0] + w, c[1] + h];
       if (!hits(b)) { taken.push(b); return c; }
     }
-    const c: Vec = [at[0] + side[0] * (gap + w), at[1] + side[1] * (gap + h)]; taken.push([c[0] - w, c[1] - h, c[0] + w, c[1] + h]); return c;
+    // Nowhere clear (a small half-width network): the least bad spot, where crossing a wire costs a little, covering a
+    // symbol more, and text on text is ruled out (2026-11-05: at 960 px Example 3.6's I2 and I3 values fell back onto
+    // other labels).
+    const box = (c: Vec): [number, number, number, number] => [c[0] - w, c[1] - h, c[0] + w, c[1] + h];
+    const cover = (b: [number, number, number, number], list: [number, number, number, number][]) => list.reduce((sum, o) =>
+      sum + Math.max(0, Math.min(b[2], o[2]) - Math.max(b[0], o[0])) * Math.max(0, Math.min(b[3], o[3]) - Math.max(b[1], o[1])), 0) / (4 * w * h);
+    const wired = (b: [number, number, number, number]) => paths.some(pts => pts.slice(1).some((q, i) => { for (let f = 0; f <= 1; f += 0.02) { const x = pts[i][0] + (q[0] - pts[i][0]) * f, y = pts[i][1] + (q[1] - pts[i][1]) * f; if (x > b[0] && x < b[2] && y > b[1] && y < b[3]) return true; } return false; }));
+    const cands: Vec[] = [[at[0] + side[0] * (gap + w), at[1] + side[1] * (gap + h)], ...tries.map(([dx, dy]) => [at[0] + dx, at[1] + dy] as Vec)];
+    for (const far of [2.5, 3, 4]) for (const along of [0, 60, -60, 110, -110]) for (const sd of [1, -1])
+      cands.push([at[0] + u[0] * along * k + side[0] * sd * (gap * far + Math.abs(side[0]) * w), at[1] + u[1] * along * k + side[1] * sd * (gap * far + Math.abs(side[1]) * w)]);
+    // a symbol's room is a generous upright box (a slanted cell's corners are empty): grazing it is cheap, covering it is not
+    const room = (f: number) => (f > 0.5 ? 100 * f : 10 * f);
+    const cost = (c: Vec, i: number) => { const b = box(c); return (onLabel(b) ? 1e6 : 0) + (b[0] < 0 || b[2] > W ? 1e5 : 0) + room(cover(b, taken)) + (wired(b) ? 25 : 0) + 0.5 * i; };
+    const best = cands.map((c, i) => [cost(c, i), c] as const).reduce((m, x) => (x[0] < m[0] ? x : m))[1];
+    taken.push(box(best)); return best;
   };
   const label = (t: string, at: Vec, u: Vec, side: Vec, gap: number, fill: string, size: number, extra: Record<string, unknown>) => {
-    const c = place(t, size, at, u, side, gap); text(c[0], c[1] + 0.35 * size * k, t, fill, size, extra);
+    const c = place(t, size, at, u, side, gap), w = textWidth(t, size * k) / 2 + 4 * k, h = 0.55 * size * k;
+    words.push([c[0] - w, c[1] - h, c[0] + w, c[1] + h]); text(c[0], c[1] + 0.35 * size * k, t, fill, size, extra);
   };
   // every symbol's room is taken before any label is placed
   const halfOf = (bi: number) => Math.min(58 * k, 0.16 * lengths[bi].reduce((a, x) => a + x, 0));

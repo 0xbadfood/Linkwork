@@ -73,6 +73,14 @@ export function inductionErrors(s: InductionSpec): string[] {
 
 export function induction(s: InductionSpec): Scene {
   const {k, props, bx, by, bw, bh, cx, cy, S, arrow, line, poly, label, ring, keysOf, finish} = kit(s);
+  // A field's grid of × (into the page) or • (out of it), drawn as marks, not letters: the rod's labels ride across the
+  // grid, and a label over a faint mark still reads where one letter on another does not (2026-11-05, check()'s
+  // text-on-text guard: I, v and F crossed the × grid of 'motional').
+  const mark = (x: number, y: number, into: boolean, fill: string, size: number) => {
+    const r = .2 * size * k;
+    if (into) { line([x - r, y - r], [x + r, y + r], fill, 2.5, {layer: 1}); line([x - r, y + r], [x + r, y - r], fill, 2.5, {layer: 1}); }
+    else props.push({id: `dot${props.length}`, type: 'circle', x, y, r: .13 * size * k, style: {fill}, layer: 1} as Prop);
+  };
   const facts: string[] = [], anchors: Record<string, P2> = {}; let dur = 8, story = '', second = '', c = 0;
   const id = (p: string) => `i${p}${c++}`;
   const rect = (x: number, y: number, w: number, h: number, fill: string, extra: Record<string, unknown> = {}, stroke = 'ink') => props.push({id: id('r'), type: 'rect', x, y, w, h, style: {fill, stroke, width: 2 * k}, layer: 2, ...extra} as Prop);
@@ -203,7 +211,7 @@ export function induction(s: InductionSpec): Scene {
   } else if (s.show === 'region') {
     const move = s.move ?? 'out', field = s.field ?? 'into', sense = regionSense(field, move), edge = bx + bw * .46, top = by + bh * .12, h = bh * .76, lw = bw * .26, lh = bh * .34, ly = cy - lh / 2, in0 = edge - lw - bw * .12, out0 = edge + bw * .1; dur = 9;
     rect(bx, top, edge - bx, h, 'paper', {layer: 1}, 'faint');
-    for (let i = 0; i < 6; i++) for (let j = 0; j < 7; j++) label(bx + (i + .5) * (edge - bx) / 6, top + (j + .5) * h / 7 + 8 * k, field === 'into' ? '×' : '•', 'muted', 28, {layer: 1});
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 7; j++) mark(bx + (i + .5) * (edge - bx) / 6, top + (j + .5) * h / 7, field === 'into', 'muted', 28);
     label(bx + 60 * k, top - 14 * k, 'B', 'muted', 28);
     const a0 = move === 'out' ? in0 : out0, a1 = move === 'out' ? out0 : in0, t0 = 1.5, t1 = 7.5, X = (t: number) => a0 + (a1 - a0) * Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
     const shape = s.shape ?? 'rectangle', outline = loopOutline(shape);
@@ -225,7 +233,7 @@ export function induction(s: InductionSpec): Scene {
     const B = s.B ?? .5, l = s.l ?? .5, v = s.v ?? 2, R = s.R ?? 1, m = motionalOf(B, l, v, R), lor = !!s.lorentz; dur = 9;
     const x0 = bx + bw * .08, x1 = bx + bw * .9, top = cy - S * .25, bot = cy + S * .25, vmax = 4, speed = bw * .06 * v, start = x1 - bw * .06, xr = (t: number) => start - speed * Math.min(1, Math.max(0, (t - 1.5) / 6.5));
     const sh = (fn: (t: number) => number) => ({keys: {x: keysOf(dur, fn)}});
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 5; j++) label(x0 + (i + .5) * (x1 - x0) / 8, top - S * .08 + (j + .5) * (bot - top + S * .16) / 5 + 8 * k, '×', 'faint', 26, {layer: 1});
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 5; j++) mark(x0 + (i + .5) * (x1 - x0) / 8, top - S * .08 + (j + .5) * (bot - top + S * .16) / 5, true, 'faint', 26);
     label(x1 + 24 * k, top - S * .06, 'B', 'muted', 28);
     props.push({id: 'area', type: 'rect', x: x0, y: top, w: xr(0) - x0, h: bot - top, style: {fill: 'cool', opacity: .18}, layer: 1, keys: {w: keysOf(dur, t => xr(t) - x0)}} as Prop);
     line([x0, top], [x1, top], 'ink', 5); line([x0, bot], [x1, bot], 'ink', 5);
@@ -257,7 +265,7 @@ export function induction(s: InductionSpec): Scene {
   } else if (s.show === 'spin') {
     const B = s.B ?? 1, l = s.l ?? 1, nu = s.nu ?? 50, sp = s.spokes ?? 1, e = spinOf(B, l, nu), c0: P2 = [bx + bw * .42, cy], R = S * .4, turn = .16; dur = 10;
     ring(c0, R, R, 'ink', 5);
-    for (let i = 0; i < 9; i++) for (let j = 0; j < 7; j++) label(bx + (i + .5) * bw * .84 / 9, by + (j + .5) * bh / 7 + 8 * k, '×', 'faint', 24, {layer: 1});
+    for (let i = 0; i < 9; i++) for (let j = 0; j < 7; j++) mark(bx + (i + .5) * bw * .84 / 9, by + (j + .5) * bh / 7, true, 'faint', 24);
     label(bx + bw * .86, by + bh * .06, 'B', 'muted', 28);
     for (let i = 0; i < sp; i++) { const a = (t: number) => 2 * Math.PI * (turn * t + i / sp), hx = (t: number) => c0[0] + R * Math.cos(a(t)), hy = (t: number) => c0[1] - R * Math.sin(a(t));
       props.push({id: `rod${i}`, type: 'line', x1: c0[0], y1: c0[1], x2: hx(0), y2: hy(0), style: {stroke: 'accent', width: 8 * k}, layer: 3, keys: {x2: keysOf(dur, hx), y2: keysOf(dur, hy)}} as Prop); if (i === 0) anchors.rim = [hx(0), hy(0)]; }
@@ -317,7 +325,7 @@ export function induction(s: InductionSpec): Scene {
       label(X(0), Y(0), out ? '•' : '×', out ? 'good' : 'bad', 40, {show: [w0, w1], layer: 5, ...(kk ? {keys: {x: keysOf(dur, X), y: keysOf(dur, Y)}} : {})});
     }
     const gx = bx + bw * .54, gw = bw * .42, gy = cy, gh = bh * .3, deg = (t: number) => th(t) / RAD, maxDeg = 720, X = (d: number) => gx + gw * d / maxDeg, Ye = (d: number) => gy - gh * Math.sin(d * RAD), Yf = (d: number) => gy - gh * Math.cos(d * RAD);
-    line([gx, gy], [gx + gw, gy], 'ink', 3); line([gx, gy - gh * 1.1], [gx, gy + gh * 1.1], 'ink', 3); label(gx + gw + 16 * k, gy + 34 * k, 'θ', 'muted', 26); label(gx + 34 * k, gy - gh * 1.14, 'ε', 'bad', 28); label(gx + 90 * k, gy - gh * 1.14, 'Φ', 'cool', 28);
+    line([gx, gy], [gx + gw, gy], 'ink', 3); line([gx, gy - gh * 1.1], [gx, gy + gh * 1.1], 'ink', 3); label(gx + gw + 18 * k, gy + 9 * k, 'θ', 'muted', 26);   // level with its axis: below it sat on the 720° mark label(gx + 34 * k, gy - gh * 1.14, 'ε', 'bad', 28); label(gx + 90 * k, gy - gh * 1.14, 'Φ', 'cool', 28);
     for (const d of [180, 360, 540, 720]) label(X(d), gy + 36 * k, `${d}°`, 'muted', 20);
     poly(Array.from({length: 145}, (_, i) => [X(i * 5), Yf(i * 5)] as P2), 'cool', 3, {}, true); poly(Array.from({length: 145}, (_, i) => [X(i * 5), Ye(i * 5)] as P2), 'bad', 4);
     const d0 = kk ? 0 : fixed!; props.push({id: 'state', type: 'circle', x: X(d0), y: Ye(d0), r: 12 * k, style: {fill: 'bad', stroke: 'ink', width: 2 * k}, layer: 4, ...(kk ? {keys: {x: keysOf(dur, t => X(deg(t))), y: keysOf(dur, t => Ye(deg(t)))}} : {})} as Prop);

@@ -103,7 +103,12 @@ export function work(s: WorkSpec): Scene {
   // cycle's friction arrow and "f" were drawn off the left edge (2026-10-30)
   const hx0 = body === 'car' ? 0.8 * side : 0.5 * side, L0 = 0.2 * Math.min(bw, bh) / Math.max(F, motion(s).fr, 1e-9);
   const back = Math.max(motion(s).fr, F * Math.max(0, -Math.cos((s.force?.angle ?? 0) * DEG)));
-  const x0 = box[0] + Math.max(0.1 * bw, back > 0 ? hx0 + back * L0 + 70 * k : 0), ppm = Math.min(0.62 * bw, box[2] - 0.06 * bw - hx0 - x0) / d;
+  // and room ahead of it at the end for a forward force and its name, which ran into the panel's sentences (F cos θ on
+  // "The net work done…", 2026-11-05): the arrow at its drawn length, then the name past its head
+  const fwd = F * Math.max(0, Math.cos(th)), slanted = Math.abs(Math.sin(th)) > 0.05 && Math.abs(Math.cos(th)) > 0.05;
+  const fname = slanted ? `${Fn} cos θ` : Fn, nameRoom = 30 * k + (0.28 + 0.275) * 32 * k * [...fname].length;
+  const ahead = Math.max(0.06 * bw + hx0, fwd > 0 ? hx0 + 4 * k + fwd * L0 + nameRoom : 0);
+  const x0 = box[0] + Math.max(0.1 * bw, back > 0 ? hx0 + back * L0 + 70 * k : 0), ppm = Math.min(0.62 * bw, box[2] - ahead - x0) / d;
   const cx = (t: number) => x0 + xAt(t) * ppm, cy = floorY - hy;
   props.push({id: 'floor', type: 'line', x1: box[0], y1: floorY, x2: box[2], y2: floorY, style: {stroke: 'muted', width: 4 * k}} as Prop);
   if (body === 'ball') props.push({id: 'body', type: 'circle', x: x0, y: cy, r: side / 2, style: {fill: 'faint', stroke: 'ink', width: 4 * k}, layer: 1, keys: {x: key(t => cx(t))}} as Prop);

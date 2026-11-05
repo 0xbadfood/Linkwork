@@ -93,6 +93,7 @@ export function motionErrors(scene: Scene, options: CheckOptions = {}): string[]
   const n = Math.floor(scene.duration * scene.fps);
   const byId = new Map(scene.actors.map(a => [a.id, a]));
   let prev: Frame | undefined;
+  const clashes = new Map<string, string>();
   for (let i = 0; i <= n; i += every) {
     const t = i * dt;
     let f: Frame;
@@ -131,6 +132,8 @@ export function motionErrors(scene: Scene, options: CheckOptions = {}): string[]
         : p.type === 'circle' ? [[p.x - p.r, p.y - p.r], [p.x + p.r, p.y + p.r]] : p.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y + p.h]] : [];
       if (pts.some(q => q[0] < -1 || q[0] > f.width + 1 || q[1] < -1 || q[1] > f.height + 1)) out.add(`prop ${p.id}: leaves the frame`, t);
     }
+    // one entry per pair: a readout's words change every frame
+    for (const [pair, e] of textClashes(f)) { if (!clashes.has(pair)) clashes.set(pair, e); out.add(clashes.get(pair)!, t); }
     prev = f;
   }
   return out.list();
@@ -150,6 +153,33 @@ function textBox(p: Prop & {type: 'text'}): Vec[] {
   const w = Math.max(...lines.map(l => textWidth(l, size)));
   const x0 = p.align === 'middle' ? p.x - w / 2 : p.align === 'end' ? p.x - w : p.x;
   return [[x0, p.y - size / 2], [x0 + w, p.y + size / 2 + (lines.length - 1) * size * 1.25]];
+}
+
+/** Text drawn on text: both visible at once (a crossfade passes, as one is under VISIBLE while the other rises). */
+export const VISIBLE = 0.3;
+/** How much of the smaller box another text may cover before the two are unreadable. */
+export const CLASH = 0.3;
+
+/** Two texts visible at once whose boxes overlap substantially, anywhere on the canvas, panel or drawing
+ * (2026-11-05, plane_motion with show [limit, delta_v]: each construction wrote its panel lines into the same rows, so
+ * two sentences sat on two others for the last 15 s of a published film and check() said nothing). */
+export function textClashes(f: Frame): [pair: string, error: string][] {
+  const texts = f.props.filter(p => p.type === 'text' && p.opacity > VISIBLE && String(p.text).trim())
+    .map(p => ({p: p as Prop & {type: 'text'}, b: textBox(p as Prop & {type: 'text'})}));
+  const out: [string, string][] = [];
+  for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
+    const {p: a, b: [[ax0, ay0], [ax1, ay1]]} = texts[i], {p: b, b: [[bx0, by0], [bx1, by1]]} = texts[j];
+    const w = Math.min(ax1, bx1) - Math.max(ax0, bx0), h = Math.min(ay1, by1) - Math.max(ay0, by0);
+    if (w <= 0 || h <= 0) continue;
+    // the same words at the same place read as one (a halo drawn under its text)
+    if (a.text === b.text && Math.abs(a.x - b.x) < 2 && Math.abs(a.y - b.y) < 2) continue;
+    const smaller = Math.min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0));
+    if (w * h > CLASH * smaller) {
+      const cut = (s: string) => JSON.stringify(s.length > 40 ? `${s.slice(0, 40)}…` : s);
+      out.push([`${a.id}\n${b.id}`, `props ${a.id} and ${b.id}: texts ${cut(a.text)} and ${cut(b.text)} are drawn on each other; move one, or end one before the other shows`]);
+    }
+  }
+  return out;
 }
 
 export function check(scene: Scene, options: CheckOptions = {}): string[] {

@@ -171,16 +171,21 @@ export function huygens(s: HuygensSpec): Scene {
     line(C, E, 'good', 6, on(T + 1.9, T + 2.5)); line(A, E, 'cool', 2.5, {show: [T + 1.9, 1e9]});
     line([xA, yI - S * .3], [xA, yI + (refl ? 0 : S * .3)], 'muted', 2, {show: [T, 1e9]}, true);
     const tag = (p: P2, t: string, dx: number, dy: number, at: number, fill = 'ink') => label(p[0] + dx * k, p[1] + dy * k, t, fill, 28, halo(k, fill, {show: [at, 1e9], layer: 5}));
-    tag(A, 'A', -26, 36, T); tag(B, 'B', -6, -20, T); tag(C, 'C', 22, 36, T + .8); tag(E, 'E', refl ? -24 : 26, refl ? -12 : 30, T + 1.9);
+    // A above the surface in refraction: below it, by A, is where v₂τ goes
+    tag(A, 'A', -26, refl ? 36 : -16, T); tag(B, 'B', -6, -20, T); tag(C, 'C', 22, 36, T + .8); tag(E, 'E', refl ? -24 : 26, refl ? -12 : 30, T + 1.9);
     // i at A, between the surface (AC) and the incident wavefront (AB); r at C, between CA and CE
     const wedge = (c: P2, a0: number, a1: number, rr: number, name: string, fill: string, at: number) => {
       arc(c, rr, a0, a1, fill, 3, {show: [at, 1e9]});
       const am = rad((a0 + a1) / 2); label(c[0] + (rr + 26 * k) * Math.cos(am), c[1] - (rr + 26 * k) * Math.sin(am) + 9 * k, name, fill, 28, halo(k, fill, {show: [at, 1e9], layer: 5}));
     };
-    wedge(A, 0, i, 70 * k, 'i', 'accent', T + .4);
-    if (refl) wedge(C, 180 - r, 180, 70 * k, 'r', 'good', T + 2.3); else wedge(C, 180, 180 + r, 70 * k, 'r', 'good', T + 2.3);
+    // the arcs shrink with a short AC (a half-width part), so i stays by A and r by C
+    const rw = Math.min(70 * k, .26 * (C[0] - A[0]));
+    wedge(A, 0, i, rw, 'i', 'accent', T + .4);
+    if (refl) wedge(C, 180 - r, 180, rw, 'r', 'good', T + 2.3); else wedge(C, 180, 180 + r, rw, 'r', 'good', T + 2.3);
     tag([(B[0] + C[0]) / 2, (B[1] + C[1]) / 2], 'v₁τ', 26, -6, T + 1.2, 'accent');
-    tag([(A[0] + E[0]) / 2, (A[1] + E[1]) / 2], refl ? 'v₁τ' : 'v₂τ', refl ? 34 : -40, refl ? 10 : 8, T + 1.4, 'cool');
+    // AE's name on its outer side, away from the angles at A and C (2026-11-05: in a half-width part the triangle is
+    // small and a fixed offset put v₂τ on A, and v₁τ on i and r)
+    tag([(A[0] + E[0]) / 2, (A[1] + E[1]) / 2], refl ? 'v₁τ' : 'v₂τ', refl ? -40 * ci : -44 * cr, refl ? -40 * si + 8 : 44 * sr + 8, T + 1.4, 'cool');
     Object.assign(anchors, {A, B, C, E, normal: [xA, yI - S * .3] as P2});
     dur = T + 4;
     if (refl) {
@@ -782,7 +787,8 @@ export function polaroid(s: PolaroidSpec): Scene {
     const p = at(xu, .55 * Math.cos(rad(a)), .55 * Math.sin(rad(a))), q = at(xu, -.55 * Math.cos(rad(a)), -.55 * Math.sin(rad(a)));
     arrow([xu, yb], p, 'accent', 3); arrow([xu, yb], q, 'accent', 3);
   }
-  label(xu, yb + R * .9 + 30 * k, 'unpolarised', 'accent', 22);
+  // above its arrows: below them, in a half-width part, is the graph's top row (2026-11-05)
+  label(xu, yb - R * .9 - 16 * k, 'unpolarised', 'accent', 22);
   const field = (x: number, dir: (t: number) => number, amp: (t: number) => number, id: string, keyed: boolean) => {
     for (const sg of [1, -1]) {
       const tip = (t: number) => at(x, sg * .75 * amp(t) * Math.cos(rad(dir(t))), sg * .75 * amp(t) * Math.sin(rad(dir(t))));
@@ -810,7 +816,8 @@ export function polaroid(s: PolaroidSpec): Scene {
   if (sweep) bar.keys = {y: keysOf(dur, t => base - barH * frac(theta(t))), h: keysOf(dur, t => barH * frac(theta(t)))};
   props.push(bar as Prop);
   label(barX, base + 30 * k, crossed ? 'I3 / I1' : 'I / I1', 'muted', 22);
-  if (!sweep) label(GX(s.angle!), GY(frac(s.angle!)) - 18 * k, num ? `${s.angle}°: ${sig(frac(s.angle!))} I1` : 'θ', 'accent', 22, halo(k, 'accent', {layer: 5}));
+  // the point's value reads away from the nearer end of the graph, clear of the I axis name at 0° (2026-11-05)
+  if (!sweep) { const lo = s.angle! <= 90; label(GX(s.angle!) + (lo ? 14 : -14) * k, GY(frac(s.angle!)) - 18 * k, num ? `${s.angle}°: ${sig(frac(s.angle!))} I1` : 'θ', 'accent', 22, halo(k, 'accent', {layer: 5, align: lo ? 'start' : 'end'})); }
   Object.assign(anchors, {P1: [X[0], yb] as P2, P2: [X[1], yb] as P2, ...(crossed ? {P3: [X[2], yb] as P2} : {}), bar: [barX, base - barH * frac(theta(dur))] as P2, base: [barX, base] as P2, point: dotP(dur)});
   const story = crossed ? 'Crossed polaroids pass nothing, but a third between them at θ lets light through: I = (I1/4) sin² 2θ'
     : 'P1 passes half of unpolarised light, polarised along its axis; P2 at θ passes I1 cos²θ';

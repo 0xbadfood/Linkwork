@@ -61,13 +61,16 @@ import {moments, momentsErrors, type MomentsSpec} from './moments.ts';
 import {rotation, rotationErrors, type RotationSpec} from './rotation.ts';
 import {verticalCircle, verticalCircleErrors, type VerticalCircleSpec} from './vertical-circle.ts';
 import {collision2d, collision2dErrors, type Collision2dSpec} from './collision.ts';
+import {emDevice, emDeviceErrors, type EmDeviceSpec} from './em-device.ts';
+import {pulley, pulleyErrors, type PulleySpec} from './pulley.ts';
+import {sound, soundErrors, type SoundSpec} from './sound.ts';
 
 export type Spec = WaveSpec | ElectricSpec | PotentialSpec | CapacitorSpec | ShmSpec | LadderSpec | NumberLineSpec | LadderSlideSpec | PendulumSpec | CompassSpec | CrankSpec
   | DomainSpec | ExtremaSpec | SecantSpec | AreaSpec | VectorSpec | GraphSpec | MotionSpec | ScaleSpec | StageSpec | PathSpec
-  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec
+  | RaySpec | RefractionSpec | PrismSpec | EyeSpec | AtmosphereSpec | ScatteringSpec | CircuitSpec | EnergyUseSpec | FieldSpec | ForceSpec | DomesticSpec | EmDeviceSpec
   | DimensionsSpec | SigFigsSpec | AngleSpec | PlaneMotionSpec | ForcesSpec | WorkSpec | EnergySpec | ComSpec | MomentsSpec | RotationSpec | OrbitSpec | GravityLawSpec | ElasticSpec
   | FluidPressureSpec | FluidFlowSpec | SurfaceSpec | TemperatureSpec | ExpansionSpec | ExchangeSpec | TransferSpec | NucleusSpec | SemiconductorSpec | KirchhoffSpec
-  | VerticalCircleSpec | Collision2dSpec;
+  | VerticalCircleSpec | Collision2dSpec | PulleySpec |SoundSpec;
 type Verb<S> = {errors: (spec: S) => string[]; compile: (spec: S) => Scene; about: string};
 
 export const VERBS: Record<string, Verb<any>> = {
@@ -182,7 +185,7 @@ export const VERBS: Record<string, Verb<any>> = {
   electric: {errors: electricErrors, compile: electric,
     about: 'electrostatics from Coulomb\'s law: charging, charge shared between identical spheres, the force between charges, superposition, the net forces of a system closing tip to tail, field lines and the lines cutting small areas, charges in a uniform field, flux, dipoles, Gaussian surfaces, E against r'},
   wave: {errors: waveErrors, compile: wave,
-    about: 'waves, computed from y = a sin(kx − ωt): a travelling wave, a pulse, sound in a pipe, superposition at a phase difference, reflection at a rigid or free end, standing waves, harmonics of strings and pipes, beats'} as Verb<WaveSpec>,
+    about: 'waves, computed from y = a sin(kx − ωt): a travelling wave, a pulse, sound in a pipe, superposition at a phase difference, reflection at a rigid or free end, standing waves, harmonics of strings and pipes, beats; loudness, pitch and quality compared as displacement–time traces (amplitude, frequency, wave form)'} as Verb<WaveSpec>,
   shm: {errors: shmErrors, compile: shm,
     about: 'simple harmonic motion, computed from x = A cos(ωt + φ): a block on one or two springs with its restoring force and x–t curve, the reference circle and its projection, x, v and a on one time axis, K and U against t and x'} as Verb<ShmSpec>,
   energy: {errors: energyErrors, compile: energy,
@@ -223,8 +226,14 @@ export const VERBS: Record<string, Verb<any>> = {
     about: 'significant figures, digit by digit: each digit of a measured number marked significant or not by the book\'s rules, a product or quotient cut to the fewest significant figures and a sum or difference to the fewest decimal places, and rounding off (a dropped 5: an even digit stays, an odd one rises)'} as Verb<SigFigsSpec>,
   vertical_circle: {errors: verticalCircleErrors, compile: verticalCircle,
     about: "a bob on a string in a vertical circle, computed: v² = v₀² − 2gL(1 − cos θ) and T − mg cos θ = mv²/L at every angle, live θ, h, v and T; the book's bob (v₀ = √(5gL)) with T = 6mg at A and the string just slack at the top C, where v = √(gL), the least speed for a taut string; slower, slack before C; the instant at C (string slack, velocity horizontal); the bob held at an angle with mg's parts"} as Verb<VerticalCircleSpec>,
+  em_device: {errors: emDeviceErrors, compile: emDevice,
+    about: "ICSE electromagnetic devices, each run by its own mechanism: an electromagnet (a soft-iron core in a coil, N and S by the clock rule, iron pins lifted while the key is closed and dropped when it opens, more pins for more turns or current); the electric bell (armature, spring strip, hammer, gong and contact screw making and breaking the circuit so the hammer strikes again and again); the d.c. motor (coil ABCD, Fleming's left-hand forces on its sides, the split-ring commutator reversing the current every half turn; slip rings instead: it settles vertical); the a.c. generator (the coil turned from outside, slip rings, a galvanometer swinging both ways, ε against time traced live: zero across the field, largest along it)"} as Verb<EmDeviceSpec>,
   collision_2d: {errors: collision2dErrors, compile: collision2d,
     about: 'a collision in two dimensions, computed for smooth balls: m1 moving at v1i strikes m2 at rest off-centre by the impact parameter b, the impulse along the line of centres at contact sets both outgoing directions; momentum conserved along x and y, elastic or with a coefficient of restitution; angles θ1 and θ2 with the horizontal, velocity names or values, momentum components; equal masses, elastic: at right angles; b = 0: head-on, one dimension'} as Verb<Collision2dSpec>,
+  pulley: {errors: pulleyErrors, compile: pulley,
+    about: 'pulleys as machines, computed: a single fixed pulley (VR = 1, turns the effort downward), a single movable pulley (VR = 2, with or without a fixed pulley above), a block and tackle of n pulleys (VR = n strands), one fixed with n movable pulleys (VR = 2ⁿ); the effort end pulled and the load rising, dE and dL marked; load, effort, MA = L/E, VR and η = MA/VR from a measured effort, an efficiency, or friction and the moving pulleys\' weight w (E = (L + w)/n)'} as Verb<PulleySpec>,
+  sound: {errors: soundErrors, compile: sound,
+    about: "ICSE sound, computed: an echo from a wall at d, t = 2d/v, with the persistence of hearing (0.1 s) on a time line and the least distance for a distinct echo (17 m in air); sonar's pulse to the sea bed and back, depth = vt/2; natural, damped and forced vibrations of a block on a spring with their displacement–time traces side by side; resonance with Barton's pendulums on a common string"} as Verb<SoundSpec>,
   angle_measure: {errors: angleErrors, compile: angleMeasure,
     about: 'the plane angle and the solid angle as defined: an arc growing on a circle, θ = s/r in radians (1 rad when the arc equals the radius, 2π for the circle), or a patch spreading on a sphere seen from its centre, Ω = A/r² in steradians (4π for the sphere)'} as Verb<AngleSpec>,
 };

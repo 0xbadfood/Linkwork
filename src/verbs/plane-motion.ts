@@ -54,8 +54,8 @@ const DV_ANGLES = [Math.PI / 3, Math.PI / 6, Math.PI / 12];
 
 /** Where the velocity triangle goes (its common tail H, beside the circle), the drawn length per m/s, and every point
  * it reaches. */
-function hodograph(R: number, v: number, at: number, vel: (t: number) => P2) {
-  const H: P2 = [2.1 * R, 0], scale = 0.8 * R / v, w = v / R;
+function hodograph(R: number, v: number, at: number, vel: (t: number) => P2, gap = 2.1) {
+  const H: P2 = [gap * R, 0], scale = 0.8 * R / v, w = v / R;
   const points: P2[] = [H, ...[0, ...DV_ANGLES].map(th => { const u = vel(at + th / w); return [H[0] + u[0] * scale, H[1] + u[1] * scale] as P2; })];
   return {H, scale, points};
 }
@@ -94,13 +94,15 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   const box: [number, number, number, number] = narrow ? [fr.box[0], fr.box[1], fr.box[2], fr.box[1] + 0.3 * H] : fr.box, lineSize = (narrow ? 25 : 30) * k;
   // delta_v draws the velocity triangle apart, to the right of the circle, as the book does (Fig. 3.18): it is in the window
   const dvAt = s.circle ? s.at ?? Math.PI / 4 / (s.circle.speed / s.circle.radius) : 0;
-  const hodo = show.has('delta_v') && s.circle ? hodograph(s.circle.radius, s.circle.speed, dvAt, kin.v) : undefined;
+  const hodo = show.has('delta_v') && s.circle ? hodograph(s.circle.radius, s.circle.speed, dvAt, kin.v, narrow ? 2.6 : 2.1) : undefined;   // a short half-width drawing has room across, not up
   const reach = [...path, ...(hodo?.points ?? [])];
   let [x0, x1] = s.x ?? [Math.min(0, ...reach.map(p => p[0])), Math.max(0, ...reach.map(p => p[0]))];
   let [y0, y1] = s.y ?? [Math.min(0, ...reach.map(p => p[1])), Math.max(0, ...reach.map(p => p[1]))];
   const size = Math.max(x1 - x0, y1 - y0, 1e-6), vs = 0.2 * size / vmax, as = amax > 1e-9 ? 0.16 * size / amax : 0;
   if (!s.x) { x0 -= 0.25 * size; x1 += 0.25 * size; }
-  if (!s.y) { y0 -= 0.25 * size; y1 += 0.25 * size; }
+  // a half-width drawing is short and wide: padded by the width's span it shrank the Δv triangles until their names
+  // sat on each other, so there the height is padded by its own span (2026-11-05)
+  if (!s.y) { const pad = 0.25 * (narrow ? Math.max(y1 - y0, 0.6 * size) : size); y0 -= pad; y1 += pad; }
   const per = Math.max((x1 - x0) / (box[2] - box[0]), (y1 - y0) / (box[3] - box[1])), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   const plane: Plane = {id: 'p', x: [cx - per * (box[2] - box[0]) / 2, cx + per * (box[2] - box[0]) / 2], y: [cy - per * (box[3] - box[1]) / 2, cy + per * (box[3] - box[1]) / 2], box};
   const span = plane.x[1] - plane.x[0], step = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].find(v => span / v <= 14) ?? 1000;
@@ -168,12 +170,15 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
   if (show.has('limit')) {
     const at = s.at ?? (t0 + t1) / 2, P = kin.r(at), first = s.dt ?? Math.min((t1 - t0) / 2, t1 - at);
     const steps = [first, first / 2, first / 4, first / 8], begin = end, each = 1.6;
+    // With delta_v after it, the whole construction makes way (fades out) as the triangles begin: both write their
+    // sentences from the same row and draw at P (2026-11-05, a published film showed two sentences on two others).
+    const until = hodo ? begin + each * steps.length + 2.2 : 1e9;
     row = motionRow;
-    props.push({id: 'P', type: 'circle', plane: 'p', x: P[0], y: P[1], r: 7 * k, style: {fill: 'ink'}, show: [begin, 1e9]} as Prop);
+    props.push({id: 'P', type: 'circle', plane: 'p', x: P[0], y: P[1], r: 7 * k, style: {fill: 'ink'}, show: [begin, until]} as Prop);
     const [sx, sy] = toScene(plane, P);
-    props.push(text('lP', sx - 18 * k, sy - 14 * k, 'P', 30 * k, {weight: 700, align: 'end', show: [begin, 1e9]}));
+    props.push(text('lPt', sx - 18 * k, sy - 14 * k, 'P', 30 * k, {weight: 700, align: 'end', show: [begin, until]}));
     // in words as well, for an illustrative scene, which hides every line with a number in it
-    row += line('dtw', 'Δt halves at each step: the average velocity Δr/Δt turns towards the tangent at P', begin, {}, 1e9);
+    row += line('dtw', 'Δt halves at each step: the average velocity Δr/Δt turns towards the tangent at P', begin, {}, until);
     steps.forEach((dt, i) => {
       const Q = kin.r(at + dt), dr: P2 = [Q[0] - P[0], Q[1] - P[1]], vbar: P2 = [dr[0] / dt, dr[1] / dt], on = begin + each * i, off = begin + each * (i + 1);
       props.push({id: `Q${i}`, type: 'circle', plane: 'p', x: Q[0], y: Q[1], r: 6 * k, style: {fill: 'muted'}, show: [on, off]} as Prop,
@@ -182,10 +187,10 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
       line(`dt${i}`, `Δt = ${f(dt)} s: Δr/Δt = (${f(vbar[0])}, ${f(vbar[1])}) ${u}/s`, on, {style: {fill: 'cool'}}, off);
     });
     const vP = kin.v(at), fin = begin + each * steps.length;
-    props.push({id: 'vP', type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + vP[0] * vs, y2: P[1] + vP[1] * vs, head: 20 * k, style: {stroke: 'cool', width: 6 * k}, show: [fin, 1e9]} as Prop);
+    props.push({id: 'vP', type: 'arrow', plane: 'p', x1: P[0], y1: P[1], x2: P[0] + vP[0] * vs, y2: P[1] + vP[1] * vs, head: 20 * k, style: {stroke: 'cool', width: 6 * k}, show: [fin, until]} as Prop);
     row += 1.35 * lineSize;
-    row += line('vlimw', 'As Δt shrinks, Δr/Δt becomes the velocity v, along the tangent at P', fin, {weight: 700});
-    line('vlim', `v = (${f(vP[0])}, ${f(vP[1])}) ${u}/s at t = ${f(at)} s`, fin, {weight: 700});
+    row += line('vlimw', 'As Δt shrinks, Δr/Δt becomes the velocity v, along the tangent at P', fin, {weight: 700}, until);
+    line('vlim', `v = (${f(vP[0])}, ${f(vP[1])}) ${u}/s at t = ${f(at)} s`, fin, {weight: 700}, until);
     facts.push(`at t = ${f(at)} s the velocity is (${f(vP[0])}, ${f(vP[1])}) ${u}/s, speed ${f(Math.hypot(...vP))} ${u}/s`);
     end = fin + 2.2;
   }
@@ -226,7 +231,8 @@ export function planeMotion(s: PlaneMotionSpec): Scene {
         arrow(`dv-${i}`, tip1, tip2, 'bad', on + 1.2, off, 5));
       name(`lQ${i}`, Q, unit(Q), 'P′', 'ink', on, off);
       name(`lr2-${i}`, mid(O, Q), turn(Q, -1), 'r′', 'accent', on, off);
-      name(`ldr-${i}`, mid(P, Q), unit(mid(P, Q)), 'Δr', 'ink', on + 0.4, off);
+      // Δr outside P and P′'s names, which close in on it as Δθ shrinks
+      name(`ldr-${i}`, mid(P, Q), unit(mid(P, Q)).map(c => 2.4 * c) as P2, 'Δr', 'ink', on + 0.4, off);
       name(`lv2-${i}`, mid(H, tip2), turn(v2, -1), 'v′', 'good', on + 0.8, off);
       name(`ldv-${i}`, mid(tip1, tip2), unit([mid(tip1, tip2)[0] - H[0], mid(tip1, tip2)[1] - H[1]]), 'Δv', 'bad', on + 1.2, off);
       line(`dvt${i}`, `Δθ = ${f(th * 180 / Math.PI)}°: |Δv| = ${f(Math.hypot(...dv))} ${u}/s; |Δv|/Δt = ${f(Math.hypot(...dv) / (th / w))} ${u}/s²`, on, {style: {fill: 'bad'}}, off);

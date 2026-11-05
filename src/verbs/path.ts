@@ -115,9 +115,10 @@ export function pathLength(s: PathSpec): Scene {
       measures: {d: {kind: 'distance', a: P(out[0]), b: {actor: 'm', joint: 'p'}, scale: 1 / unit}}, style: {fill: 'cool'}});
   row += 4.4 * 34 * k;
   const net = dist(legs[0], legs.at(-1)!), end = T0 + T + 0.3;
-  props.push({id: 'avg-speed', type: 'text', x: px, y: row, width: pw, size: 32 * k, weight: 700, show: [end, 1e9], style: {fill: 'accent'},
-      text: `average speed = ${fmt(total)} m ÷ ${fmt(trip)} s = ${fmt(speed)} m/s`},
-    {id: 'avg-vel', type: 'text', x: px, y: row + 2.6 * 32 * k, width: pw, size: 32 * k, weight: 700, show: [end + 0.8, 1e9], style: {fill: 'cool'},
+  // the velocity line goes below however many lines the speed wraps to (a narrow panel wraps it to three)
+  const avgSpeed = `average speed = ${fmt(total)} m ÷ ${fmt(trip)} s = ${fmt(speed)} m/s`;
+  props.push({id: 'avg-speed', type: 'text', x: px, y: row, width: pw, size: 32 * k, weight: 700, show: [end, 1e9], style: {fill: 'accent'}, text: avgSpeed},
+    {id: 'avg-vel', type: 'text', x: px, y: row + (wrapText(avgSpeed, 32 * k, pw).length * 1.25 + 0.35) * 32 * k, width: pw, size: 32 * k, weight: 700, show: [end + 0.8, 1e9], style: {fill: 'cool'},
       text: `size of average velocity = ${fmt(net)} m ÷ ${fmt(trip)} s = ${fmt(net / trip)} m/s`});
   const facts = [`the path is ${fmt(total)} m long${s.back ? ' (there and back)' : ''}, covered in ${fmt(trip)} s at ${fmt(speed)} m/s`,
     `displacement from start to finish: ${fmt(net)} m`, `average speed ${fmt(speed)} m/s; size of average velocity ${fmt(net / trip)} m/s`];

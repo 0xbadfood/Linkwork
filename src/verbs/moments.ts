@@ -10,6 +10,9 @@
 // Example 6.8, Fig. 6.27): its weight W at its centre of gravity D, the wall's reaction F1 horizontal at B, the floor's
 // reaction as N up and friction f toward the wall at A; solved from N = W, f = F1 and moments about A:
 // F1 × BC = W × AC/2. (2026-11-05: keph1-06 C9 S36 "Forces on the Ladder" drew a box labelled ladder.)
+// A lever by its class (ICSE Class 10 Machines §3.5–3.7, 2026-11-05): fulcrum F, load L and effort E placed as the class
+// puts them (I: F between; II: L between; III: E between), MA = effort arm / load arm, an efficiency lowering MA below
+// VR, the effort for a load, the book's examples; or the three classes side by side (class 'all').
 import {nameError} from './names.ts';
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
@@ -25,9 +28,13 @@ export type MomentsSpec = {verb: 'moments'; length?: number; pivot?: number; sup
   /** a ladder of length L (m), its foot `foot` m from a smooth wall, mass (kg) for the numbers; solve adds the moment
    * equation and the values */
   ladder?: LadderStatics;
+  /** a lever by its class: 1, 2 or 3 (or 'all': the three side by side), its arms, a load, an efficiency, examples */
+  lever?: LeverClass;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
 
 export type LadderStatics = {L: number; foot: number; mass?: number; wall?: 'smooth'; solve?: boolean};
+export type LeverClass = {class: 1 | 2 | 3 | 'all'; effort_arm?: number; load_arm?: number; arm_unit?: 'cm' | 'm'; load?: number; unit?: 'N' | 'kgf';
+  efficiency?: number; examples?: boolean | string[]};
 
 const DEG = Math.PI / 180;
 
@@ -75,6 +82,7 @@ function solve(s: MomentsSpec): Solved {
 
 export function momentsErrors(s: MomentsSpec): string[] {
   const e: string[] = [];
+  if (s.lever !== undefined) return leverErrors(s);
   if (s.ladder !== undefined) {
     const q = s.ladder;
     if (typeof q !== 'object' || q === null) return ['moments: ladder is {L (m), foot (m from the wall), mass? (kg), wall?: smooth, solve?: true}'];
@@ -138,6 +146,7 @@ export function moments(s: MomentsSpec): Scene {
     props.push({id, type: 'arrow', x1, y1, x2, y2, head: 20 * k, style: {stroke, width: 6 * k}, show: [when, 1e9], fade: 0.3, layer: 3, ...extra} as Prop);
 
   if (s.ladder) return ladderScene(s, s.ladder);
+  if (s.lever) return leverScene(s, s.lever);
   if (s.couple) {
     // a free rod turning under a couple: the forces ride at its ends, square to it
     const {magnitude: F, d} = s.couple, half = 0.36 * bw, n = 60, t0 = 1.6, t1 = 6.5, turn = 120;
@@ -220,6 +229,9 @@ export function moments(s: MomentsSpec): Scene {
       props.push({id: `dl${i}`, type: 'line', x1: X(ref), y1: y, x2: X(q.x), y2: y, style: {stroke: 'muted', width: 2 * k}, show: [when, 1e9], fade: 0.3} as Prop,
         {id: `dt${i}`, type: 'line', x1: X(q.x), y1: y - 10 * k, x2: X(q.x), y2: y + 10 * k, style: {stroke: 'muted', width: 2 * k}, show: [when, 1e9], fade: 0.3} as Prop,
         text(`ld${i}`, (X(ref) + X(q.x)) / 2, y - 8 * k, `${f(Math.abs(q.x - ref))} m`, 24 * k, {align: 'middle', style: {fill: 'muted'}, show: [when, 1e9]}));
+      // a panel under the drawing (a narrow part) starts below the lowest distance line: its "1 m" sat on the first
+      // sentence (2026-11-05)
+      if (px < box[2]) row = Math.max(row, y + 10 * k + 46 * k);
     });
   }
   // the story
@@ -364,4 +376,182 @@ function ladderScene(s: MomentsSpec, q: LadderStatics): Scene {
     `wall's reaction F1 = ${per(sol.F1)} (horizontal); friction f = ${per(sol.f)} toward the wall; N = ${per(sol.N)}`,
     `moments about A: F1 × ${f(h)} = W × ${f(a / 2)}`, `floor's reaction F2 = ${per(sol.F2)} at ${f(sol.alpha)}° to the floor`);
   return scene(s, W, H, end + 2, plane, props, [], {verb: 'moments', facts, anchors: {A, B, C, D}});
+}
+
+// ---- levers by class ------------------------------------------------------------------------------------------------
+const ROMAN = {1: 'I', 2: 'II', 3: 'III'} as const;
+/** The book's examples of each class (Selina Concise Physics 10, §3.6–3.7). */
+export const LEVER_EXAMPLES: Record<1 | 2 | 3, string[]> = {
+  1: ['a see-saw', 'a crowbar', 'a pair of scissors', 'a beam balance', 'nodding the head'],
+  2: ['a nutcracker', 'a bottle opener', 'a wheelbarrow', 'raising the body on the toes'],
+  3: ['fire tongs', 'sugar tongs', 'the forearm lifting a load', 'a fishing rod'],
+};
+const DEFAULT_ARMS: Record<1 | 2 | 3, [number, number]> = {1: [2, 1], 2: [3, 1], 3: [1, 3]};
+
+/** MA = effort arm / load arm (= VR, the ideal MA); with an efficiency, MA = η × VR; the effort for a load. */
+export function leverNumbers(cls: 1 | 2 | 3, effortArm: number, loadArm: number, efficiency = 1, load?: number) {
+  const VR = effortArm / loadArm, MA = efficiency * VR;
+  return {VR, MA, E: load === undefined ? undefined : load / MA, kind: MA > 1 + 1e-9 ? 'force multiplier' : MA < 1 - 1e-9 ? 'speed multiplier' : 'neither', cls};
+}
+
+function leverErrors(s: MomentsSpec): string[] {
+  const q = s.lever!, e: string[] = [];
+  if (typeof q !== 'object' || q === null) return ["moments: lever is {class: 1 | 2 | 3 | 'all', effort_arm?, load_arm?, arm_unit?, load?, unit?, efficiency?, examples?}"];
+  if (![1, 2, 3, 'all'].includes(q.class as never)) return ["moments: lever.class is 1 (fulcrum between effort and load), 2 (load between), 3 (effort between) or 'all' (the three side by side)"];
+  const extra = (['forces', 'pivot', 'supports', 'beam_mass', 'couple', 'effort', 'load', 'length', 'ladder'] as const).filter(x => s[x] !== undefined);
+  if (extra.length) e.push(`moments: a lever by class is the whole scene: leave out ${extra.join(', ')}`);
+  if (q.class === 'all') {
+    const own = (['effort_arm', 'load_arm', 'load', 'efficiency', 'arm_unit', 'unit'] as const).filter(x => q[x] !== undefined);
+    if (own.length) e.push(`moments: lever class 'all' draws the three classes with typical arms and no numbers: leave out ${own.join(', ')}`);
+  } else {
+    for (const k of ['effort_arm', 'load_arm'] as const) if (q[k] !== undefined && !(isNum(q[k]) && q[k]! > 0)) e.push(`moments: lever.${k} is a length in ${q.arm_unit ?? 'cm'}, above 0 (its distance from the fulcrum)`);
+    if ((q.effort_arm === undefined) !== (q.load_arm === undefined)) e.push('moments: give both lever.effort_arm and lever.load_arm, or neither (typical arms for the class)');
+    if (isNum(q.effort_arm) && isNum(q.load_arm) && q.effort_arm > 0 && q.load_arm > 0) {
+      const r = q.effort_arm / q.load_arm;
+      if (q.class === 2 && r <= 1) e.push('moments: a class II lever has the load between the fulcrum and the effort, so its effort arm is always the longer: make effort_arm > load_arm (or use class 1 or 3)');
+      if (q.class === 3 && r >= 1) e.push('moments: a class III lever has the effort between the fulcrum and the load, so its effort arm is always the shorter: make effort_arm < load_arm (or use class 1 or 2)');
+      if (r > 30 || r < 1 / 30) e.push('moments: the arms differ by at most 30 times (the shorter would be a dot); for a longer lever say so in the narration');
+    }
+    if (q.arm_unit !== undefined && !['cm', 'm'].includes(q.arm_unit)) e.push('moments: lever.arm_unit is cm (default) or m');
+    if (q.unit !== undefined && !['N', 'kgf'].includes(q.unit)) e.push('moments: lever.unit is N (default) or kgf');
+    if (q.load !== undefined && !(isNum(q.load) && q.load > 0)) e.push(`moments: lever.load is the load in ${q.unit ?? 'N'}, above 0 (the effort is solved)`);
+    if (q.efficiency !== undefined && !(isNum(q.efficiency) && q.efficiency > 0 && q.efficiency <= 1)) e.push('moments: lever.efficiency is a fraction above 0 and at most 1 (0.6 for 60%): MA = η × VR');
+    if ((q.load !== undefined || q.efficiency !== undefined) && q.effort_arm === undefined) e.push('moments: lever.load and lever.efficiency need the arms (effort_arm, load_arm) for the numbers');
+  }
+  if (q.examples !== undefined && typeof q.examples !== 'boolean' && !(Array.isArray(q.examples) && q.examples.length >= 1 && q.examples.length <= 4 && q.examples.every(x => typeof x === 'string' && x.length >= 2 && x.length <= 32 && !/\d/.test(x))))
+    e.push("moments: lever.examples is true (the book's), false, or 1 to 4 short names without digits ('a nutcracker')");
+  if (Array.isArray(q.examples) && q.class === 'all') e.push("moments: lever class 'all' takes examples: true or false (the book's for each class)");
+  return e;
+}
+
+type LeverDraw = {cls: 1 | 2 | 3; ea: number; la: number; MA: number; area: [number, number, number, number]; sz: number; at: number; tilt: number;
+  names?: {E: string; L: string}; arms?: {E: string; L: string}; id: string};
+
+/** One lever in its area: the bar, F's wedge, L and E arrows to one scale (E = L / MA), the arms measured from F; it tilts
+ * about F at `tilt` (the effort's end moving its way). Returns the props. */
+function drawLever(d: LeverDraw): Prop[] {
+  const {cls, ea, la, MA, area, sz, at, tilt, id} = d, out: Prop[] = [];
+  const aw = area[2] - area[0], ah = area[3] - area[1], A = Math.min(0.34 * ah, 170 * sz), thick = 14 * sz;
+  const total = cls === 1 ? ea + la : cls === 2 ? ea : la, Lb = 0.8 * aw, x0 = area[0] + 0.12 * aw, sc = Lb / total;
+  const pos = cls === 1 ? {E: 0, F: ea, L: ea + la} : cls === 2 ? {F: 0, L: la, E: ea} : {F: 0, E: ea, L: la};
+  const X = (u: number) => x0 + u * sc, cy = area[1] + A + 56 * sz, xF = X(pos.F);
+  const eDown = cls === 1;                                         // class I: effort pushes down; II and III: it pulls up
+  const a = 6 * DEG * (cls === 1 ? 1 : 1);                         // the effort end moves its way: + turns it so (see rot)
+  const rot = (x: number, y: number, t: number): [number, number] => { const dx = x - xF, dy = y - cy; return [xF + dx * Math.cos(t) + dy * Math.sin(t), cy - dx * Math.sin(t) + dy * Math.cos(t)]; };
+  // class I: E left of F pushing down needs the left end down (+); II and III: E right of F pulling up needs the right end up (+)
+  const keyed = (fn: (t: number) => number): Key[] => [[0, fn(0)], [tilt, fn(0)], [tilt + 1.4, fn(a), 'inOut']];
+  const ride = (x: number, y1: number, y2: number) => ({keys: {x1: keyed(t => rot(x, cy, t)[0]), y1: keyed(t => rot(x, cy, t)[1] + y1 - cy), x2: keyed(t => rot(x, cy, t)[0]), y2: keyed(t => rot(x, cy, t)[1] + y2 - cy)}});
+  const rideText = (x: number, y: number) => ({keys: {x: keyed(t => rot(x, cy, t)[0]), y: keyed(t => rot(x, cy, t)[1] + y - cy)}});
+  const show = {show: [at, 1e9] as [number, number], fade: 0.3};
+  // where the bar was, faint, so the turn shows
+  out.push({id: `${id}ghost`, type: 'line', x1: X(0), y1: cy, x2: X(total), y2: cy, style: {stroke: 'faint', width: thick, dash: [10 * sz, 8 * sz]}, show: [tilt, 1e9], fade: 0.3} as Prop,
+    {id: `${id}bar`, type: 'line', x1: X(0), y1: cy, x2: X(total), y2: cy, style: {stroke: 'ink', width: thick}, layer: 1, ...show,
+      keys: {x1: keyed(t => rot(X(0), cy, t)[0]), y1: keyed(t => rot(X(0), cy, t)[1]), x2: keyed(t => rot(X(total), cy, t)[0]), y2: keyed(t => rot(X(total), cy, t)[1])}} as Prop);
+  const wy = cy + thick / 2, wh = 44 * sz;
+  out.push({id: `${id}wedge`, type: 'polyline', points: [[xF, wy], [xF - 24 * sz, wy + wh], [xF + 24 * sz, wy + wh]], closed: true, style: {fill: 'muted', stroke: 'ink', width: 3 * sz}, layer: 2, ...show} as Prop,
+    text(`${id}F`, xF - 30 * sz, wy + 0.6 * wh, 'F', 30 * sz, {weight: 700, align: 'end', style: {fill: 'ink'}, ...show}));
+  // the forces: one scale, the larger arrow A long
+  const big = Math.max(1, 1 / MA), lenL = Math.max(36 * sz, A / big), lenE = Math.max(36 * sz, A / big / MA);
+  const xL = X(pos.L), xE = X(pos.E), close = Math.abs(xL - xE) < 170 * sz;
+  const force = (nm: 'L' | 'E', x: number, len: number, down: boolean, colour: string, when: number) => {
+    const [y1, y2] = down ? [cy - thick / 2 - len, cy - thick / 2] : [cy - thick / 2, cy - thick / 2 - len];
+    const other = nm === 'L' ? xE : xL, lean = close ? (x < other ? 'end' : 'start') : 'middle', lx = x + (lean === 'end' ? 10 * sz : lean === 'start' ? -10 * sz : 0);
+    out.push({id: `${id}${nm}`, type: 'arrow', x1: x, y1, x2: x, y2, head: 18 * sz, style: {stroke: colour, width: 6 * sz}, layer: 3, show: [when, 1e9], fade: 0.3, ...ride(x, y1, y2)} as Prop,
+      text(`${id}l${nm}`, lx, cy - thick / 2 - len - 24 * sz, d.names?.[nm] ?? nm, 30 * sz, {weight: 700, align: lean, style: {fill: colour}, layer: 3, show: [when, 1e9], fade: 0.3, ...rideText(lx, cy - thick / 2 - len - 24 * sz)}));
+  };
+  force('L', xL, lenL, true, 'figure', at + 0.3);
+  force('E', xE, lenE, eDown, 'accent', at + 0.6);
+  // the arms, measured from F under the bar
+  const arm = (nm: 'E' | 'L', x: number, y: number, colour: string) => {
+    const t = d.arms?.[nm] ?? (nm === 'E' ? 'effort arm' : 'load arm'), dim = {stroke: colour, width: 2.5 * sz};
+    out.push({id: `${id}d${nm}`, type: 'line', x1: xF, y1: y, x2: x, y2: y, style: dim, show: [at + 1, 1e9], fade: 0.3} as Prop,
+      ...[xF, x].map((xx, i) => ({id: `${id}d${nm}${i}`, type: 'line', x1: xx, y1: y - 9 * sz, x2: xx, y2: y + 9 * sz, style: dim, show: [at + 1, 1e9], fade: 0.3} as Prop)),
+      // a name wider than its arm goes beside it, past the far end
+      textWidth(t, 24 * sz) < Math.abs(x - xF) - 12 * sz ? text(`${id}ld${nm}`, (xF + x) / 2, y - 16 * sz, t, 24 * sz, {align: 'middle', style: {fill: colour}, show: [at + 1, 1e9], fade: 0.3})
+        : text(`${id}ld${nm}`, Math.max(x, xF) + 14 * sz, y, t, 24 * sz, {style: {fill: colour}, show: [at + 1, 1e9], fade: 0.3}));
+  };
+  arm('E', xE, wy + wh + 44 * sz, 'accent');
+  arm('L', xL, wy + wh + 96 * sz, 'muted');
+  return out;
+}
+
+/** How tall a lever drawn at size sz needs its area to be. */
+const leverHeight = (sz: number, ah: number) => Math.min(0.34 * ah, 170 * sz) + 56 * sz + 7 * sz + 44 * sz + 96 * sz + 20 * sz;
+
+function leverScene(s: MomentsSpec, q: LeverClass): Scene {
+  const W = s.width ?? 1920, H = s.height ?? 1080, k = H / 1080, narrow = W < 1.3 * H, props: Prop[] = [], facts: string[] = [];
+  const ex = (c: 1 | 2 | 3) => (Array.isArray(q.examples) ? q.examples : LEVER_EXAMPLES[c].slice(0, q.class === 'all' ? 3 : 4));
+  const where = {1: 'the fulcrum F is between the effort E and the load L', 2: 'the load L is between the fulcrum F and the effort E', 3: 'the effort E is between the fulcrum F and the load L'};
+  if (q.class === 'all') {
+    // the three side by side (one to a row in a narrow part), each tilting in turn
+    const top = narrow ? 0.1 * H + 44 * k : 0.155 * H, tw = W - 0.12 * W, ts = (narrow ? 36 : 44) * k;
+    let y = top;
+    if (s.title) { props.push({id: 'title', type: 'text', x: 0.06 * W, y, size: ts, weight: 700, text: s.title, width: tw} as Prop); y += wrapText(s.title, ts, tw).length * 1.25 * ts + 24 * k; }
+    const cap = {1: ['Fulcrum between effort and load', 'MA more than, equal to or less than one'], 2: ['Load between fulcrum and effort', 'MA always more than one: a force multiplier'],
+      3: ['Effort between fulcrum and load', 'MA always less than one: a gain in speed']} as const;
+    const at = (c: number) => 0.4 + 0.5 * (c - 1), tilt = (c: number) => 2.4 + 1.8 * (c - 1);
+    for (const c of [1, 2, 3] as const) {
+      const [ea, la] = DEFAULT_ARMS[c], MA = ea / la;
+      const lines = [...cap[c], ...(q.examples ? [`e.g. ${ex(c).join(', ')}`] : [])];
+      if (!narrow) {
+        const cw = (0.94 * W) / 3, cx0 = 0.03 * W + (c - 1) * cw, sz = k * 0.9, head = 38 * k, rest = 0.95 * H - y - head - 20 * k;
+        const ah = Math.min(leverHeight(sz, rest), rest - 3 * 1.3 * 28 * k * 2);
+        props.push(text(`h${c}`, cx0 + cw / 2, y + head / 2, `Class ${ROMAN[c]}`, head, {weight: 700, align: 'middle', show: [at(c), 1e9], fade: 0.3}));
+        props.push(...drawLever({cls: c, ea, la, MA, area: [cx0 + 0.04 * cw, y + head + 10 * k, cx0 + 0.96 * cw, y + head + 10 * k + ah], sz, at: at(c), tilt: tilt(c), id: `c${c}`}));
+        let yy = y + head + 30 * k + ah;
+        lines.forEach((t, i) => {
+          props.push(text(`cap${c}-${i}`, cx0 + cw / 2, yy, t, 26 * k, {align: 'middle', width: 0.9 * cw, weight: i === 1 ? 700 : 500, style: {fill: i === 1 ? (c === 3 ? 'cool' : c === 2 ? 'good' : 'ink') : 'muted'}, show: [i ? tilt(c) + 1.2 : at(c) + 0.6, 1e9], fade: 0.3}));
+          yy += wrapText(t, 26 * k, 0.9 * cw).length * 1.25 * 26 * k + 10 * k;
+        });
+      } else {
+        // one to a row: the drawing left, its class and captions right
+        const rh = (0.96 * H - y) / 3, ry = y + (c - 1) * rh, sz = Math.min(0.8 * k, (rh - 12 * k) / 393), lw = 0.6 * W, head = 32 * k;
+        props.push(text(`h${c}`, lw + 0.02 * W, ry + 0.1 * rh, `Class ${ROMAN[c]}`, head, {weight: 700, show: [at(c), 1e9], fade: 0.3}));
+        props.push(...drawLever({cls: c, ea, la, MA, area: [0.02 * W, ry, lw, ry + rh - 6 * k], sz, at: at(c), tilt: tilt(c), id: `c${c}`}));
+        let yy = ry + 0.1 * rh + head + 6 * k;
+        lines.forEach((t, i) => {
+          props.push(text(`cap${c}-${i}`, lw + 0.02 * W, yy, t, 22 * k, {width: W - lw - 0.04 * W, weight: i === 1 ? 700 : 500, style: {fill: i === 1 ? (c === 3 ? 'cool' : c === 2 ? 'good' : 'ink') : 'muted'}, show: [i ? tilt(c) + 1.2 : at(c) + 0.6, 1e9], fade: 0.3}));
+          yy += wrapText(t, 22 * k, W - lw - 0.04 * W).length * 1.25 * 22 * k + 8 * k;
+        });
+      }
+      facts.push(`class ${ROMAN[c]}: ${where[c]}; ${c === 1 ? 'MA can be more than, equal to or less than 1' : c === 2 ? 'MA always more than 1' : 'MA always less than 1'}${q.examples ? `; examples: ${ex(c).join(', ')}` : ''}`);
+    }
+    const plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box: [0, 0, W, H]};
+    return scene(s, W, H, tilt(3) + 1.4 + 3, plane, props, [], {verb: 'moments', facts});
+  }
+  const c = q.class, given = q.effort_arm !== undefined, [ea, la] = given ? [q.effort_arm!, q.load_arm!] : DEFAULT_ARMS[c];
+  const au = q.arm_unit ?? 'cm', fu = q.unit ?? 'N', num = leverNumbers(c, ea, la, q.efficiency ?? 1, q.load);
+  const fr = frame(W, H, k, s.title), box = fr.box, plane: Plane = {id: 'p', x: [0, 1], y: [0, 1], box};
+  props.push(...fr.titles);
+  const ptext = panel(W, k), size = (narrow ? 23 : 29) * k;
+  let row = fr.row;
+  const line = (id: string, t: string, when: number, extra: Partial<Prop> = {}) => {
+    props.push(ptext(id, fr.px, row, t, size, {show: [when, 1e9], fade: 0.3, ...extra}));
+    row += wrapText(t, size, W - fr.px - 40 * k).length * 1.3 * size + 6 * k;
+  };
+  const bh = box[3] - box[1], sz = k * Math.min(1, bh / leverHeight(k, bh)), ah = leverHeight(sz, bh);
+  const area: [number, number, number, number] = [box[0], box[1] + (bh - ah) / 2, box[2], box[1] + (bh + ah) / 2];
+  const v = (x: number, u: string) => `${f(x)} ${u}`;
+  const names = given && q.load !== undefined ? {L: `L = ${v(q.load, fu)}`, E: `E = ${v(num.E!, fu)}`} : undefined;
+  const arms = given ? {E: `effort arm ${v(ea, au)}`, L: `load arm ${v(la, au)}`} : undefined;
+  const tilt = 2.6;
+  props.push(...drawLever({cls: c, ea, la, MA: num.MA, area, sz, at: 0.3, tilt, names, arms, id: ''}));
+  line('l1', `Class ${ROMAN[c]} lever: ${where[c]}`, 0.6, {weight: 700});
+  line('l2', c === 1 ? 'Effort and load act the same way, on either side of F' : 'Effort and load act in opposite directions, on the same side of F', 1.2, {style: {fill: 'muted'}});
+  line('l3', 'MA = effort arm / load arm', 1.8, {weight: 700});
+  if (given) line('l4', `MA = ${f(ea)} / ${f(la)} = ${f(num.VR)}`, 2.2);
+  const VRw = num.VR;
+  line('l5', c === 2 ? 'The effort arm is always the longer: MA is always more than one, a force multiplier'
+    : c === 3 ? 'The effort arm is always the shorter: MA is always less than one, a gain in speed, not force'
+    : VRw > 1 + 1e-9 ? 'Effort arm longer than load arm: MA more than one, a force multiplier' : VRw < 1 - 1e-9 ? 'Effort arm shorter than load arm: MA less than one, a gain in speed'
+    : 'Equal arms: MA is one, like a beam balance', 2.8, {style: {fill: c === 3 || VRw < 1 - 1e-9 ? 'cool' : 'good'}});
+  line('l6', VRw > 1 + 1e-9 ? 'Turned, the effort moves farther than the load' : VRw < 1 - 1e-9 ? 'Turned, the load moves farther than the effort' : 'Turned, effort and load move equally', tilt + 1.6, {style: {fill: 'muted'}});
+  let last = tilt + 1.6;
+  if (given && q.efficiency !== undefined && q.efficiency < 1) { line('l7', `With efficiency ${f(q.efficiency)}: VR stays ${f(num.VR)}, MA = ${f(q.efficiency)} × ${f(num.VR)} = ${f(num.MA)}`, last + 0.6); last += 0.6; }
+  if (given && q.load !== undefined) { line('l8', `Effort E = L / MA = ${f(q.load)} / ${f(num.MA)} = ${v(num.E!, fu)}`, last + 0.6, {weight: 700, style: {fill: 'accent'}}); last += 0.6; }
+  if (q.examples) { line('l9', `Examples: ${ex(c).join(', ')}`, last + 0.6, {style: {fill: 'muted'}}); last += 0.6; }
+  facts.push(`class ${ROMAN[c]} lever: ${where[c]}`, ...(given ? [`effort arm ${v(ea, au)}, load arm ${v(la, au)}`, `MA = VR = ${f(num.VR)} ideally`] : []),
+    ...(given && q.efficiency !== undefined ? [`with efficiency ${f(q.efficiency)}, MA = ${f(num.MA)}`] : []), ...(given && q.load !== undefined ? [`load ${v(q.load, fu)}, effort ${v(num.E!, fu)}`] : []),
+    ...(q.examples ? [`examples: ${ex(c).join(', ')}`] : []));
+  return scene(s, W, H, last + 2.2, plane, props, [], {verb: 'moments', facts});
 }

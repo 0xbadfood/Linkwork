@@ -116,9 +116,12 @@ export function eye(s: EyeSpec): Scene {
   const name = {normal: 'A normal eye', myopia: 'A myopic (short-sighted) eye', hypermetropia: 'A hypermetropic (long-sighted) eye', presbyopia: 'An eye with presbyopia'}[c];
   const range = c === 'myopia' ? `far point ${fmt(s.far_point ?? 80)} cm (not infinity)` : c === 'normal' ? 'sees clearly from 25 cm to infinity' : `near point ${fmt(s.near_point ?? 100)} cm (not 25 cm)`;
   props.push({id: 'condition', type: 'text', x: panel ? px : left, y: panel ? row : bottom - 10 * k, text: `${name}: ${range}`, size: 30 * k, weight: 700, width: panel ? pw : 0.9 * W, style: {fill: 'muted'}});
-  row += 2.6 * 30 * k;
+  // each panel line steps down by its own wrapped height: a half-width panel wraps them to four or five lines, and a
+  // fixed step drew them on each other (2026-11-05, caught by check()'s text-on-text guard)
+  const step = (t: string) => Math.max(2, wrapText(t, 30 * k, pw).length) * 1.25 * 30 * k + 20 * k;
+  row += step(`${name}: ${range}`);
   if (s.correct) { props.push({id: 'lens-power', type: 'text', x: px, y: row, width: pw, size: 30 * k, weight: 700, style: {fill: 'good'}, show: [0.6, 1e9],
-      text: `Corrected with a ${lensP < 0 ? 'concave' : 'convex'} lens of power ${lensP > 0 ? '+' : '−'}${fmt(Math.abs(lensP))} D (f = ${fmt(100 / lensP, 1)} cm)`}); row += 2.6 * 30 * k; }
+      text: `Corrected with a ${lensP < 0 ? 'concave' : 'convex'} lens of power ${lensP > 0 ? '+' : '−'}${fmt(Math.abs(lensP))} D (f = ${fmt(100 / lensP, 1)} cm)`}); row += step(String((props[props.length - 1] as {text?: string}).text)); }
   s.objects.forEach((o, i) => {
     const u = o === 'infinity' ? Infinity : o, res = focus(s, u), s0 = T0 + i * E, last = i === s.objects.length - 1, show: [number, number] = [s0, last ? 1e9 : s0 + E], tag = `p${i}`;
     const draw = (t0: number, t1: number) => ({draw: 0, keys: {draw: [[t0, 0], [t1, 1, 'linear']] as Key[]}});

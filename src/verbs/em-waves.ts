@@ -14,6 +14,7 @@ import {kit} from './potential.ts';
 import {sci} from './electric.ts';
 import {wavelengthColour} from '../physics/light.ts';
 import type {Prop, Scene} from '../scene.ts';
+import {textWidth} from '../svg.ts';
 
 type P2 = [number, number];
 export const EM_SHOWS = ['displacement', 'plane', 'medium', 'source', 'hertz', 'spectrum'] as const;
@@ -119,7 +120,8 @@ export function emWaves(s: EmWavesSpec): Scene {
       label(P[0], wy + S * .12 + 70 * k, 'flat surface: i crosses it', 'good', 24, {show: [2, 5]});
       const pot: P2[] = [...Array.from({length: 19}, (_, j) => { const a = -Math.PI / 2 + Math.PI * j / 18; return [P[0] + (xL + gap * .55 - P[0]) * Math.cos(a), wy + S * .12 * Math.sin(a)] as P2; })];
       poly(pot, 'bad', 4, {show: [5, 8.5]}, true); label(bx + bw * .02, yB + 50 * k, 'pot surface, through the gap: no conduction current', 'bad', 24, {align: 'start', show: [5, 8.5]});
-      label(bx + bw * .3, by + bh * .06, '∮B·dl = μ0 i ... or 0?', 'muted', 26, {show: [5, 8.5]});
+      // the question goes under the pot surface's name, not up by 'E grows' (2026-11-05: on it in a half-width part)
+      label(bx + bw * .02, yB + 86 * k, '∮B·dl = μ0 i ... or 0?', 'muted', 26, {align: 'start', show: [5, 8.5]});
     }
     // E between the plates grows with the charge; it is the source of i_d
     for (let j = 0; j < 5; j++) { const y = yT + pl * 2 * (j + .5) / 5; keyed({type: 'arrow', x1: xL + 10 * k, y1: y, x2: xL + 12 * k, y2: y, head: 12 * k, style: {stroke: 'accent', width: 3 * k}, keys: {x2: keysOf(dur, t => xL + 12 * k + (gap - 26 * k) * q(t))}}); }
@@ -278,8 +280,13 @@ export function emWaves(s: EmWavesSpec): Scene {
     for (let j = 0; j < 30; j++) { const nm = 700 - 300 * j / 30; rect(va + (vb - va) * j / 30, vy, (vb - va) / 30 + 1, hb * .7, wavelengthColour(nm), {layer: 1, style: {fill: wavelengthColour(nm), stroke: 'none', width: 0}}); }
     label(va, vy + hb * .7 + 30 * k, '700 nm', 'muted', 20); label(vb, vy + hb * .7 + 30 * k, '400 nm', 'muted', 20);
     for (let e = 4; e >= -14; e -= 2) { const x = X(10 ** e); line([x, yb - S * .02], [x, yb], 'muted', 2); }
-    label(x0, yb - S * .06, 'λ: 10⁴ m', 'muted', 22, {align: 'start'}); label(x1, yb - S * .06, '10⁻¹⁴ m', 'muted', 22, {align: 'end'});
-    label(x0, by + bh * .95, 'longer λ, lower ν, less energy per photon', 'muted', 22, {align: 'start'}); label(x1, by + bh * .95, 'shorter λ, higher ν, more energy', 'muted', 22, {align: 'end'});
+    // the scale's ends a row above the upper band names; the two sentences under the opened-out visible band, on two rows
+    // when one row cannot hold both (2026-11-05: in a half-width part all of these sat on one another)
+    const ends = Math.min(yb - S * .06, yb - 48 * k);
+    label(x0, ends, 'λ: 10⁴ m', 'muted', 22, {align: 'start'}); label(x1, ends, '10⁻¹⁴ m', 'muted', 22, {align: 'end'});
+    const longer = 'longer λ, lower ν, less energy per photon', shorter = 'shorter λ, higher ν, more energy';
+    const ys = Math.max(by + bh * .95, vy + hb * .7 + 64 * k), two = textWidth(longer, 22 * k) + textWidth(shorter, 22 * k) + 40 * k > x1 - x0;
+    label(x0, ys, longer, 'muted', 22, {align: 'start'}); label(x1, ys + (two ? 30 * k : 0), shorter, 'muted', 22, {align: 'end'});
     // a wave above the bar whose wavelength shrinks as it sweeps from radio to gamma
     const wy = by + bh * .14, wa = S * .05, sweep = (t: number) => Math.min(1, t / (dur * .8)), lamPx = (t: number) => 160 * k * 10 ** (-1.4 * sweep(t)), wx = (t: number) => x0 + (x1 - x0 - bw * .16) * sweep(t);
     for (let j = 0; j < 40; j++) keyed({type: 'line', x1: 0, y1: wy, x2: 0, y2: wy, style: {stroke: 'accent', width: 3 * k}, layer: 4,

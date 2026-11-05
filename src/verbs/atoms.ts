@@ -175,7 +175,8 @@ export function rutherford(s: RutherfordSpec): Scene {
       anchors[`alpha${j + 1}`] = end;
       // θ at the exit, read inwards from the edge, stepped clear of the one before
       const lx = Math.min(Math.max(end[0], bx + 70 * k), bx + bw - 70 * k);
-      let ly = Math.min(Math.max(end[1] + (end[1] < by + 30 * k ? 34 * k : -14 * k), by + 30 * k), by + bh - 10 * k);
+      // the bottom row is the scale note's (2026-11-05: a θ at the lower edge sat on it)
+      let ly = Math.min(Math.max(end[1] + (end[1] < by + 30 * k ? 34 * k : -14 * k), by + 30 * k), by + bh - (num ? 36 : 10) * k);
       if (Math.abs(ly - lastY) < 30 * k) ly = lastY + 30 * k; lastY = ly;
       label(lx, ly, num ? `θ = ${Math.round(deg(th))}°` : 'θ', tones[j], 22, halo(k, tones[j], {show: [6.4, 1e9]}));
       facts.push(`b = ${sig(b)} fm: θ = ${Math.round(deg(th))}°`);
@@ -386,7 +387,8 @@ export function bohr(s: BohrSpec): Scene {
   if (s.show === 'levels') {
     // Fig. 12.7 to one scale: E = 0 at the top (the free electron), n = 1 at −13.6 eV
     const list = (Array.isArray(s.series) ? s.series : s.series ? [s.series] : ['lyman', 'balmer', 'paschen']).slice().sort((a, b) => SERIES[a] - SERIES[b]);
-    const top = by + bh * .1, bot = by + bh * .92, Y = (ev: number) => top + (-ev / E1) * (bot - top), x0 = bx + bw * .16, x1 = bx + bw * .98;
+    // the continuum band holds two rows (its name, then n = ∞ on the line): at least 62 px, as in a half-width part
+    const top = by + Math.max(bh * .1, 62 * k), bot = by + bh * .92, Y = (ev: number) => top + (-ev / E1) * (bot - top), x0 = bx + bw * .16, x1 = bx + bw * .98;
     props.push({id: 'continuum', type: 'rect', x: x0, y: by, w: x1 - x0, h: top - by, style: {fill: 'cool', opacity: .12}, layer: 1} as Prop);
     label(x1, by + 24 * k, 'free electron: any energy', 'muted', 20, {align: 'end'});
     line([x0, top], [x1, top], 'ink', 2.5); label(x0 - 10 * k, top + 8 * k, num ? '0 eV' : 'E = 0', 'muted', 20, {align: 'end'});

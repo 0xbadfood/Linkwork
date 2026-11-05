@@ -8,6 +8,8 @@
 //   standing      two opposite waves and their sum, 2a sin kx cos ωt: nodes and antinodes
 //   modes         the harmonics of a string, an open pipe or a closed pipe; frequencies from L and v
 //   beats         two close frequencies and their sum: the loudness swells at ν₁ − ν₂
+//   compare       two or three displacement–time traces, as a C.R.O. shows them (ICSE Class 10 Sound, 2026-11-05): loudness
+//                 (amplitude), pitch (frequency) or quality (wave form: overtones at the same amplitude and frequency)
 // Heights are drawn large to be seen; lengths along x are to scale. Motion is slowed to a watchable rate, and says so.
 import type {Key} from '../keys.ts';
 import type {Plane} from '../plane.ts';
@@ -17,11 +19,24 @@ import {round} from '../vec.ts';
 import {n2, panel, scene} from './calculus.ts';
 import {frame} from './vectors.ts';
 
-export const WAVE_SHOWS = ['travelling', 'pulse', 'longitudinal', 'superposition', 'reflection', 'standing', 'modes', 'beats'] as const;
+export const WAVE_SHOWS = ['travelling', 'pulse', 'longitudinal', 'superposition', 'reflection', 'standing', 'modes', 'beats', 'compare'] as const;
+export const WAVE_COMPARES = ['loudness', 'pitch', 'quality'] as const;
+/** Wave forms by their harmonics' amplitudes and phases (n = 1, 2, 3 ...): a tuning fork's pure note, the book's triangular
+ * wave (Fig. 7.20), and instruments with few (flute) or many (piano) subsidiary notes; drawn to one peak amplitude. */
+export const WAVEFORMS: Record<string, {name: string; h: [number, number][]}> = {
+  sine: {name: 'tuning fork: a pure note', h: [[1, 0]]},
+  triangle: {name: 'a triangular wave', h: [1, 3, 5, 7, 9, 11].map(n => [(n % 4 === 1 ? 1 : -1) / (n * n), 0] as [number, number]).flatMap((x, i) => (i ? [[0, 0], x] : [x])) as [number, number][]},
+  square: {name: 'a square wave', h: [1, 3, 5, 7, 9, 11, 13].map(n => [1 / n, 0] as [number, number]).flatMap((x, i) => (i ? [[0, 0], x] : [x])) as [number, number][]},
+  flute: {name: 'flute: few overtones', h: [[1, 0], [0.28, 0.6], [0.1, 1.1]]},
+  violin: {name: 'violin: strong overtones', h: [1, 2, 3, 4, 5, 6, 7, 8].map(n => [1 / n, 0] as [number, number])},
+  piano: {name: 'piano: many overtones', h: [[1, 0], [0.55, 0.5], [0.38, 1.3], [0.22, 2.2], [0.14, 0.7], [0.08, 1.7]]},
+};
 export type WaveSpec = {verb: 'wave'; show: (typeof WAVE_SHOWS)[number]; a?: number; wavelength?: number; frequency?: number; speed?: number;
   k?: number; omega?: number; tension?: number; mu?: number; bulk?: number; rho?: number; phase?: number; direction?: 1 | -1; pulses?: 1 | 2;
   end?: 'rigid' | 'free'; system?: 'string' | 'open_pipe' | 'closed_pipe'; L?: number; harmonics?: number[]; source?: number; nu1?: number; nu2?: number; window?: number;
   title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean;
+  /** compare: what differs between the traces, and its values: amplitudes (mm), frequencies (Hz) or wave forms */
+  compare?: (typeof WAVE_COMPARES)[number]; amplitudes?: number[]; frequencies?: number[]; waveforms?: string[];
   against?: {wavelength: number; frequency: number}};
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -56,6 +71,28 @@ export function shareWaveScale(specs: unknown[]) {
 // A wave at most this many times shorter or quicker than the one it is compared with is still drawn truly; beyond it, it would be a blur.
 const MOST_AGAINST = 3;
 
+function compareErrors(s: WaveSpec): string[] {
+  const e: string[] = [], W = 'wave';
+  for (const n of ['compare', 'amplitudes', 'frequencies', 'waveforms'] as const) if (s[n] !== undefined && s.show !== 'compare') e.push(`${W}: ${n} is for show compare`);
+  if (s.show !== 'compare') return e;
+  if (!WAVE_COMPARES.includes(s.compare!)) return [...e, `${W}: compare is ${WAVE_COMPARES.join(', ')}: what differs between the traces (amplitude, frequency or wave form)`];
+  const list = (n: 'amplitudes' | 'frequencies', unit: string) => {
+    const v = s[n];
+    if (v === undefined) return;
+    if (!(Array.isArray(v) && v.length >= 2 && v.length <= 3 && v.every(x => isNum(x) && x > 0))) { e.push(`${W}: ${n} is 2 or 3 values in ${unit}, above 0, one trace each`); return; }
+    if (new Set(v).size < v.length) e.push(`${W}: ${n} must differ, or the traces show nothing`);
+    else if (Math.max(...v) / Math.min(...v) > (n === 'frequencies' ? 6 : 8)) e.push(`${W}: ${n}: the largest at most ${n === 'frequencies' ? 6 : 8} times the smallest, so both can be drawn to one scale`);
+  };
+  list('amplitudes', 'mm'); list('frequencies', 'Hz');
+  if (s.waveforms !== undefined && !(Array.isArray(s.waveforms) && s.waveforms.length >= 2 && s.waveforms.length <= 3 && s.waveforms.every(x => x in WAVEFORMS) && new Set(s.waveforms).size === s.waveforms.length))
+    e.push(`${W}: waveforms is 2 or 3 different ones of ${Object.keys(WAVEFORMS).join(', ')}`);
+  const own = {loudness: 'amplitudes', pitch: 'frequencies', quality: 'waveforms'}[s.compare!];
+  for (const n of ['amplitudes', 'frequencies', 'waveforms'] as const) if (s[n] !== undefined && n !== own) e.push(`${W}: compare ${s.compare} varies only ${own}; leave out ${n} (the rest are kept the same)`);
+  if (!s.illustrative && s.compare !== 'quality' && s[own as 'amplitudes'] === undefined)
+    e.push(`${W}: compare ${s.compare} needs ${own} (${own === 'amplitudes' ? 'mm' : 'Hz'}, 2 or 3 values); or, when the narration states no numbers, set illustrative: true`);
+  return e;
+}
+
 export function waveErrors(s: WaveSpec): string[] {
   const e: string[] = [], W = 'wave';
   if (!WAVE_SHOWS.includes(s.show)) return [`${W}: show is one of ${WAVE_SHOWS.join(', ')}`];
@@ -70,7 +107,8 @@ export function waveErrors(s: WaveSpec): string[] {
   const given = [s.wavelength ?? s.k, s.frequency ?? s.omega, s.speed ?? s.tension ?? s.bulk].filter(x => x !== undefined).length;
   if (given === 3) { const m = model({...s, speed: undefined, tension: undefined, bulk: undefined}), v = model({...s, wavelength: undefined, k: undefined}).v;
     if (Math.abs(m.v - v) > 0.01 * v) e.push(`${W}: λν = ${f(m.v)} m/s disagrees with the speed ${f(v)} m/s; give any two`); }
-  const numbers = s.show !== 'modes' && s.show !== 'beats' && s.show !== 'pulse' && s.show !== 'reflection';
+  const numbers = s.show !== 'modes' && s.show !== 'beats' && s.show !== 'pulse' && s.show !== 'reflection' && s.show !== 'compare';
+  e.push(...compareErrors(s));
   if (numbers && !s.illustrative && given < 2) e.push(`${W}: give two of wavelength (or k), frequency (or omega), speed (or tension and mu, or bulk and rho); or, when the narration states no numbers, set illustrative: true`);
   if (s.show === 'modes') {
     if (s.system !== undefined && !['string', 'open_pipe', 'closed_pipe'].includes(s.system)) e.push(`${W}: system is string, open_pipe or closed_pipe`);
@@ -208,6 +246,49 @@ export function wave(s: WaveSpec): Scene {
     second = sys === 'closed_pipe' ? 'Closed end: node. Open end: antinode' : sys === 'open_pipe' ? 'Antinodes at both open ends' : 'Nodes at both fixed ends';
     if (s.source !== undefined) { const base = modeFreq(s, 1, vv), r = s.source / base, step = sys === 'closed_pipe' ? (Math.abs(((r + 1) / 2) - Math.round((r + 1) / 2)) < 0.01) : Math.abs(r - Math.round(r)) < 0.01;
       facts.push(step ? `a ${f(s.source)} Hz source resonates: it is harmonic ${Math.round(r)}, ${f(base)} Hz × ${Math.round(r)}` : `a ${f(s.source)} Hz source does not resonate: ${f(s.source)} / ${f(base)} = ${f(r)} is not an allowed harmonic`); }
+  } else if (s.show === 'compare') {
+    // two or three traces, one above another, sharing one time axis and one displacement scale, drawn left to right
+    const kind = s.compare!, amps = kind === 'loudness' ? s.amplitudes ?? [1, 2] : undefined, freqs = kind === 'pitch' ? s.frequencies ?? [1, 2] : undefined;
+    const forms = kind === 'quality' ? s.waveforms ?? ['sine', 'piano'] : undefined, n = (amps ?? freqs ?? forms)!.length;
+    const top = Math.max(...(amps ?? [1])), low = Math.min(...(freqs ?? [1]));
+    const cycles = kind === 'pitch' ? 2.5 : 3, h = 1 / n, amp = 0.3 * h, draw = {draw: 0, keys: {draw: [[lead, 0], [lead + 3, 1, 'linear']]}, live: false, samples: 900};
+    const order = (v: number[], i: number) => v.filter(x => x < v[i]).length;   // rank of trace i, smallest first
+    const rank = (v: number[], i: number, words: string[][]) => words[v.length - 2][order(v, i)];
+    const loud = [['softer: smaller amplitude', 'louder: larger amplitude'], ['soft: small amplitude', 'louder: larger amplitude', 'loudest: largest amplitude']];
+    const high = [['lower pitch (grave): lower frequency', 'higher pitch (shrill): higher frequency'], ['low pitch: low frequency', 'higher pitch: higher frequency', 'highest pitch: highest frequency']];
+    const colours = ['accent', 'cool', 'good'];
+    for (let i = 0; i < n; i++) {
+      const c = 1 - (i + 0.5) * h, K = 2 * Math.PI * cycles * (freqs ? freqs[i] / low : 1), A = amp * (amps ? amps[i] / top : 1);
+      let y = `sin(${num(K)} * x)`;
+      if (forms) {
+        const hs = WAVEFORMS[forms[i]].h, terms = hs.map(([a, p], j) => (a ? `${num(a)} * sin(${num((j + 1) * K)} * x + ${num(p)})` : '')).filter(Boolean);
+        // scaled to one peak, so the loudness looks the same: only the shape differs
+        let peak = 0;
+        for (let q = 0; q <= 2000; q++) { const x = q / 2000 / cycles; peak = Math.max(peak, Math.abs(hs.reduce((sum, [a, p], j) => sum + a * Math.sin((j + 1) * K * x + p), 0))); }
+        y = `(${terms.join(' + ')}) / ${num(peak)}`;
+      }
+      line(`rest${i}`, 0, c, 1, c, 'faint', 2);
+      line(`yax${i}`, 0, c - amp * 1.12, 0, c + amp * 1.12, 'faint', 2);
+      curve(`w${i}`, `${c} + ${num(A)} * ${y}`, colours[i], 4, draw);
+      const words = amps ? rank(amps, i, loud) : freqs ? rank(freqs, i, high) : WAVEFORMS[forms![i]].name;
+      const value = s.illustrative ? '' : amps ? `, a = ${f(amps[i])} mm` : freqs ? `, ${f(freqs[i])} Hz` : '';
+      label(`n${i}`, 0.015, c + amp + 0.045 * Math.min(1, 2 / n), words + value, colours[i], n === 3 ? 22 : 24, 'start');
+    }
+    label('nt', 1, -0.035, 'time', 'muted', 22, 'end');
+    dur = lead + 3 + 3;
+    if (kind === 'loudness') {
+      story = 'Same frequency and wave form, different amplitude: the larger amplitude is the louder sound';
+      second = 'Loudness grows as the square of the amplitude';
+      if (s.amplitudes) facts.push(`loudness ratio (${f(top)} / ${f(Math.min(...amps!))})² = ${f((top / Math.min(...amps!)) ** 2)}`, 'same pitch and same quality: same frequency and wave form');
+    } else if (kind === 'pitch') {
+      story = 'Same amplitude and wave form, different frequency: the higher frequency is the higher pitch (a shrill sound)';
+      second = 'More waves in the same time';
+      if (s.frequencies) facts.push(`frequencies ${freqs!.map(x => `${f(x)} Hz`).join(', ')}: the ${f(Math.max(...freqs!))} Hz note has the ${n === 2 ? 'higher' : 'highest'} pitch`, 'same loudness and quality: same amplitude and wave form', `time shown ${f(cycles / low * 1000)} ms`);
+    } else {
+      story = 'Same amplitude and frequency, so the same loudness and pitch, but different wave forms: a different quality (timbre)';
+      second = 'The overtones (subsidiary notes) sounding with the fundamental shape the wave';
+      facts.push('quality depends on the wave form: the number and strength of the subsidiary notes with the principal note');
+    }
   } else {
     const n1 = s.nu1 ?? 11, n2_ = s.nu2 ?? 9, beat = Math.abs(n1 - n2_), span = s.window ?? 2 / beat, r = [0.85, 0.6, 0.23], amp = 0.09; dur = 8;
     const y1 = `sin(${num(2 * Math.PI * n1 * span)} * x)`, y2 = `sin(${num(2 * Math.PI * n2_ * span)} * x)`, draw = {draw: 0, keys: {draw: [[lead, 0], [lead + 5, 1, 'linear']]}, live: false, samples: 800};
@@ -239,6 +320,7 @@ export function wave(s: WaveSpec): Scene {
   say('s1', story, 0.3, {weight: 700});
   if (second) say('s2', second, 0.3 + lead, {style: {fill: 'muted'}});
   if (!s.illustrative) facts.slice(0, 3).forEach((t, i) => say(`f${i}`, t[0].toUpperCase() + t.slice(1), lead + 1 + i * 0.5));
-  if (s.show !== 'modes' || !s.illustrative) say('sc', 'Heights enlarged and motion slowed, to be seen', 0.3, {style: {fill: 'faint'}});
+  if (s.show === 'compare') say('sc', 'Displacement against time, as a C.R.O. screen shows it', 0.3, {style: {fill: 'faint'}});
+  else if (s.show !== 'modes' || !s.illustrative) say('sc', 'Heights enlarged and motion slowed, to be seen', 0.3, {style: {fill: 'faint'}});
   return scene(s, W, H, dur, plane, props, [], {verb: 'wave', facts, anchors});
 }

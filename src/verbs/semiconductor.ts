@@ -20,6 +20,7 @@ import {kit} from './potential.ts';
 import {sci} from './electric.ts';
 import type {Key} from '../keys.ts';
 import type {Prop, Scene} from '../scene.ts';
+import {textWidth} from '../svg.ts';
 
 type P2 = [number, number];
 type Common = {title?: string; width?: number; height?: number; fps?: number; theme?: 'dark' | 'light'; illustrative?: boolean};
@@ -414,7 +415,11 @@ export function semiconductor(s: SemiconductorSpec): Scene {
     const gy = by + bh * .97, gh = bh * .3, top = biased ? (fwd ? V0 - V : V0 + V) : V0, scale = Math.max(V0, top), tG = biased ? 1 : 4.6;
     const shape = (u: number) => u <= -1 ? 0 : u >= 1 ? 1 : u < 0 ? (u + 1) ** 2 / 2 : 1 - (1 - u) ** 2 / 2;
     const curve = (height: number, wd: number) => Array.from({length: 121}, (_, i) => { const x = x0 + w * i / 120; return [x, gy - shape((x - xj) / wd) * height / scale * gh] as P2; });
-    line([x0, gy], [x0 + w, gy], 'muted', 2, {show: [tG, 1e9]}); label(x0, gy - gh - 18 * k, 'potential', 'muted', 22, {align: 'start', show: [tG, 1e9]});
+    line([x0, gy], [x0 + w, gy], 'muted', 2, {show: [tG, 1e9]}); 
+    // its name above the graph, or under its baseline when the diffusion lines below the slab come down that far (a
+    // half-width part: 'potential' sat on 'holes diffuse p → n', 2026-11-05)
+    const named = gy - gh - 18 * k < (biased ? -Infinity : y0 + h + 140 * k) ? gy + 30 * k : gy - gh - 18 * k;
+    label(x0, named, 'potential', 'muted', 22, {align: 'start', show: [tG, 1e9]});
     if (biased) poly(curve(V0, W0), 'muted', 3, {show: [tG, 1e9]}, true);
     poly(curve(top, Wd), 'accent', 4, {show: [tG, 1e9], draw: 0, keys: {draw: [[tG, 0], [tG + 1.2, 1, 'inOut']]}});
     const yTop = gy - top / scale * gh;
@@ -470,7 +475,11 @@ export function semiconductor(s: SemiconductorSpec): Scene {
     label(X(.5), Y(30e-3), 'forward bias', 'accent', 24, {show: [1.6, 1e9]}); label(X(-12), Y(-1.6e-6), 'reverse bias', 'cool', 24, {show: [3.2, 1e9]});
     const Vc = CUT_IN[mat];
     line([X(Vc), oy], [X(Vc), oy - up], 'muted', 2, {show: [2.2, 1e9]}, true);
-    label(X(Vc) - 10 * k, oy - up + 14 * k, num ? `cut-in ≈ ${Vc} V` : 'cut-in', 'muted', 22, {align: 'end', show: [2.2, 1e9]});
+    // left of its line at the top, unless the line stands too near the I axis (germanium's 0.2 V): then under the V
+    // axis's numbers, where the forward side is empty (2026-11-05: it was drawn across the axis's 40)
+    const cut = num ? `cut-in ≈ ${Vc} V` : 'cut-in', fits = X(Vc) - 10 * k - textWidth(cut, 22 * k) > ox + 12 * k;
+    if (fits) label(X(Vc) - 10 * k, oy - up + 14 * k, cut, 'muted', 22, {align: 'end', show: [2.2, 1e9]});
+    else label(X(Vc) - 10 * k, oy + 64 * k, cut, 'muted', 22, {align: 'start', show: [2.2, 1e9]});
     anchors.origin = [ox, oy]; anchors.cutin = [X(Vc), oy];
     facts.push(`cut-in voltage about ${Vc} V for ${mat === 'Si' ? 'silicon' : 'germanium'}`, 'reverse current about 1 μA, nearly constant');
     dur = 6;

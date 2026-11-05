@@ -502,6 +502,16 @@ export function stage(s: StageSpec): Scene {
       const [x, y] = P(q.x, q.y), [dx, dy] = parts[part](q);
       return {x1: x, y1: y - h, x2: x + dx * scale, y2: y - h - dy * scale, head: Math.min(18 * k, 0.45 * Math.hypot(dx, dy) * scale)};
     };
+    // Names by their tips, each clear of the others: v beyond its tip, vₓ on the side of its tip away from vᵧ, vᵧ on the
+    // side away from vₓ; a part too short to draw keeps no name (2026-11-05, the cricket ball: above every tip, "v" sat
+    // on "vₓ" at the top of the flight; a dropped ball's vₓ name, at a zero arrow, sat on vᵧ's).
+    const labelAt = (q: typeof steps[0], part: 'v' | 'vx' | 'vy'): Vec => {
+      const a = arrowAt(q, part), L = Math.hypot(a.x2 - a.x1, a.y2 - a.y1), g = 24 * k;
+      if (part === 'vx') return [a.x2, a.y2 + (q.vy > 0 ? g : -g)];
+      if (part === 'vy') return [a.x2 + (q.vx > 0 ? -g : g), a.y2];
+      return L < 1e-6 ? [a.x2, a.y2 - g] : [a.x2 + (a.x2 - a.x1) / L * g, a.y2 + (a.y2 - a.y1) / L * g];
+    };
+    const named = (q: typeof steps[0], part: 'v' | 'vx' | 'vy') => { const a = arrowAt(q, part); return Math.hypot(a.x2 - a.x1, a.y2 - a.y1) > 12 * k ? 1 : 0; };
     for (const part of show) {
       const keys: Record<string, Key[]> = {x1: [], y1: [], x2: [], y2: [], head: []};
       for (const q of steps) for (const [f, v] of Object.entries(arrowAt(q, part))) keys[f].push([q.t, v, 'linear']);
@@ -509,8 +519,8 @@ export function stage(s: StageSpec): Scene {
         style: {stroke: COLOURS[part], width: (part === 'v' ? 6 : 4.5) * k}, layer: 5});
       props.push({id: `vel${n}-${part}-label`, type: 'text', x: 0, y: 0, text: part === 'v' ? 'v' : part === 'vx' ? 'vₓ' : 'vᵧ', size: 28 * k, weight: 700,
         align: 'middle', show: span, fade: 0.15, style: {fill: COLOURS[part]}, layer: 5,
-        keys: {x: steps.map(q => [q.t, arrowAt(q, part).x2 + (part === 'vy' ? 26 * k : 0), 'linear'] as Key),
-          y: steps.map(q => [q.t, arrowAt(q, part).y2 - (part === 'vy' ? 0 : 22 * k), 'linear'] as Key)}});
+        keys: {x: steps.map(q => [q.t, labelAt(q, part)[0], 'linear'] as Key), y: steps.map(q => [q.t, labelAt(q, part)[1], 'linear'] as Key),
+          opacity: steps.map(q => [q.t, named(q, part), 'linear'] as Key)}});
       // Snapshots: a faint copy where the mover was, every few seconds of its flight.
       if (vel.every) for (let t = moving[0].t, i = 0; t <= span[1] && i < 40; t += vel.every, i++) {
         const q = steps.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
